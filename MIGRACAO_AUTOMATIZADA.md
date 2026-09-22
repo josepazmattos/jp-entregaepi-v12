@@ -1,27 +1,50 @@
-# Migração automatizada do EntregaEPI V12
+# Migração automatizada JP EntregaEPI V12
 
-Este commit adiciona o pacote completo da V12 em formato ZIP para evitar novos conflitos manuais de Git/CloudShell.
+Esta branch contém a estrutura inicial da migração V12.
 
-Arquivo incluído:
+## Situação atual
+
+O pacote ZIP completo da V12 permanece em:
 
 ```text
 packages/JP_EntregaEPI_V12_EXPRESS_LAMBDA_STATIC.zip
 ```
 
-## Como usar
+O backend Express/Lambda também foi expandido em:
 
-1. Baixe o ZIP do repositório.
-2. Extraia o conteúdo.
-3. A estrutura extraída contém:
-   - `frontend/` — frontend estático;
-   - `backend/` — backend Node.js/Express preparado para Lambda;
-   - `infra/` — scripts de deploy/teste;
-   - `docs/` — documentação da migração.
+```text
+backend/
+```
 
-## Segurança
+## Teste do backend no CloudShell
 
-A V11 atual não é alterada por este pacote. A V12 deve ser testada em ambiente paralelo antes de qualquer publicação em produção.
+```bash
+cd ~/jp-entregaepi-v12
 
-## Modelo de ficha
+git fetch origin
 
-A ficha deve preservar os dados do trabalhador, função, matrícula eSocial, tipo da movimentação e o Termo de Responsabilidade antes dos EPIs.
+git checkout v12-teste
+
+git pull origin v12-teste
+
+cd backend
+npm install
+npm start
+```
+
+Em outra aba/terminal:
+
+```bash
+curl http://localhost:3001/health
+curl http://localhost:3001/api/caepi/365
+```
+
+## Próximo passo
+
+Depois do backend local responder, publicar a V12 em ambiente separado:
+
+```text
+/EntregaEPI-v12-teste
+```
+
+A V11 de produção permanece intacta.
