@@ -1,71 +1,63 @@
 # JP EntregaEPI V12
 
-Projeto separado para testar a migração do EntregaEPI para:
+Projeto de teste para migração do EntregaEPI para arquitetura com frontend estático e backend Node.js/Express preparado para AWS Lambda.
 
-- frontend estático;
-- backend Node.js/Express;
-- execução em AWS Lambda;
-- API Gateway HTTP API;
-- banco DynamoDB on-demand;
-- arquivos estáticos e modelos em S3/CloudFront;
-- biometria local no Windows via JP Biometria + Java + SDK NITGEN.
+A versão V11 atual em produção continua separada e não deve ser alterada por este repositório.
 
-## Situação
+## Arquitetura prevista
 
-Este repositório foi criado para a V12 paralela. A V11 atual continua publicada separadamente em produção e não deve ser sobrescrita durante os testes.
+- Frontend estático
+- Backend Node.js/Express
+- AWS Lambda
+- API Gateway HTTP API
+- DynamoDB on-demand
+- Arquivos em S3
+- Biometria local no Windows com JP Biometria + Java + SDK NITGEN
 
-## Pacote-base gerado
+## Branch de teste
 
-O pacote gerado nesta conversa foi:
-
-`JP_EntregaEPI_V12_EXPRESS_LAMBDA_STATIC.zip`
-
-Ele contém:
+Esta branch é apenas de teste:
 
 ```text
-frontend/EntregaEPI/
-backend/src/
-infra/
-docs/
-.github/workflows/
+v12-teste
 ```
 
-## Estrutura pretendida
+## Estrutura publicada no GitHub
 
 ```text
-frontend/
-  EntregaEPI/
-    index.html
-    config.js
-    assets/
-    templates/
-    biometria/
-
 backend/
-  package.json
-  src/
-    app.js
-    lambda.js
-    server.js
-    routes/
-    services/
-    db/
-
-infra/
-  create-dynamodb-table.sh
-  deploy-backend-lambda.sh
-  deploy-frontend-s3.sh
-  test-api-local.sh
+packages/
+MIGRACAO_AUTOMATIZADA.md
+README.md
 ```
 
-## Regra de segurança
+A pasta `backend/` já está expandida e pode ser testada diretamente.
 
-A V12 deve ser publicada primeiro em ambiente de teste, por exemplo:
+## Teste local do backend
 
-`https://www.jptreinamentos.com.br/EntregaEPI-v12-teste`
+```bash
+cd backend
+npm install
+npm start
+```
 
-Somente depois dos testes item por item ela deve substituir a V11.
+Em outro terminal:
 
-## Observação sobre a ficha de EPI
+```bash
+curl http://localhost:3001/health
+curl http://localhost:3001/api/caepi/365
+```
 
-A ficha precisa preservar os campos validados na V11: função, matrícula eSocial, tipo da movimentação e o Termo de Responsabilidade antes dos EPIs.
+## Objetivo
+
+Testar a V12 em ambiente separado antes de qualquer migração da produção.
+
+Ambiente previsto de teste:
+
+```text
+https://www.jptreinamentos.com.br/EntregaEPI-v12-teste
+```
+
+## Observação
+
+A ficha de EPI deve preservar os campos de identificação do trabalhador, função, matrícula eSocial, tipo da movimentação e o Termo de Responsabilidade antes dos EPIs.
