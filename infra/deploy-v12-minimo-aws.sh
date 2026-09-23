@@ -4,7 +4,7 @@ set -euo pipefail
 APP_PREFIX="EntregaEPI-v12-teste"
 S3_BUCKET="pagina-conteudo-cloudfront"
 CLOUDFRONT_DIST_ID="E2Q4EB4LP1LFXF"
-REGION="${AWS_REGION:-sa-east-1}"
+REGION="sa-east-1"
 LAMBDA_NAME="jp-entregaepi-v12-api"
 ROLE_NAME="jp-entregaepi-v12-lambda-role"
 API_NAME="jp-entregaepi-v12-http-api"
@@ -25,7 +25,6 @@ echo "[1/9] Conferindo estrutura..."
 test -f backend/package.json
 test -f backend/src/lambda.js
 test -f frontend/EntregaEPI/index.html
-
 mkdir -p .deploy
 
 echo "[2/9] Criando/validando role Lambda..."
@@ -33,33 +32,27 @@ if ! aws iam get-role --role-name "$ROLE_NAME" >/dev/null 2>&1; then
   cat > .deploy/lambda-trust.json <<'JSON'
 {
   "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": { "Service": "lambda.amazonaws.com" },
-      "Action": "sts:AssumeRole"
-    }
-  ]
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": { "Service": "lambda.amazonaws.com" },
+    "Action": "sts:AssumeRole"
+  }]
 }
 JSON
-  aws iam create-role \
-    --role-name "$ROLE_NAME" \
-    --assume-role-policy-document file://.deploy/lambda-trust.json >/dev/null
-
-  aws iam attach-role-policy \
-    --role-name "$ROLE_NAME" \
-    --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole >/dev/null
-
+  aws iam create-role --role-name "$ROLE_NAME" --assume-role-policy-document file://.deploy/lambda-trust.json >/dev/null
+  aws iam attach-role-policy --role-name "$ROLE_NAME" --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole >/dev/null
   echo "Aguardando propagação da role..."
   sleep 12
 fi
 ROLE_ARN="$(aws iam get-role --role-name "$ROLE_NAME" --query 'Role.Arn' --output text)"
 echo "Role ARN: $ROLE_ARN"
 
-echo "[3/9] Empacotando backend Express/Lambda..."
+echo "[3/9] Empacotando backend Express/Lambda sem rsync..."
 rm -rf .deploy/backend-package .deploy/lambda.zip
 mkdir -p .deploy/backend-package
-rsync -a backend/ .deploy/backend-package/ --exclude node_modules --exclude package-lock.json
+cp -a backend/. .deploy/backend-package/
+rm -rf .deploy/backend-package/node_modules
+rm -f .deploy/backend-package/package-lock.json
 cd .deploy/backend-package
 npm install --omit=dev >/dev/null
 zip -qr ../lambda.zip .
@@ -67,10 +60,7 @@ cd "$ROOT_DIR"
 
 echo "[4/9] Criando ou atualizando Lambda..."
 if aws lambda get-function --function-name "$LAMBDA_NAME" --region "$REGION" >/dev/null 2>&1; then
-  aws lambda update-function-code \
-    --function-name "$LAMBDA_NAME" \
-    --zip-file fileb://.deploy/lambda.zip \
-    --region "$REGION" >/dev/null
+  aws lambda update-function-code --function-name "$LAMBDA_NAME" --zip-file fileb://.deploy/lambda.zip --region "$REGION" >/dev/null
   aws lambda wait function-updated --function-name "$LAMBDA_NAME" --region "$REGION"
 else
   aws lambda create-function \
@@ -152,7 +142,6 @@ aws s3 sync frontend/EntregaEPI/ "s3://$S3_BUCKET/$APP_PREFIX/" \
   --delete \
   --exclude 'biometria/*.exe' \
   --cache-control 'no-store, no-cache, must-revalidate'
-
 aws s3api put-object --bucket "$S3_BUCKET" --key "$APP_PREFIX" --body frontend/EntregaEPI/index.html --content-type 'text/html; charset=utf-8' --cache-control 'no-store, no-cache, must-revalidate' >/dev/null
 aws s3api put-object --bucket "$S3_BUCKET" --key "$APP_PREFIX/" --body frontend/EntregaEPI/index.html --content-type 'text/html; charset=utf-8' --cache-control 'no-store, no-cache, must-revalidate' >/dev/null
 aws s3api put-object --bucket "$S3_BUCKET" --key "$APP_PREFIX/index.html" --body frontend/EntregaEPI/index.html --content-type 'text/html; charset=utf-8' --cache-control 'no-store, no-cache, must-revalidate' >/dev/null
@@ -169,7 +158,6 @@ curl -fsS "$API_ENDPOINT/api/caepi/365"
 echo
 
 echo
-
 echo "========================================"
 echo "V12 mínima publicada com sucesso"
 echo "========================================"
