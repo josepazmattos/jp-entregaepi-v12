@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JP EntregaEPI V12 Teste</title>
+  <script src="./config.js"></script>
+  <style>
+    :root{--jp:#078949;--navy:#133a56;--bg:#f4f8fb;--line:#d7e4ee;--muted:#637384}
+    *{box-sizing:border-box} body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:#09233a}
+    .shell{max-width:1100px;margin:40px auto;padding:0 18px}.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px;margin:16px 0;box-shadow:0 8px 28px rgba(19,52,78,.08)}
+    .top{display:flex;gap:14px;align-items:center}.logo{width:58px;height:58px;border-radius:16px;background:var(--jp);display:grid;place-items:center;color:#fff;font-weight:900;font-size:26px}
+    h1{margin:0;font-size:32px}.muted{color:var(--muted)}button{border:0;border-radius:12px;padding:13px 18px;font-weight:800;cursor:pointer;margin:6px 6px 6px 0}.ok{background:var(--jp);color:#fff}.dark{background:var(--navy);color:#fff}.gray{background:#e9eef3}
+    pre{background:#0d2538;color:#d9f2ff;border-radius:12px;padding:15px;white-space:pre-wrap;overflow:auto}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.pill{display:inline-block;padding:6px 10px;border-radius:999px;background:#e7f8ee;color:#006b3a;font-weight:800}
+    @media(max-width:800px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="card top">
+      <div class="logo">JP</div>
+      <div>
+        <h1>EntregaEPI V12 Teste</h1>
+        <div class="muted">Frontend estático + backend Node.js/Express em Lambda/API Gateway</div>
+        <div><span class="pill" id="version">carregando...</span></div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="card"><b>Ambiente</b><br><span class="muted">/EntregaEPI-v12-teste</span></div>
+      <div class="card"><b>Produção V11</b><br><span class="muted">preservada em /EntregaEPI</span></div>
+      <div class="card"><b>Biometria</b><br><span class="muted">continua local no Windows</span></div>
+    </section>
+
+    <section class="card">
+      <h2>Testes da API V12</h2>
+      <p class="muted">Esta tela valida o mínimo necessário: API online, consulta CA e rotas base. Não substitui a V11.</p>
+      <button class="ok" onclick="testHealth()">Testar /health</button>
+      <button class="dark" onclick="testCa()">Testar CA 365</button>
+      <button class="gray" onclick="testAll()">Testar tudo</button>
+      <pre id="out">Aguardando...</pre>
+    </section>
+
+    <section class="card">
+      <h2>Requisito da Ficha de EPI</h2>
+      <p>A V12 deve manter o padrão consolidado da ficha: trabalhador, CPF, função, matrícula eSocial, tipo da movimentação, número da ficha e Termo de Responsabilidade antes da relação de EPIs.</p>
+    </section>
+  </main>
+  <script>
+    const cfg = window.JP_CONFIG || {};
+    document.getElementById('version').textContent = `${cfg.version || '12.0.0'} • ${cfg.ambiente || 'teste'}`;
+    function api(path){ return String(cfg.apiBaseUrl || '').replace(/\/$/,'') + path; }
+    function show(v){ document.getElementById('out').textContent = typeof v === 'string' ? v : JSON.stringify(v,null,2); }
+    async function get(path){ const r = await fetch(api(path)); const t = await r.text(); try{return JSON.parse(t)}catch{return {status:r.status, body:t}} }
+    async function testHealth(){ try{ show(await get('/health')); } catch(e){ show('ERRO /health: '+e.message+'\nAPI: '+cfg.apiBaseUrl); } }
+    async function testCa(){ try{ show(await get('/api/caepi/365')); } catch(e){ show('ERRO /api/caepi/365: '+e.message+'\nAPI: '+cfg.apiBaseUrl); } }
+    async function testAll(){ const res={config:cfg}; try{res.health=await get('/health')}catch(e){res.healthError=e.message} try{res.ca365=await get('/api/caepi/365')}catch(e){res.caError=e.message} show(res); }
+    testHealth();
+  </script>
+</body>
+</html>
