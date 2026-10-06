@@ -22,6 +22,16 @@ on:
         default: true
         type: boolean
 
+  push:
+    branches:
+      - main
+      - v12-teste
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "infra/**"
+      - ".github/workflows/deploy-entregaepi-v12.yml"
+
 permissions:
   id-token: write
   contents: read
@@ -43,10 +53,35 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Definir alvo do deploy
+        id: target
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            APP_PREFIX="${{ github.event.inputs.app_prefix }}"
+            TARGET_REF="${{ github.event.inputs.target_ref }}"
+            RUN_SMOKE="${{ github.event.inputs.run_smoke_tests }}"
+          else
+            TARGET_REF="${GITHUB_REF_NAME}"
+            RUN_SMOKE="true"
+            if [ "${GITHUB_REF_NAME}" = "main" ]; then
+              APP_PREFIX="EntregaEPI"
+            else
+              APP_PREFIX="EntregaEPI-v12"
+            fi
+          fi
+
+          echo "app_prefix=$APP_PREFIX" >> "$GITHUB_OUTPUT"
+          echo "target_ref=$TARGET_REF" >> "$GITHUB_OUTPUT"
+          echo "run_smoke_tests=$RUN_SMOKE" >> "$GITHUB_OUTPUT"
+
+          echo "Deploy alvo: $APP_PREFIX"
+          echo "Ref alvo: $TARGET_REF"
+
       - name: Baixar código alvo
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.target_ref }}
+          ref: ${{ steps.target.outputs.target_ref }}
 
       - name: Configurar AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -58,6 +93,7 @@ jobs:
         run: |
           test -f backend/package.json
           test -f backend/src/lambda.js
+          test -f backend/src/db/store.js
           test -f frontend/EntregaEPI/index.html
           test -f frontend/EntregaEPI/assets/app.js
           test -f frontend/EntregaEPI/assets/styles.css
@@ -138,7 +174,7 @@ jobs:
 
       - name: Preparar config e prefixo do frontend
         run: |
-          APP_PREFIX="${{ github.event.inputs.app_prefix }}"
+          APP_PREFIX="${{ steps.target.outputs.app_prefix }}"
           cat > frontend/EntregaEPI/config.js <<EOF
           window.JP_CONFIG = {
             version: "12.7.0-funcional",
@@ -155,7 +191,7 @@ jobs:
           fi
 
       - name: Backup antes de publicar em produção
-        if: ${{ github.event.inputs.app_prefix == 'EntregaEPI' }}
+        if: ${{ steps.target.outputs.app_prefix == 'EntregaEPI' }}
         run: |
           BACKUP_PREFIX="EntregaEPI-backup-actions-$(date +%Y%m%d-%H%M%S)"
           aws s3 sync "s3://${S3_BUCKET}/EntregaEPI/" "s3://${S3_BUCKET}/${BACKUP_PREFIX}/" || true
@@ -165,7 +201,7 @@ jobs:
 
       - name: Publicar frontend no S3
         run: |
-          APP_PREFIX="${{ github.event.inputs.app_prefix }}"
+          APP_PREFIX="${{ steps.target.outputs.app_prefix }}"
           aws s3 sync frontend/EntregaEPI/ "s3://${S3_BUCKET}/${APP_PREFIX}/" \
             --delete \
             --cache-control "no-store, no-cache, must-revalidate"
@@ -184,23 +220,23 @@ jobs:
 
       - name: Invalidar CloudFront
         run: |
-          APP_PREFIX="${{ github.event.inputs.app_prefix }}"
+          APP_PREFIX="${{ steps.target.outputs.app_prefix }}"
           aws cloudfront create-invalidation \
             --distribution-id "$CLOUDFRONT_DIST_ID" \
             --paths "/${APP_PREFIX}" "/${APP_PREFIX}/" "/${APP_PREFIX}/*"
 
       - name: Testes finais
-        if: ${{ github.event.inputs.run_smoke_tests == 'true' }}
+        if: ${{ steps.target.outputs.run_smoke_tests == 'true' }}
         run: |
           curl -fsS "${{ steps.api.outputs.api_endpoint }}/health"
           echo
           curl -fsS "${{ steps.api.outputs.api_endpoint }}/api/caepi/365"
           echo
-          APP_PREFIX="${{ github.event.inputs.app_prefix }}"
+          APP_PREFIX="${{ steps.target.outputs.app_prefix }}"
           curl -s "https://www.jptreinamentos.com.br/${APP_PREFIX}?v=$(date +%s)" | grep -E "Dashboard|Entrega de EPI|JP Segurança do Trabalho" | head
 
       - name: Resultado
         run: |
-          APP_PREFIX="${{ github.event.inputs.app_prefix }}"
+          APP_PREFIX="${{ steps.target.outputs.app_prefix }}"
           echo "Deploy concluído: https://www.jptreinamentos.com.br/${APP_PREFIX}?v=127"
           echo "API: ${{ steps.api.outputs.api_endpoint }}"
