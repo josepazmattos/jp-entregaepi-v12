@@ -1,18 +1,27 @@
 {
   "name": "jp-entregaepi-v12-api",
-  "version": "12.7.2",
+  "version": "12.8.0",
   "type": "module",
   "main": "src/lambda.js",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node src/server.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "3.1147.0",
     "@aws-sdk/client-dynamodb": "3.1147.0",
     "@aws-sdk/lib-dynamodb": "3.1147.0",
     "cors": "2.8.6",
+    "exceljs": "4.4.0",
     "express": "5.2.1",
     "serverless-http": "4.0.0"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "11.1.1"
+    }
   }
 }

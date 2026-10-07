@@ -8,7 +8,7 @@ const {chromium} = require('playwright');
 const frontend = path.resolve(__dirname, '../frontend/EntregaEPI');
 const output = path.join(__dirname, 'output');
 fs.mkdirSync(output,{recursive:true});
-const results={suite:'Interface e impressão V12.7.2',syntheticData:true,realApiUsed:false,checks:[],pdfs:{},layouts:{}};
+const results={suite:'Interface e impressão V12.8.0',syntheticData:true,realApiUsed:false,checks:[],pdfs:{},layouts:{}};
 const company={id:'EMPRESA-TESTE',nome:'EMPRESA EXEMPLO',cnpj:'00.000.000/0000-00',localidade:'Cidade de Teste',uf:'MS'};
 const worker={id:'TRABALHADOR-TESTE',empresaId:company.id,nomeCompleto:'TRABALHADOR DE TESTE',cpf:'000.000.000-00',funcao:'FUNÇÃO DE TESTE',matriculaESocial:'00042',status:'Ativo'};
 const epi={id:'EPI-TESTE',empresaId:company.id,descricao:'EQUIPAMENTO DE TESTE',ca:'00000',fabricante:'FABRICANTE DE TESTE'};
@@ -221,7 +221,7 @@ async function main(){
     requests.push({path:url.pathname,method:request.method(),authorizationPresent:request.headers().authorization===`Bearer ${idToken}`,empresaId:request.headers()['x-empresa-id']});
     if(apiFailure){await json(apiFailure,{ok:false,error:apiFailure===403?'Perfil não configurado. Solicite ao administrador.':'Sessão expirada.'});return;}
     if(url.pathname==='/health'){
-      await json(200,{ok:true,version:'12.7.2',mode:'dynamodb',durable:true,storageReady:true,buildSha:'BUILD-SINTETICO',caepi:{sourceKind:'official-snapshot',officialSnapshot:true,live:false,downloadedAt:'2026-10-06T16:00:00Z'}});return;
+      await json(200,{ok:true,version:'12.8.0',mode:'dynamodb',durable:true,storageReady:true,buildSha:'BUILD-SINTETICO',caepi:{sourceKind:'official-snapshot',officialSnapshot:true,live:false,downloadedAt:'2026-10-06T16:00:00Z'}});return;
     }
     if(url.pathname.startsWith('/api/caepi/')){
       if(url.pathname.endsWith('/654321')){
@@ -317,7 +317,7 @@ async function main(){
 
   await page.locator('.nav [data-screen="config"]').click();
   await assertDiagnosticsClosed('config');
-  assert.ok((await page.locator('#configVersion').innerText()).includes('12.7.2'));
+  assert.ok((await page.locator('#configVersion').innerText()).includes('12.8.0'));
   assert.ok((await page.locator('#configCompany').innerText()).includes(company.nome));
   await inspectLayout('desktop-config');
   await page.locator('#healthTestButton').click();
@@ -350,6 +350,7 @@ async function main(){
   apiFailure=403;
   await page.locator('[data-screen="empresas"]').click();
   await page.locator('#empresaForm input[name="nome"]').fill('CADASTRO SINTÉTICO NÃO SALVO');
+  await page.locator('#empresaCnpj').fill('00.000.000/0000-00');
   await page.locator('#empresaForm button[type="submit"]').click();
   await page.waitForFunction(()=>document.getElementById('appMessage').textContent.includes('Perfil não configurado'));
   assert.equal(await page.locator('#empresaForm input[name="nome"]').inputValue(),'CADASTRO SINTÉTICO NÃO SALVO');
@@ -362,12 +363,13 @@ async function main(){
   await page.locator('#refreshButton').click();
   await page.waitForSelector('#loginPage:not(.hidden)');
   assert.ok((await page.locator('#loginMessage').innerText()).includes('sessão expirou'));
-  assert.equal(await page.locator('#password').inputValue(),'SENHA-SINTETICA-SEM-VALIDADE');
-  passed('401 encerra sessão expirada sem apagar a senha digitada');
+  assert.equal(await page.locator('#password').inputValue(),'');
+  passed('401 encerra sessão expirada sem reter a senha usada na autenticação');
 
   await page.setViewportSize({width:390,height:844});
   await inspectLayout('mobile-login');
   apiFailure=0;
+  await page.locator('#password').fill('SENHA-SINTETICA-SEM-VALIDADE');
   await page.locator('#loginButton').click();
   await page.waitForFunction(count=>document.getElementById('metricFichas').textContent===String(count),database.fichas.length);
   await assertMenuClosed();
@@ -395,6 +397,8 @@ async function main(){
   passed('login, dashboard, configurações e biometria cabem em celular de 390 por 844');
   assert.deepEqual(pageErrors,[],'nenhuma exceção JavaScript não tratada');
   assert.ok(!results.unexpectedExternalRequest,'nenhuma conexão a serviços reais');
+  results.tenants=await require('./frontend-tenant-browser.cjs')({browser,origin,output});
+  results.checks.push(...results.tenants.checks);
   results.passed=true;
 }
 

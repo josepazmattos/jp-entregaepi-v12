@@ -13,6 +13,7 @@ process.env.COGNITO_ISSUER = 'https://cognito-idp.sa-east-1.amazonaws.com/test-p
 process.env.COGNITO_CLIENT_ID = 'synthetic-client';
 process.env.AUTH_COMPANY_CLAIM = 'custom:empresa_id';
 const { handler } = await import('../src/lambda.js');
+const storage = await import('../src/db/store.js');
 
 const basicClaims = { sub: 'synthetic-master', iss: process.env.COGNITO_ISSUER, aud: process.env.COGNITO_CLIENT_ID, token_use: 'id', exp: String(Math.floor(Date.now() / 1000) + 3600) };
 const masterClaims = { ...basicClaims, 'cognito:groups': '[MASTER]' };
@@ -45,11 +46,11 @@ test('API Lambda: autorização, empresa, emissão e captura em isolamento local
     assert.equal((await request('GET', '/api/empresas', { claims: basicClaims })).status, 403);
   });
   await t.test('cadastros usam ID gerado pelo servidor e vínculo existente', async () => {
-    const a = await request('POST', '/api/empresas', { body: { id: 'client-provided', nome: 'EMPRESA SINTÉTICA A', localidade: 'CIDADE SINTÉTICA' } });
-    assert.equal(a.status, 200);
-    companyA = a.body.item.id;
+    // Company account provisioning has its own injected Cognito tests; this API suite never calls AWS.
+    const a = await storage.create('empresa', { id: 'client-provided', nome: 'EMPRESA SINTÉTICA A', localidade: 'CIDADE SINTÉTICA' });
+    companyA = a.id;
     assert.notEqual(companyA, 'client-provided');
-    companyB = (await request('POST', '/api/empresas', { body: { nome: 'EMPRESA SINTÉTICA B' } })).body.item.id;
+    companyB = (await storage.create('empresa', { nome: 'EMPRESA SINTÉTICA B' })).id;
     const workerBody = { nomeCompleto: 'TRABALHADOR SINTÉTICO', cpf: '000.000.000-00', funcao: 'FUNÇÃO SINTÉTICA', matriculaESocial: 'TESTE-000', localidade: 'CIDADE SINTÉTICA' };
     workerA = (await request('POST', '/api/trabalhadores', { company: companyA, body: workerBody })).body.item;
     workerB = (await request('POST', '/api/trabalhadores', { company: companyB, body: workerBody })).body.item;
@@ -67,10 +68,68 @@ test('API Lambda: autorização, empresa, emissão e captura em isolamento local
     assert.equal((await request('POST', '/api/empresas', { claims, body: { nome: 'NÃO CRIAR' } })).status, 403);
     assert.equal((await request('GET', '/api/auditoria', { claims })).status, 403);
   });
-  await t.test('ficha rejeita trabalhador/EPI de outra empresa e quantidade inválida', async () => {
+  await t.test('upload XLSX exige autorização, faz prévia por empresa e confirma sem duplicar trabalhadores', async () => {
+    const { default: ExcelJS } = await import('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Trabalhadores');
+    sheet.addRow(['Nome completo', 'CPF', 'Matrícula eSocial', 'Função', 'Localidade']);
+    sheet.addRow(['ZÉLIA SINTÉTICA', '52998224725', '00002', 'FUNÇÃO SINTÉTICA', 'CIDADE SINTÉTICA']);
+    sheet.addRow(['ÁLVARO SINTÉTICO', '11144477735', '00003', 'FUNÇÃO SINTÉTICA', 'CIDADE SINTÉTICA']);
+    const body = { arquivoNome: 'trabalhadores-sinteticos.xlsx', arquivoBase64: Buffer.from(await workbook.xlsx.writeBuffer()).toString('base64') };
+    const claims = { ...basicClaims, sub: 'synthetic-company-user', 'cognito:groups': '[EMPRESA]', 'custom:empresa_id': companyA };
+    assert.equal((await request('POST', '/api/trabalhadores/importacao/previa', { claims: null, company: companyA, body })).status, 401);
+    const preview = await request('POST', '/api/trabalhadores/importacao/previa', { claims, body });
+    assert.equal(preview.status, 200);
+    assert.equal(preview.body.resumo.criar, 2);
+    assert.equal((await request('GET', '/api/trabalhadores', { claims })).body.items.length, 1);
+    const path = `/api/trabalhadores/importacao/${preview.body.importacaoId}`;
+    const otherClaims = { ...claims, sub: 'synthetic-company-B-user', 'custom:empresa_id': companyB };
+    assert.equal((await request('GET', path, { claims: otherClaims })).status, 404);
+    assert.equal((await request('POST', `${path}/confirmar`, { claims: otherClaims, body: {} })).status, 404);
+    const confirmed = await request('POST', `${path}/confirmar`, { claims, body: {} });
+    assert.equal(confirmed.status, 200);
+    assert.equal(confirmed.body.status, 'concluida');
+    assert.equal((await request('POST', `${path}/confirmar`, { claims, body: {} })).status, 200);
+    const workers = await request('GET', '/api/trabalhadores', { claims });
+    assert.deepEqual(workers.body.items.map(item => item.nomeCompleto), ['ÁLVARO SINTÉTICO', 'TRABALHADOR SINTÉTICO', 'ZÉLIA SINTÉTICA']);
+    assert.equal((await request('POST', '/api/trabalhadores/importacao/previa', { claims, body: { arquivoNome: 'nao-e-planilha.xlsx', arquivoBase64: 'invalid' } })).status, 400);
+  });
+  await t.test('catálogo técnico é global, não revela autoria e deduplica contribuição simultânea', async () => {
+    const claims = { ...basicClaims, sub: 'synthetic-company-user', 'cognito:groups': '[EMPRESA]', 'custom:empresa_id': companyA };
+    const catalog = await request('GET', '/api/epis', { claims });
+    assert.deepEqual(new Set(catalog.body.items.map(item => item.id)), new Set([epiA.id, epiB.id]));
+    assert.ok(catalog.body.items.every(item => item.catalogoCompartilhado && !('empresaId' in item) && !('criadoPor' in item) && !('observacoes' in item)));
+    const body = { ca: '700003', descricao: 'EPI COMPARTILHADO SINTÉTICO', modelo: 'MODELO TESTE', tamanho: 'M', empresaId: companyB, criadoPor: 'forged-creator', observacoes: 'NOTA PRIVADA' };
+    const [one, two] = await Promise.all([
+      request('POST', '/api/epis', { body, company: companyB }),
+      request('POST', '/api/epis', { body, company: companyB })
+    ]);
+    assert.equal(one.status, 200);
+    assert.equal(two.status, 200);
+    assert.equal(one.body.item.id, two.body.item.id);
+    assert.equal(JSON.stringify(one.body.item).includes('forged-creator'), false);
+    assert.equal(JSON.stringify(one.body.item).includes('NOTA PRIVADA'), false);
+    assert.equal((await request('GET', '/api/epis', { claims, company: companyB })).status, 403);
+    assert.equal((await request('GET', '/api/epis', { claims: null })).status, 401);
+  });
+  await t.test('equipamento sem CA pode ser cadastrado pelo Master sem empresa e usado na ficha', async () => {
+    const equipment = await request('POST', '/api/epis', { body: { tipo: 'sem_ca', descricao: 'BOLSA DE FERRAMENTAS SINTÉTICA', validade: '2030-01-01' } });
+    assert.equal(equipment.status, 200);
+    assert.equal(equipment.body.item.ca, '');
+    assert.equal(equipment.body.item.validade, '');
+    const emission = await request('POST', '/api/fichas', { company: companyA, body: { trabalhadorId: workerA.id, itens: [{ epiId: equipment.body.item.id, quantidade: 1 }] } });
+    assert.equal(emission.status, 200);
+    assert.equal(emission.body.item.itens[0].ca, '');
+    assert.equal(emission.body.item.itens[0].validade, '');
+    assert.equal((await request('POST', '/api/epis', { body: { descricao: 'SEM TIPO E SEM CA' } })).status, 400);
+  });
+  await t.test('ficha isola trabalhador, aceita catálogo compartilhado e rejeita EPI ausente/quantidade inválida', async () => {
     const base = { trabalhadorId: workerA.id, itens: [{ epiId: epiA.id, quantidade: 1 }] };
     assert.equal((await request('POST', '/api/fichas', { company: companyA, body: { ...base, trabalhadorId: workerB.id } })).status, 403);
-    assert.equal((await request('POST', '/api/fichas', { company: companyA, body: { ...base, itens: [{ epiId: epiB.id, quantidade: 1 }] } })).status, 403);
+    const shared = await request('POST', '/api/fichas', { company: companyA, body: { ...base, itens: [{ epiId: epiB.id, quantidade: 1 }] } });
+    assert.equal(shared.status, 200);
+    assert.equal(shared.body.item.itens[0].epiDescricao, epiB.descricao);
+    assert.equal((await request('POST', '/api/fichas', { company: companyA, body: { ...base, itens: [{ epiId: 'missing-equipment', quantidade: 1 }] } })).status, 404);
     assert.equal((await request('POST', '/api/fichas', { company: companyA, body: { ...base, itens: [{ epiId: epiA.id, quantidade: -1 }] } })).status, 400);
     assert.equal((await request('POST', '/api/fichas', { company: companyA, body: { ...base, data: '31/02/2026' } })).status, 400);
     assert.equal((await request('POST', '/api/fichas', { company: companyA, body: { ...base, modeloFicha: { id: 'JP-DOCX-11.10.6', termoResponsabilidade: 'TEXTO ADULTERADO' } } })).status, 400);

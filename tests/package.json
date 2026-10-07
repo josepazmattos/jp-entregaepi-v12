@@ -1,11 +1,11 @@
 {
   "name": "jp-entregaepi-tests",
-  "version": "12.7.2",
+  "version": "12.8.0",
   "private": true,
   "scripts": {
-    "test": "node --test frontend.test.cjs && node frontend-browser.cjs",
+    "test": "node --test frontend.test.cjs && node frontend-browser.cjs && node ficha-matricula-browser.cjs",
     "test:unit": "node --test frontend.test.cjs",
-    "test:browser": "node frontend-browser.cjs",
+    "test:browser": "node frontend-browser.cjs && node ficha-matricula-browser.cjs",
     "install-browser": "playwright install --with-deps chromium"
   },
   "devDependencies": {

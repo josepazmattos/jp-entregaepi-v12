@@ -1,33 +1,45 @@
 import { Router } from 'express';
-import { create, list, get } from '../db/store.js';
-import { ok, fail, objectBody, textField, pickText } from './_helpers.js';
-import { assertCompanyAccess, requireMaster } from '../middleware/auth.js';
+import * as defaultStorage from '../db/store.js';
+import { ok, objectBody } from './_helpers.js';
+import { assertCompanyAccess, requireMaster, httpError } from '../middleware/auth.js';
+import { createCompanyService, publicCompany } from '../services/empresa.service.js';
+import { companyAccounts } from '../services/company-accounts.js';
 
-const router = Router();
+export function createEmpresasRouter({ storage = defaultStorage, accounts = companyAccounts } = {}) {
+  const router = Router();
+  const service = createCompanyService({ storage, accounts });
 
-router.get('/', async (req, res) => {
-  const items = req.auth.master ? await list('empresa') : (await Promise.all(req.auth.empresaIds.map(id => get('empresa', id)))).filter(Boolean);
-  ok(res, { items });
-});
-
-router.get('/:id', async (req, res) => {
-  assertCompanyAccess(req, req.params.id);
-  const item = await get('empresa', req.params.id);
-  if (!item) return fail(res, 404, 'Empresa não encontrada');
-  ok(res, { item });
-});
-
-router.post('/', requireMaster, async (req, res) => {
-  const body = objectBody(req);
-  const nome = textField(body.nome, { required: true, field: 'Nome da empresa', max: 300 });
-  const item = await create('empresa', {
-    ...pickText(body, ['cnpj', 'localidade', 'uf', 'responsavel', 'email', 'telefone', 'logoUrl', 'masterUsuario']),
-    ...(body.logoDataUrl ? { logoDataUrl: textField(body.logoDataUrl, { field: 'Logo', max: 200 * 1024 }) } : {}),
-    nome,
-    status: 'Ativa',
-    criadoPor: req.auth.sub
+  router.get('/', async (req, res) => {
+    const items = req.auth.master
+      ? await storage.list('empresa')
+      : (await Promise.all(req.auth.empresaIds.map(id => storage.get('empresa', id)))).filter(Boolean);
+    ok(res, { items: items.map(publicCompany) });
   });
-  ok(res, { item });
-});
 
-export default router;
+  router.get('/:id', async (req, res) => {
+    assertCompanyAccess(req, req.params.id);
+    ok(res, { item: publicCompany(await service.company(req.params.id)) });
+  });
+
+  router.post('/', requireMaster, async (req, res) => {
+    const result = await service.register(objectBody(req), req.auth.sub);
+    res.status(result.acesso.status === 'ativo' ? 200 : 202);
+    ok(res, result);
+  });
+
+  router.post('/:id/acesso', requireMaster, async (req, res) => {
+    const result = await service.resume(req.params.id, objectBody(req), req.auth.sub);
+    res.status(result.acesso.status === 'ativo' ? 200 : 202);
+    ok(res, result);
+  });
+
+  router.patch('/:id', async (req, res) => {
+    assertCompanyAccess(req, req.params.id);
+    const body = objectBody(req);
+    if (body._version != null && (!Number.isSafeInteger(body._version) || body._version < 1)) throw httpError(400, 'A versão do cadastro é inválida. Atualize a tela.', 'EMPRESA_VERSAO_INVALIDA');
+    ok(res, { item: await service.edit(req.params.id, body, { expectedVersion: body._version }) });
+  });
+  return router;
+}
+
+export default createEmpresasRouter();

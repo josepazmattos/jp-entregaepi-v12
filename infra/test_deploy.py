@@ -29,6 +29,16 @@ def initial_snapshot():
                 {"AttributeName": "pk", "KeyType": "HASH"}, {"AttributeName": "sk", "KeyType": "RANGE"}],
                 "AttributeDefinitions": [{"AttributeName": "pk", "AttributeType": "S"},
                                          {"AttributeName": "sk", "AttributeType": "S"}]}},
+            "ttl": {"TimeToLiveDescription": {"AttributeName": "expiresAtEpoch", "TimeToLiveStatus": "ENABLED"}},
+            "cognito_pool": {"UserPool": {"Id": deploy.POOL,
+                "Arn": f"arn:aws:cognito-idp:{deploy.REGION}:{deploy.ACCOUNT}:userpool/{deploy.POOL}",
+                "AdminCreateUserConfig": {"AllowAdminCreateUserOnly": True},
+                "SchemaAttributes": [{"Name": "custom:empresa_id", "AttributeDataType": "String",
+                    "Mutable": False, "Required": False, "DeveloperOnlyAttribute": False}]}},
+            "cognito_client": {"UserPoolClient": {"UserPoolId": deploy.POOL, "ClientId": deploy.CLIENT,
+                "ReadAttributes": ["sub", "email", "custom:empresa_id"], "WriteAttributes": ["email", "name"],
+                "ExplicitAuthFlows": ["ALLOW_REFRESH_TOKEN_AUTH", "ALLOW_USER_PASSWORD_AUTH", "ALLOW_USER_SRP_AUTH"]}},
+            "cognito_groups": {"Groups": [{"GroupName": name, "UserPoolId": deploy.POOL} for name in ("MASTER", "EMPRESA")]},
             "function": {"Configuration": copy.deepcopy(config), "Code": {"Location": "https://example.s3.sa-east-1.amazonaws.com/test"}},
             "config": config, "api": {"ApiId": deploy.API_ID, "ApiEndpoint": deploy.API_URL,
                 "ProtocolType": "HTTP", "CorsConfiguration": {"AllowHeaders": ["content-type", "authorization"],
@@ -64,9 +74,16 @@ class FakeAws:
         if service == "sts":
             return copy.deepcopy(self.snapshot["identity"])
         if service == "dynamodb":
-            if operation != "describe-table":
-                raise AssertionError("Nenhuma leitura de cadastros ou escrita em DynamoDB é permitida.")
-            return copy.deepcopy(self.snapshot["table"])
+            label = {"describe-table": "table", "describe-time-to-live": "ttl"}.get(operation)
+            if not label or params != {"TableName": deploy.TABLE}:
+                raise AssertionError("Somente metadados da tabela aprovada podem ser consultados.")
+            return copy.deepcopy(self.snapshot[label])
+        if service == "cognito-idp":
+            label = {"describe-user-pool": "cognito_pool", "describe-user-pool-client": "cognito_client", "list-groups": "cognito_groups"}.get(operation)
+            expected = {"UserPoolId": deploy.POOL, **({"ClientId": deploy.CLIENT} if operation == "describe-user-pool-client" else {})}
+            if not label or params != expected:
+                raise AssertionError("Somente metadados do pool e cliente aprovados podem ser consultados.")
+            return copy.deepcopy(self.snapshot[label])
         if service == "lambda":
             if operation == "get-function":
                 return {"Configuration": copy.deepcopy(self.snapshot["config"]), "Code": self.snapshot["function"]["Code"]}
@@ -256,7 +273,8 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(cfg["Runtime"], "nodejs22.x")
         self.assertEqual(cfg["Environment"]["Variables"]["EXISTING_SETTING"], "preservar")
         self.assertEqual(cfg["Environment"]["Variables"]["BUILD_SHA"], COMMIT)
-        self.assertNotIn("AUTH_COMPANY_CLAIM", cfg["Environment"]["Variables"])
+        self.assertEqual(cfg["Environment"]["Variables"]["AUTH_COMPANY_CLAIM"], "custom:empresa_id")
+        self.assertEqual(cfg["Environment"]["Variables"]["COGNITO_USER_POOL_ID"], deploy.POOL)
         self.assertEqual(self.aws.objects["EntregaEPI/biometria/agente-local.exe"], self.initial_objects["EntregaEPI/biometria/agente-local.exe"])
         for key, obj in self.aws.objects.items():
             if key.startswith(self.operation.backup_prefix):

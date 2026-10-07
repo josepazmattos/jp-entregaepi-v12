@@ -18,7 +18,7 @@ export function fichaSnapshots(empresa, trabalhador) {
       nomeCompleto: textField(trabalhador.nomeCompleto || trabalhador.nome || trabalhador.name),
       cpf: textField(trabalhador.cpf),
       funcao: textField(trabalhador.funcao || trabalhador.job || trabalhador.cargo),
-      matriculaESocial: textField(trabalhador.matriculaESocial || trabalhador.matriculaEsocial || trabalhador.esocial),
+      matriculaESocial: textField(trabalhador.matriculaESocial || trabalhador.matriculaEsocial || trabalhador.esocial, { field: 'Matrícula eSocial', max: Infinity }),
       localidade: textField(trabalhador.localidade || trabalhador.city)
     }
   };
@@ -39,13 +39,16 @@ export function buildFicha({ empresaId, empresa, trabalhador, items, body, actor
   const tipo = body.tipo || 'Entrega';
   if (!['Entrega', 'Troca', 'Devolução'].includes(tipo)) throw httpError(400, 'Tipo da movimentação inválido.', 'MOVIMENTACAO_INVALIDA');
   const normalizedItems = items.map(({ requested, epi }) => {
-    if (!epi || epi.empresaId !== empresaId) throw httpError(403, 'O EPI não pertence à empresa selecionada.', 'EPI_NAO_AUTORIZADO');
+    // The technical equipment catalog is shared. Workers and issued documents
+    // remain company-scoped; their authorization is checked before this builder.
+    if (!epi) throw httpError(404, 'Equipamento não encontrado no catálogo compartilhado.', 'EPI_NAO_ENCONTRADO');
     const quantidade = Number(requested.quantidade ?? 1);
     if (!Number.isSafeInteger(quantidade) || quantidade < 1 || quantidade > 100000) throw httpError(400, 'A quantidade deve ser um número inteiro maior que zero.', 'QUANTIDADE_INVALIDA');
     return {
       epiId: epi.id,
       epiDescricao: textField(epi.descricao || epi.description || epi.name, { max: 2000 }),
       ca: textField(epi.ca),
+      semCA: epi.semCA === true || epi.tipo === 'sem_ca',
       fabricante: textField(epi.fabricante || epi.manufacturer),
       validade: textField(epi.validade || epi.validity),
       quantidade

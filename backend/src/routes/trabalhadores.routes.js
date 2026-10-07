@@ -1,36 +1,51 @@
 import { Router } from 'express';
-import { create, list, get } from '../db/store.js';
-import { ok, fail, empresaIdFrom, objectBody, textField, pickText } from './_helpers.js';
+import { list, get, create, update, listWithRevision, transact } from '../db/store.js';
+import { ok, fail, empresaIdFrom, objectBody } from './_helpers.js';
+import { sortWorkers } from '../services/trabalhadores.service.js';
+import { createWorkerImportService } from '../services/trabalhadores-import.service.js';
 
 const router = Router();
+const importer = createWorkerImportService({ list, get, create, update, listWithRevision, transact });
 
-router.get('/', async (req, res) => ok(res, { items: await list('trabalhador', empresaIdFrom(req)) }));
+async function selectedCompany(req, res) {
+  const empresaId = empresaIdFrom(req);
+  if (!empresaId) { fail(res, 400, 'Selecione a empresa para acessar os trabalhadores.', { code: 'EMPRESA_OBRIGATORIA' }); return null; }
+  if (!await get('empresa', empresaId)) { fail(res, 404, 'Empresa não encontrada'); return null; }
+  return empresaId;
+}
+
+router.get('/', async (req, res) => {
+  const empresaId = await selectedCompany(req, res);
+  if (empresaId) ok(res, { items: sortWorkers(await list('trabalhador', empresaId)) });
+});
 
 router.post('/', async (req, res) => {
   const body = objectBody(req);
-  const empresaId = empresaIdFrom(req);
-  if (!empresaId) return fail(res, 400, 'empresaId é obrigatório');
-  if (!await get('empresa', empresaId)) return fail(res, 404, 'Empresa não encontrada');
-  const nomeCompleto = textField(body.nomeCompleto || body.nome, { required: true, field: 'Nome completo', max: 300 });
-  const matriculaESocial = textField(body.matriculaESocial || body.matriculaEsocial, { required: true, field: 'Matrícula eSocial', max: 100 });
-  const cpf = textField(body.cpf, { required: true, field: 'CPF', max: 20 });
-  const funcao = textField(body.funcao, { required: true, field: 'Função', max: 300 });
-  const localidade = textField(body.localidade, { required: true, field: 'Localidade', max: 300 });
-  if (body.status && !['Ativo', 'Inativo'].includes(body.status)) return fail(res, 400, 'Status do trabalhador inválido');
+  const empresaId = await selectedCompany(req, res);
+  if (empresaId) ok(res, await importer.createWorker({ body, empresaId, actor: req.auth.sub }));
+});
 
-  const item = await create('trabalhador', {
-    ...pickText(body, ['setor', 'dataAdmissao', 'rg', 'email', 'telefone', 'observacoes']),
-    nomeCompleto,
-    nome: nomeCompleto,
-    matriculaESocial,
-    cpf,
-    funcao,
-    localidade,
-    empresaId,
-    status: body.status || 'Ativo',
-    criadoPor: req.auth.sub
-  });
-  ok(res, { item });
+router.post('/importacao/previa', async (req, res) => {
+  const body = objectBody(req);
+  const empresaId = await selectedCompany(req, res);
+  if (!empresaId) return;
+  ok(res, await importer.preview({ arquivoNome: body.arquivoNome, arquivoBase64: body.arquivoBase64, empresaId, actor: req.auth.sub }));
+});
+
+router.get('/importacao/:id', async (req, res) => {
+  const empresaId = await selectedCompany(req, res);
+  if (empresaId) ok(res, await importer.getProgress({ id: req.params.id, empresaId, actor: req.auth.sub }));
+});
+
+router.post('/importacao/:id/confirmar', async (req, res) => {
+  objectBody(req);
+  const empresaId = await selectedCompany(req, res);
+  if (!empresaId) return;
+  try { ok(res, await importer.confirm({ id: req.params.id, empresaId, actor: req.auth.sub })); }
+  catch (error) {
+    if (!error.importacao) throw error;
+    fail(res, error.status, error.message, { code: error.code, importacao: error.importacao });
+  }
 });
 
 export default router;

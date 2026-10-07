@@ -110,7 +110,7 @@
     const locality = first(company.localidade, company.city, ficha.localidade, ficha.locality, worker.localidade);
     const uf = first(company.uf, company.UF);
     const localityWithUf = uf && !new RegExp(`(?:/|,|\\s)${text(uf).replace(/[^a-zA-Z]/g, "")}$`, "i").test(locality) ? `${locality}/${uf}` : locality;
-    const logo = imageSource(first(company.logoDataUrl, company.logoUrl, company.logo), true) || imageSource(options.defaultLogo, true);
+    const logo = imageSource(first(company.logoDataUrl, company.logoUrl, company.logo), true) || imageSource(first(empresa.logoDataUrl, empresa.logoUrl, empresa.logo), true) || imageSource(options.defaultLogo, true);
     const signature = signatureInfo(ficha);
     const cancelled = ficha.status === "cancelada" || ficha.canceled === true;
     const term = first(ficha.modeloFicha && ficha.modeloFicha.termoResponsabilidade, TERMO_APROVADO);
@@ -122,7 +122,8 @@
       const itemDate = formatDate(first(item.data, item.date, date));
       const returnDate = formatDate(first(item.dataDevolucao, item.returnDate, itemType === "Devolução" ? itemDate : ""));
       const signText = item.signed === false && signature.verified ? "Pendente" : signature.rowText;
-      return `<tr><td>${esc(first(item.quantidade, item.qty, 1))}</td><td>${esc(first(item.epiDescricao, item.descricao, item.name, epi.descricao, epi.name, "EPI"))}</td><td>${esc(first(item.ca, epi.ca))}</td><td>${esc(itemType)}</td><td>${esc(itemDate)}</td><td class="docx-sign-cell">${esc(signText)}</td><td>${esc(returnDate)}</td></tr>`;
+      const caLabel = item.semCA === true ? "Sem CA" : first(item.ca, epi.ca);
+      return `<tr><td>${esc(first(item.quantidade, item.qty, 1))}</td><td>${esc(first(item.epiDescricao, item.descricao, item.name, epi.descricao, epi.name, "EPI"))}</td><td>${esc(caLabel)}</td><td>${esc(itemType)}</td><td>${esc(itemDate)}</td><td class="docx-sign-cell">${esc(signText)}</td><td>${esc(returnDate)}</td></tr>`;
     }).join("");
     const fingerprint = signature.image ? `<div class="docx-fingerprint"><img src="${esc(signature.image)}" alt="Imagem da captura biométrica registrada"></div>` : '<div class="docx-sign-space"></div>';
     const signatureNote = signature.note ? `<p class="docx-sign-note">${esc(signature.note)}</p>` : "";

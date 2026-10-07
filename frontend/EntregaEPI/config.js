@@ -1,5 +1,5 @@
 window.JP_CONFIG = {
-  version: "12.7.2",
+  version: "12.8.0",
   appBasePath: "/EntregaEPI/",
   apiBaseUrl: "https://g4pdu3t1va.execute-api.sa-east-1.amazonaws.com",
   cognitoRegion: "sa-east-1",

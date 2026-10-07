@@ -26,7 +26,7 @@ import zipfile
 
 from fetch_ca_snapshot import read_source, verify_installed
 
-VERSION = "12.7.2"
+VERSION = "12.8.0"
 REPOSITORY = "josepazmattos/jp-entregaepi-v12"
 ACCOUNT = "003020057405"
 REGION = "sa-east-1"
@@ -52,7 +52,8 @@ OBJECT_METADATA_FIELDS = ("ContentType", "CacheControl", "ContentDisposition",
                           "WebsiteRedirectLocation")
 ALLOWED_AWS = {
     "sts": {"get-caller-identity"},
-    "dynamodb": {"describe-table"},
+    "dynamodb": {"describe-table", "describe-time-to-live"},
+    "cognito-idp": {"describe-user-pool", "describe-user-pool-client", "list-groups"},
     "lambda": {"get-function", "get-function-configuration", "update-function-code",
                "update-function-configuration"},
     "apigatewayv2": {"get-api", "get-routes", "get-integrations", "get-authorizers",
@@ -190,6 +191,47 @@ def check_context(root: Path, env: dict) -> str:
     return commit
 
 
+def validate_tenant_preflight(snapshot: dict) -> None:
+    """Validate the existing account boundary; deployment never mutates Cognito or TTL."""
+    pool = snapshot.get("cognito_pool", {}).get("UserPool", {})
+    expected_arn = f"arn:aws:cognito-idp:{REGION}:{ACCOUNT}:userpool/{POOL}"
+    if pool.get("Id") != POOL or pool.get("Arn") != expected_arn:
+        raise DeployError("O pool Cognito não corresponde ao alvo aprovado.")
+    if pool.get("AdminCreateUserConfig", {}).get("AllowAdminCreateUserOnly") is not True:
+        raise DeployError("O cadastro público de usuários Cognito precisa permanecer desativado.")
+    attributes = [attribute for attribute in (pool.get("SchemaAttributes") or [])
+                  if isinstance(attribute, dict) and attribute.get("Name") == "custom:empresa_id"]
+    if (len(attributes) != 1 or attributes[0].get("AttributeDataType") != "String"
+            or attributes[0].get("Mutable") is not False
+            or attributes[0].get("Required", False) is not False
+            or attributes[0].get("DeveloperOnlyAttribute", False) is not False):
+        raise DeployError("O vínculo custom:empresa_id precisa ser String, imutável e não obrigatório no pool Cognito.")
+    client = snapshot.get("cognito_client", {}).get("UserPoolClient", {})
+    if client.get("ClientId") != CLIENT or client.get("UserPoolId") != POOL or client.get("ClientSecret"):
+        raise DeployError("O cliente Cognito precisa corresponder ao cliente público aprovado, sem segredo.")
+    read = client.get("ReadAttributes")
+    write = client.get("WriteAttributes")
+    if (not isinstance(read, list) or any(not isinstance(item, str) for item in read)
+            or "custom:empresa_id" not in read):
+        raise DeployError("O cliente Cognito precisa permitir a leitura explícita de custom:empresa_id.")
+    if (not isinstance(write, list) or not write or any(not isinstance(item, str) for item in write)
+            or any(item == "custom:empresa_id" or "*" in item for item in write)):
+        # Omitted/default permissions do not prove that a client cannot set a claim.
+        raise DeployError("O cliente Cognito precisa ter escrita explícita sem acesso a custom:empresa_id.")
+    required_flows = {"ALLOW_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH", "ALLOW_USER_SRP_AUTH"}
+    flows = client.get("ExplicitAuthFlows") or []
+    if (not isinstance(flows, list) or any(not isinstance(flow, str) for flow in flows)
+            or not required_flows.issubset(flows)):
+        raise DeployError("Os fluxos de autenticação Cognito existentes precisam ser preservados.")
+    groups = {group.get("GroupName") for group in (snapshot.get("cognito_groups", {}).get("Groups") or [])
+              if isinstance(group, dict) and group.get("UserPoolId") == POOL}
+    if not {"MASTER", "EMPRESA"}.issubset(groups):
+        raise DeployError("Os grupos MASTER e EMPRESA precisam existir no pool Cognito aprovado.")
+    ttl = snapshot.get("ttl", {}).get("TimeToLiveDescription", {})
+    if ttl.get("AttributeName") != "expiresAtEpoch" or ttl.get("TimeToLiveStatus") not in {"ENABLED", "ENABLING"}:
+        raise DeployError("A tabela precisa ter TTL expiresAtEpoch habilitado para os controles temporários da importação.")
+
+
 def validate_preflight(snapshot: dict) -> str:
     identity, function, config = snapshot["identity"], snapshot["function"], snapshot["config"]
     if identity.get("Account") != ACCOUNT or not identity.get("Arn", "").startswith(
@@ -202,6 +244,7 @@ def validate_preflight(snapshot: dict) -> str:
         raise DeployError("Tabela existente não está ativa com as chaves pk/sk esperadas.")
     if types.get("pk") != "S" or types.get("sk") != "S":
         raise DeployError("Tipos de chave da tabela não correspondem ao armazenamento do aplicativo.")
+    validate_tenant_preflight(snapshot)
     if config.get("FunctionArn") != FUNCTION_ARN or config.get("Role") != EXECUTION_ROLE:
         raise DeployError("A função existente ou sua role não corresponde ao alvo aprovado.")
     if config.get("PackageType", "Zip") != "Zip" or config.get("Runtime") not in (
@@ -240,13 +283,15 @@ def validate_preflight(snapshot: dict) -> str:
 def merged_environment(config: dict, commit: str) -> dict:
     variables = dict(config.get("Environment", {}).get("Variables", {}))
     variables.update(TABLE_NAME=TABLE, DATA_MODE="dynamodb", APP_VERSION=VERSION, BUILD_SHA=commit,
-                     COGNITO_ISSUER=ISSUER, COGNITO_CLIENT_ID=CLIENT)
+                     COGNITO_ISSUER=ISSUER, COGNITO_CLIENT_ID=CLIENT,
+                     COGNITO_USER_POOL_ID=POOL, AUTH_COMPANY_CLAIM="custom:empresa_id")
     return {"Variables": variables}
 
 
 def content_type(path: Path) -> str:
     return {".js": "application/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
-            ".html": "text/html; charset=utf-8", ".json": "application/json; charset=utf-8"}.get(
+            ".html": "text/html; charset=utf-8", ".json": "application/json; charset=utf-8",
+            ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}.get(
                 path.suffix.lower(), mimetypes.guess_type(path.name)[0] or "application/octet-stream")
 
 
@@ -343,7 +388,7 @@ class Deployment:
         self.report["checks"].append(name)
 
     def preflight(self) -> None:
-        self.log("Conferindo conta, tabela, função e integração existentes.")
+        self.log("Conferindo conta, vínculo Cognito, TTL, função e integração existentes.")
         if isinstance(self.aws, AwsCli):
             self.aws.check_support()
         verify_installed(self.root / "backend/src/data/caepi", self.ca_source)
@@ -351,6 +396,10 @@ class Deployment:
         self.snapshot = {
             "identity": self.aws.call("sts", "get-caller-identity"),
             "table": self.aws.call("dynamodb", "describe-table", {"TableName": TABLE}),
+            "ttl": self.aws.call("dynamodb", "describe-time-to-live", {"TableName": TABLE}),
+            "cognito_pool": self.aws.call("cognito-idp", "describe-user-pool", {"UserPoolId": POOL}),
+            "cognito_client": self.aws.call("cognito-idp", "describe-user-pool-client", {"UserPoolId": POOL, "ClientId": CLIENT}),
+            "cognito_groups": self.aws.call("cognito-idp", "list-groups", {"UserPoolId": POOL}),
             "function": self.aws.call("lambda", "get-function", {"FunctionName": FUNCTION}),
             "config": self.aws.call("lambda", "get-function-configuration", {"FunctionName": FUNCTION}),
         }
@@ -361,6 +410,8 @@ class Deployment:
         self.integration = validate_preflight(self.snapshot)
         save_json(self.private / "aws-before.json", self.snapshot)
         self.check("preflight-account-region-table-keys-lambda-revision-api-integration")
+        self.check("preflight-cognito-immutable-company-readonly-client-admin-create-groups")
+        self.check("preflight-dynamodb-import-expiration-ttl")
 
     def download_lambda_backup(self) -> None:
         location = self.snapshot["function"].get("Code", {}).get("Location", "")
