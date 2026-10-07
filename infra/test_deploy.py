@@ -166,8 +166,17 @@ def make_project(root):
     (root / "backend/src/lambda.js").write_text("export const handler = () => {};")
     (root / "backend/node_modules/synthetic/index.js").write_text("export default {};")
     (root / "frontend/EntregaEPI/index.html").write_text('<script src="/__APP_PREFIX__/assets/app.js"></script>')
-    for name in ("app.js", "ficha.js", "styles.css"):
+    for name in ("app.js", "ficha.js", "biometria.js", "styles.css"):
         (root / "frontend/EntregaEPI/assets" / name).write_text("/* fixture sintética */")
+    binary = bytearray(512)
+    binary[:2] = b"MZ"
+    binary[60:64] = (128).to_bytes(4, "little")
+    binary[128:134] = b"PE\0\0\x64\x86"
+    binary[152:154] = b"\x0b\x02"
+    (root / "frontend/EntregaEPI/assets" / deploy.EXECUTABLE).write_bytes(binary)
+    (root / "frontend/EntregaEPI/assets" / deploy.MANIFEST).write_text(json.dumps({
+        "version": "12.8.1", "buildSha": COMMIT, "filename": deploy.EXECUTABLE,
+        "sha256": hashlib.sha256(binary).hexdigest(), "sizeBytes": len(binary)}))
     ca = root / "backend/src/data/caepi"
     shard_bytes = gzip.compress(json.dumps({"items": [{"ca": "365", "name": "EPI SINTÉTICO"}]}).encode())
     (ca / "ca-000.json.gz").write_bytes(shard_bytes)
@@ -269,6 +278,11 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(written[-3:], ["EntregaEPI/index.html", "EntregaEPI", "EntregaEPI/"])
         self.assertLess(written.index("EntregaEPI/assets/ficha.js"), written.index("EntregaEPI/config.js"))
         self.assertIn("EntregaEPI/version.json", written)
+        public = json.loads(self.aws.objects["EntregaEPI/version.json"]["body"])
+        self.assertEqual(public["biometria"]["buildSha"], COMMIT)
+        installer_key = "EntregaEPI/assets/" + deploy.EXECUTABLE
+        self.assertEqual(public["biometria"]["sha256"], hashlib.sha256(self.aws.objects[installer_key]["body"]).hexdigest())
+        self.assertEqual(self.operation.report["biometriaRelease"], public["biometria"])
         cfg = self.aws.snapshot["config"]
         self.assertEqual(cfg["Runtime"], "nodejs22.x")
         self.assertEqual(cfg["Environment"]["Variables"]["EXISTING_SETTING"], "preservar")
@@ -305,7 +319,22 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(cfg["Runtime"], "nodejs20.x")
         self.assertTrue(any(r.get("AuthorizationType") == "JWT" for r in self.aws.snapshot["routes"]["Items"]))
         deleted = {c[2]["Key"] for c in self.aws.calls if c[0:2] == ("s3api", "delete-object")}
-        self.assertEqual(deleted, {"EntregaEPI/assets/ficha.js", "EntregaEPI/version.json"})
+        self.assertEqual(deleted, {"EntregaEPI/assets/ficha.js", "EntregaEPI/assets/biometria.js",
+            "EntregaEPI/assets/" + deploy.EXECUTABLE, "EntregaEPI/assets/" + deploy.MANIFEST,
+            "EntregaEPI/version.json"})
+
+    def test_corrupt_installer_aborts_before_aws_calls(self):
+        asset = self.root / "frontend/EntregaEPI/assets" / deploy.EXECUTABLE
+        asset.write_bytes(asset.read_bytes()[:-1] + b"X")
+        with self.assertRaisesRegex(deploy.DeployError, "hash"):
+            self.operation.run()
+        self.assertEqual(self.aws.calls, [])
+
+    def test_missing_installer_aborts_before_aws_calls(self):
+        (self.root / "frontend/EntregaEPI/assets" / deploy.EXECUTABLE).unlink()
+        with self.assertRaisesRegex(deploy.DeployError, "ausente"):
+            self.operation.run()
+        self.assertEqual(self.aws.calls, [])
 
     def test_failed_lambda_configuration_can_still_be_rolled_back(self):
         self.aws.fail_runtime_once = True

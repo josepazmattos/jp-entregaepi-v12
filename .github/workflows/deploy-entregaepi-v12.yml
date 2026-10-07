@@ -23,7 +23,7 @@ env:
 
 jobs:
   test:
-    name: Validar código, ficha e navegador
+    name: Validar código, biometria, ficha e navegador
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
@@ -53,6 +53,22 @@ jobs:
           cache-dependency-path: |
             backend/package-lock.json
             tests/package-lock.json
+      - name: Preparar Go para o componente Windows
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.27.1"
+          cache: false
+      - name: Preparar Java com compilação compatível com Java 8
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Testar o serviço local e o launcher com leitor sintético
+        run: python3 native/biometria/test_native.py
+      - name: Compilar o reparador Windows do commit testado
+        run: python3 native/biometria/build.py --output native/biometria/dist --build-sha "$GITHUB_SHA"
+      - name: Conferir e preparar o download do componente local
+        run: python3 infra/biometria_release.py --source native/biometria/dist --destination frontend/EntregaEPI/assets --commit "$GITHUB_SHA"
       - name: Instalar dependências do backend pelo lockfile
         run: npm ci --prefix backend --no-audit --no-fund
       - name: Preparar a cópia oficial CAEPI fixada por hash
@@ -61,7 +77,7 @@ jobs:
         run: npm test --prefix backend
       - name: Validar automação de implantação
         run: |
-          python3 -m py_compile infra/deploy.py infra/fetch_ca_snapshot.py infra/test_deploy.py infra/test_ca_snapshot.py
+          python3 -m py_compile infra/deploy.py infra/fetch_ca_snapshot.py infra/biometria_release.py
           python3 -m unittest discover -s infra -p 'test_*.py' -v
           bash -n infra/instalar-v12-7-producao-funcional.sh
       - name: Instalar testes de navegador pelo lockfile
@@ -70,6 +86,15 @@ jobs:
         run: npm --prefix tests run install-browser
       - name: Testar dashboard, login e ficha no navegador
         run: npm --prefix tests test
+      - name: Guardar o componente Windows aprovado por estes testes
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: jp-biometria-windows-${{ github.sha }}
+          path: |
+            native/biometria/dist/JP-Biometria-Setup-12.8.1.exe
+            native/biometria/dist/biometria-release.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Guardar somente evidências sintéticas
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -79,9 +104,42 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  windows:
+    name: Instalar, iniciar e reparar o componente no Windows
+    needs: test
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Baixar exatamente o código testado
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.test.outputs.tested_sha }}
+          persist-credentials: false
+      - name: Preparar Java no Windows de teste
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Baixar o mesmo executável aprovado pelo job de testes
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: jp-biometria-windows-${{ github.sha }}
+          path: native/biometria/dist
+      - name: Conferir instalação e reparo no Windows sem leitor físico
+        shell: pwsh
+        run: python infra/windows_biometria_smoke.py --source native/biometria/dist --commit "$env:GITHUB_SHA"
+      - name: Guardar o resultado sintético do teste Windows
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verificacao-windows-biometria-${{ github.sha }}
+          path: .deploy/windows-biometria-report.json
+          if-no-files-found: ignore
+          retention-days: 14
+
   deploy:
     name: Publicar a versão aprovada na main
-    needs: test
+    needs: [test, windows]
     if: >-
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
@@ -108,6 +166,13 @@ jobs:
         run: npm ci --prefix backend --omit=dev --no-audit --no-fund
       - name: Preparar a mesma cópia oficial CAEPI testada
         run: python3 infra/fetch_ca_snapshot.py
+      - name: Baixar o componente Windows aprovado nesta execução
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: jp-biometria-windows-${{ github.sha }}
+          path: native/biometria/dist
+      - name: Validar o mesmo artefato antes de qualquer alteração na AWS
+        run: python3 infra/biometria_release.py --source native/biometria/dist --destination frontend/EntregaEPI/assets --commit "$GITHUB_SHA"
       - name: Autenticar na conta AWS verificada
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:

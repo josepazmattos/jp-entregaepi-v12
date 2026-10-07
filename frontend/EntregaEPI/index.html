@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#146544" />
   <title>JP EntregaEPI V12</title>
-  <script src="/__APP_PREFIX__/config.js?v=1280"></script>
-  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=1280" />
+  <script src="/__APP_PREFIX__/config.js?v=1281"></script>
+  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=1281" />
 </head>
 <body>
   <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
@@ -75,7 +75,7 @@
           <button id="newPasswordCancel" type="button" class="text-button">Voltar ao acesso</button>
         </form>
         <div class="login-help"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-lock"></use></svg><p>Use o acesso fornecido pelo administrador da sua empresa.</p></div>
-        <div class="login-footer"><span>Versão <b>12.8.0</b></span><span class="environment-label"><i aria-hidden="true"></i> Produção</span></div>
+        <div class="login-footer"><span>Versão <b>12.8.1</b></span><span class="environment-label"><i aria-hidden="true"></i> Produção</span></div>
       </section>
     </section>
   </main>
@@ -102,7 +102,7 @@
         </div>
       </nav>
       <div class="sidebar-support"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg><div><strong>Gestão com responsabilidade</strong><p>Organize os EPIs e acompanhe cada movimentação.</p></div></div>
-      <div class="sidebar-footer"><div class="sidebar-environment"><span class="environment-label"><i aria-hidden="true"></i> Produção</span><small>v12.8.0</small></div><button id="logoutButton" class="btn btn-logout" type="button"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-logout"></use></svg>Sair da conta</button></div>
+      <div class="sidebar-footer"><div class="sidebar-environment"><span class="environment-label"><i aria-hidden="true"></i> Produção</span><small>v12.8.1</small></div><button id="logoutButton" class="btn btn-logout" type="button"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-logout"></use></svg>Sair da conta</button></div>
     </aside>
     <button id="sidebarBackdrop" class="sidebar-backdrop" type="button" aria-label="Fechar menu" tabindex="-1"></button>
 
@@ -254,22 +254,29 @@
         </section>
 
         <section id="screen-biometria" class="screen" aria-labelledby="title-biometria">
-          <div class="topbar"><div><span class="kicker">Conexão local</span><h1 id="title-biometria">Biometria</h1><p>Verifique a conexão com o leitor instalado neste computador.</p></div></div>
+          <div class="topbar"><div><span class="kicker">Conexão local</span><h1 id="title-biometria">Biometria</h1><p>Conecte o leitor deste computador e registre a captura na ficha selecionada.</p></div></div>
           <div class="connection-grid">
             <div class="card connection-card">
               <div class="connection-heading"><span class="device-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-fingerprint"></use></svg></span><span id="bioStatusBadge" class="status-badge" data-state="idle">Não verificado</span></div>
               <h2 id="bioStatusTitle">Verifique a conexão local</h2><p id="bioStatusText" class="status-description" role="status" aria-live="polite">Conecte o equipamento e verifique se o serviço JP Biometria está disponível neste computador.</p>
-              <button id="bioTestButton" class="btn btn-primary" type="button" onclick="testBiometriaLocal()"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-connection"></use></svg>Verificar leitor</button><p id="bioCheckedAt" class="check-time">Aguardando a primeira verificação.</p>
+              <div class="bio-connection-actions"><button id="bioTestButton" class="btn btn-primary" type="button" onclick="testBiometriaLocal()"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-connection"></use></svg>Verificar leitor</button><button id="bioOpenTestButton" class="btn btn-secondary" type="button" onclick="openBiometricCapture()">Testar captura</button><button id="bioStartButton" class="text-button" type="button" onclick="startBiometriaLocal()">Iniciar JP Biometria</button></div><p id="bioCheckedAt" class="check-time">Aguardando a primeira verificação.</p>
+              <p class="bio-permission-help">Primeiro uso ou componente local desatualizado? <a id="bioRepairLink" class="link" href="/__APP_PREFIX__/assets/JP-Biometria-Setup-12.8.1.exe" download>Instalar / reparar JP Biometria</a>. Execute o instalador neste computador e depois verifique o leitor.</p>
               <details class="technical-details"><summary>Detalhes da conexão</summary><pre id="bioOutput">Aguardando teste...</pre></details>
             </div>
-            <aside class="card instructions-card"><div class="section-heading"><div><h2>Antes de verificar</h2><p>Prepare o equipamento em três passos.</p></div></div><ol class="setup-steps"><li><span>1</span><div><h3>Conecte o leitor</h3><p>Conecte o equipamento a uma porta USB deste computador.</p></div></li><li><span>2</span><div><h3>Abra o serviço local</h3><p>Mantenha o JP Biometria em execução durante a verificação.</p></div></li><li><span>3</span><div><h3>Verifique a conexão</h3><p>Clique em Verificar leitor e acompanhe o status ao lado.</p></div></li></ol></aside>
+            <aside class="card instructions-card"><div class="section-heading"><div><h2>Prepare o leitor</h2><p>O driver e o agente local trabalham juntos.</p></div></div><ol class="setup-steps"><li><span>1</span><div><h3>Conecte e libere o leitor</h3><p>Conecte o USB e feche o utilitário de diagnóstico NITGEN, que pode estar usando o equipamento.</p></div></li><li><span>2</span><div><h3>Abra o JP Biometria</h3><p>Clique em Iniciar JP Biometria. Se o navegador perguntar, autorize abrir o aplicativo instalado.</p></div></li><li><span>3</span><div><h3>Permita a conexão local</h3><p>Clique em Verificar leitor. Se houver uma solicitação do navegador, permita o acesso à rede local para este site.</p></div></li><li><span>4</span><div><h3>Faça uma captura</h3><p>Use Testar captura ou, em Fichas de EPI, escolha Capturar digital na ficha pendente.</p></div></li></ol><p class="bio-permission-help">Se o acesso foi bloqueado, abra as permissões deste site pelo ícone ao lado do endereço e revise a permissão de rede local.</p></aside>
+          </div>
+          <div id="bioCapturePanel" class="card bio-capture-panel hidden" aria-labelledby="bioCaptureTitle">
+            <div class="section-heading"><div><h2 id="bioCaptureTitle">Capturar digital</h2><p>Confira o destino antes de registrar a imagem.</p></div><button id="bioCancelButton" class="btn btn-secondary" type="button" onclick="closeBiometricCapture()">Fechar e descartar</button></div>
+            <dl class="bio-capture-context"><div><dt>Empresa</dt><dd id="bioCaptureCompany"></dd></div><div><dt>Trabalhador</dt><dd id="bioCaptureWorker"></dd></div><div><dt>Ficha</dt><dd id="bioCaptureFicha"></dd></div></dl>
+            <div class="bio-capture-layout"><div class="bio-image-preview"><img id="bioCaptureImage" class="hidden" alt="Imagem recebida do leitor nesta captura"><p id="bioCapturePlaceholder">A imagem aparecerá após a captura.</p></div><div class="bio-capture-controls"><div class="field"><label for="bioFingerSelect">Dedo utilizado</label><select id="bioFingerSelect"></select></div><p>Posicione o dedo selecionado quando a luz do leitor acender. Aguarde a conclusão antes de retirá-lo.</p><div class="bio-connection-actions"><button id="bioCaptureButton" class="btn btn-primary" type="button" onclick="captureBiometricImage()">Capturar digital</button><button id="bioRegisterButton" class="btn btn-primary hidden" type="button" onclick="registerBiometricCapture()" disabled>Registrar captura na ficha</button></div><div id="bioCaptureResult" class="message hidden" role="status" aria-live="polite"></div></div></div>
+            <p class="bio-record-note">O registro associa a imagem à ficha indicada. Esta integração não realiza conferência automática da identidade do trabalhador.</p>
           </div>
           <div class="context-note"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-file"></use></svg><div><strong>Fichas e registros de assinatura</strong><p>Acesse as fichas para consultar os documentos e os registros de assinatura disponíveis.</p></div><button class="text-button" type="button" onclick="goScreen('fichas')">Ver fichas <svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-arrow"></use></svg></button></div>
         </section>
 
         <section id="screen-config" class="screen" aria-labelledby="title-config">
           <div class="topbar"><div><span class="kicker">Sistema</span><h1 id="title-config">Configurações</h1><p>Informações do ambiente e verificação dos serviços do sistema.</p></div></div>
-          <div class="card installation-card"><div class="section-heading"><div class="section-title-with-icon"><span class="heading-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-settings"></use></svg></span><div><h2>Seu ambiente de trabalho</h2><p>Configuração atual do JP EntregaEPI.</p></div></div><span class="product-tag">JP EntregaEPI</span></div><dl class="settings-summary"><div><dt>Ambiente</dt><dd id="configEnvironment">Produção</dd></div><div><dt>Versão</dt><dd id="configVersion">12.8.0</dd></div><div><dt>Perfil de acesso</dt><dd id="configProfile">Usuário autenticado</dd></div><div><dt>Empresa em uso</dt><dd id="configCompany">Selecione uma empresa</dd></div></dl></div>
+          <div class="card installation-card"><div class="section-heading"><div class="section-title-with-icon"><span class="heading-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-settings"></use></svg></span><div><h2>Seu ambiente de trabalho</h2><p>Configuração atual do JP EntregaEPI.</p></div></div><span class="product-tag">JP EntregaEPI</span></div><dl class="settings-summary"><div><dt>Ambiente</dt><dd id="configEnvironment">Produção</dd></div><div><dt>Versão</dt><dd id="configVersion">12.8.1</dd></div><div><dt>Perfil de acesso</dt><dd id="configProfile">Usuário autenticado</dd></div><div><dt>Empresa em uso</dt><dd id="configCompany">Selecione uma empresa</dd></div></dl></div>
           <div class="section-heading"><div><h2>Conexões e serviços</h2><p>Consulte a disponibilidade quando precisar.</p></div></div>
           <div class="service-grid">
             <div class="card service-card"><div class="service-top"><span class="service-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-server"></use></svg></span><span id="apiStatusBadge" class="status-badge" data-state="idle">Não verificado</span></div><h3>Serviço do sistema</h3><p id="apiStatusText" class="status-description" role="status" aria-live="polite">Confira o acesso aos cadastros e às fichas do sistema.</p><button id="healthTestButton" class="btn btn-secondary" type="button" onclick="testHealth()"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Verificar conexão</button></div>
@@ -281,7 +288,8 @@
       </main>
     </div>
   </section>
-  <script src="/__APP_PREFIX__/assets/ficha.js?v=1280"></script>
-  <script src="/__APP_PREFIX__/assets/app.js?v=1280"></script>
+  <script src="/__APP_PREFIX__/assets/ficha.js?v=1281"></script>
+  <script src="/__APP_PREFIX__/assets/biometria.js?v=1281"></script>
+  <script src="/__APP_PREFIX__/assets/app.js?v=1281"></script>
 </body>
 </html>

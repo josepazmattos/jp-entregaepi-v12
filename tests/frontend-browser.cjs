@@ -8,7 +8,7 @@ const {chromium} = require('playwright');
 const frontend = path.resolve(__dirname, '../frontend/EntregaEPI');
 const output = path.join(__dirname, 'output');
 fs.mkdirSync(output,{recursive:true});
-const results={suite:'Interface e impressão V12.8.0',syntheticData:true,realApiUsed:false,checks:[],pdfs:{},layouts:{}};
+const results={suite:'Interface e impressão V12.8.1',syntheticData:true,realApiUsed:false,checks:[],pdfs:{},layouts:{}};
 const company={id:'EMPRESA-TESTE',nome:'EMPRESA EXEMPLO',cnpj:'00.000.000/0000-00',localidade:'Cidade de Teste',uf:'MS'};
 const worker={id:'TRABALHADOR-TESTE',empresaId:company.id,nomeCompleto:'TRABALHADOR DE TESTE',cpf:'000.000.000-00',funcao:'FUNÇÃO DE TESTE',matriculaESocial:'00042',status:'Ativo'};
 const epi={id:'EPI-TESTE',empresaId:company.id,descricao:'EQUIPAMENTO DE TESTE',ca:'00000',fabricante:'FABRICANTE DE TESTE'};
@@ -212,7 +212,7 @@ async function main(){
     }
     if(url.origin==='http://127.0.0.1:8789'&&url.pathname==='/status'){
       biometricRequests++;
-      await json(200,{ok:true,service:'SERVICO-BIOMETRICO-SINTETICO'});return;
+      await json(200,{ok:true,service:'JP Biometria Local Java',version:'12.8.1',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture'},sdk:true,reader:true,deviceCount:1,deviceName:'NITGEN HFDU06'});return;
     }
     if(!url.hostname.endsWith('.execute-api.sa-east-1.amazonaws.com')){
       results.unexpectedExternalRequest=true;
@@ -221,7 +221,7 @@ async function main(){
     requests.push({path:url.pathname,method:request.method(),authorizationPresent:request.headers().authorization===`Bearer ${idToken}`,empresaId:request.headers()['x-empresa-id']});
     if(apiFailure){await json(apiFailure,{ok:false,error:apiFailure===403?'Perfil não configurado. Solicite ao administrador.':'Sessão expirada.'});return;}
     if(url.pathname==='/health'){
-      await json(200,{ok:true,version:'12.8.0',mode:'dynamodb',durable:true,storageReady:true,buildSha:'BUILD-SINTETICO',caepi:{sourceKind:'official-snapshot',officialSnapshot:true,live:false,downloadedAt:'2026-10-06T16:00:00Z'}});return;
+      await json(200,{ok:true,version:'12.8.1',mode:'dynamodb',durable:true,storageReady:true,buildSha:'BUILD-SINTETICO',caepi:{sourceKind:'official-snapshot',officialSnapshot:true,live:false,downloadedAt:'2026-10-06T16:00:00Z'}});return;
     }
     if(url.pathname.startsWith('/api/caepi/')){
       if(url.pathname.endsWith('/654321')){
@@ -317,7 +317,7 @@ async function main(){
 
   await page.locator('.nav [data-screen="config"]').click();
   await assertDiagnosticsClosed('config');
-  assert.ok((await page.locator('#configVersion').innerText()).includes('12.8.0'));
+  assert.ok((await page.locator('#configVersion').innerText()).includes('12.8.1'));
   assert.ok((await page.locator('#configCompany').innerText()).includes(company.nome));
   await inspectLayout('desktop-config');
   await page.locator('#healthTestButton').click();
@@ -337,14 +337,14 @@ async function main(){
   assert.equal(biometricRequests,0,'o serviço local só é consultado por ação do usuário');
   await page.locator('#bioTestButton').click();
   await page.waitForFunction(()=>document.getElementById('bioStatusBadge').dataset.state==='success');
-  assert.equal(await page.locator('#bioStatusBadge').innerText(),'Serviço acessível');
+  assert.equal(await page.locator('#bioStatusBadge').innerText(),'Leitor conectado');
   const bioSummary=(await page.locator('#bioStatusTitle').innerText())+' '+(await page.locator('#bioStatusText').innerText());
-  assert.match(bioSummary,/não confirma .*detecção do leitor.*captura.*verificação.*assinatura biométrica/i);
+  assert.match(bioSummary,/não confirma a identidade/i);
   assert.ok(!/leitor detectado|assinatura (validada|confirmada)|biometria verificada/i.test(bioSummary));
   assert.equal(biometricRequests,1);
   await assertDiagnosticsClosed('biometria');
   await inspectLayout('desktop-biometria');
-  passed('HTTP 200 do serviço biométrico informa acesso sem atribuir detecção ou verificação');
+  passed('agente reconhecido informa leitor conectado sem atribuir verificação de identidade');
   passed('login, dashboard, configurações e biometria cabem em desktop de 1366 por 900');
 
   apiFailure=403;
@@ -399,6 +399,8 @@ async function main(){
   assert.ok(!results.unexpectedExternalRequest,'nenhuma conexão a serviços reais');
   results.tenants=await require('./frontend-tenant-browser.cjs')({browser,origin,output});
   results.checks.push(...results.tenants.checks);
+  results.biometrics=await require('./frontend-biometria-browser.cjs')({browser,origin,output});
+  results.checks.push(...results.biometrics.checks);
   results.passed=true;
 }
 

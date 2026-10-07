@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { create, list, get, remove, update } from '../db/store.js';
 import { ok, fail, empresaIdFrom, objectBody, assertRecordAccess, textField } from './_helpers.js';
-import { buildFicha, normalizeImageCapture } from '../services/ficha.service.js';
+import { buildFicha, isImageCaptureReplay, normalizeImageCapture } from '../services/ficha.service.js';
 
 const router = Router();
 
@@ -36,10 +36,27 @@ router.post('/:id/assinar', async (req, res) => {
   const ficha = await get('ficha', req.params.id);
   if (!ficha) return fail(res, 404, 'Ficha não encontrada');
   assertRecordAccess(req, ficha);
-  if (ficha.status !== 'pendente') return fail(res, 409, 'A ficha não está pendente de assinatura');
+  // Preserve the legacy response for an already signed/cancelled document.
+  if (ficha.status !== 'pendente' && req.body?.captureRequestId == null) return fail(res, 409, 'A ficha não está pendente de assinatura');
   const assinatura = normalizeImageCapture(objectBody(req), req.auth.sub);
-  const item = await update('ficha', ficha.id, { status: 'assinada', assinaturaBiometrica: assinatura, assinaturaStatus: 'registrada_sem_verificacao_biometrica', dataAssinatura: assinatura.signedAt }, { expectedVersion: ficha._version, expectedUpdatedAt: ficha.updatedAt });
-  ok(res, { item, warning: 'Assinatura registrada com a imagem fornecida. Verificação biométrica não disponível.' });
+  const completed = (item, replayed) => ok(res, { item, replayed, warning: 'Assinatura registrada com a imagem fornecida. Verificação biométrica não disponível.' });
+  if (isImageCaptureReplay(ficha, assinatura)) return completed(ficha, true);
+  if (ficha.status !== 'pendente') return fail(res, 409, 'A ficha já possui outro registro de assinatura ou foi cancelada. Atualize a lista antes de continuar.', { code: 'CAPTURA_CONFLITANTE' });
+  try {
+    const item = await update('ficha', ficha.id, { status: 'assinada', assinaturaBiometrica: assinatura, assinaturaStatus: 'registrada_sem_verificacao_biometrica', dataAssinatura: assinatura.signedAt }, { expectedVersion: ficha._version, expectedUpdatedAt: ficha.updatedAt });
+    return completed(item, false);
+  } catch (error) {
+    if (assinatura.captureRequestId && error.code === 'REGISTRO_ALTERADO') {
+      // A concurrent retry may have committed the same request. Re-read only
+      // this document and recheck authorization without weakening the lock.
+      const current = await get('ficha', ficha.id);
+      if (current) {
+        assertRecordAccess(req, current);
+        if (isImageCaptureReplay(current, assinatura)) return completed(current, true);
+      }
+    }
+    throw error;
+  }
 });
 
 router.delete('/:id', async (req, res) => {

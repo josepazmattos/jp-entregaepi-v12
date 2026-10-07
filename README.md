@@ -1,13 +1,14 @@
-# JP EntregaEPI 12.8.0
+# JP EntregaEPI 12.8.1
 
 Aplicação de entrega de equipamentos para empresas clientes. O administrador
 **Master** cadastra as empresas e disponibiliza seus acessos. Cada empresa
 organiza seus trabalhadores e fichas; o catálogo de equipamentos é compartilhado.
 Autenticação em Cognito, API em Lambda e persistência em DynamoDB.
 
-- Aplicação: https://www.jptreinamentos.com.br/EntregaEPI/?v=1280
+- Aplicação: https://www.jptreinamentos.com.br/EntregaEPI/?v=1281
 - Versão e commit publicados: https://www.jptreinamentos.com.br/EntregaEPI/version.json
 - [Guia das empresas, importação e equipamentos](docs/V12_8_EMPRESAS_E_IMPORTACAO.md)
+- [Leitor NITGEN: reparo, conexão e captura na ficha](docs/V12_8_1_BIOMETRIA.md)
 - [Guia de implantação](docs/DEPLOY_V12_7_1.md)
 
 ## Empresas e acessos
@@ -97,7 +98,8 @@ os diagnósticos recolhidos continuam disponíveis.
 
 ## Testes locais
 
-Use Node.js 22 e Python 3. Os testes usam dados sintéticos e o catálogo público
+Use Node.js 22, Python 3, Go 1.27.1 e JDK 17. O componente Java é compilado
+para Java 8; o launcher é um executável para Windows de 64 bits. Os testes usam dados sintéticos e o catálogo público
 de CAs, sem criar contas ou alterar trabalhadores no ambiente de produção.
 
 ```bash
@@ -105,6 +107,9 @@ npm ci --prefix backend --no-audit --no-fund
 python3 infra/fetch_ca_snapshot.py
 npm test --prefix backend
 python3 -m unittest discover -s infra -p 'test_*.py' -v
+python3 native/biometria/test_native.py
+python3 native/biometria/build.py --output native/biometria/dist --build-sha "$(git rev-parse HEAD)"
+python3 infra/biometria_release.py --source native/biometria/dist --destination frontend/EntregaEPI/assets --commit "$(git rev-parse HEAD)"
 npm ci --prefix tests --no-audit --no-fund
 npm --prefix tests run install-browser
 npm --prefix tests test
@@ -118,6 +123,19 @@ resultados em `tests/output/` contêm somente exemplos sintéticos.
 O workflow **Testar e publicar JP EntregaEPI** testa `main`, `v12-teste` e
 `install-v12-7-recovery-20261006`. Somente `main` publica, usando exatamente o
 commit aprovado pelos testes da execução.
+
+O job de testes compila o reparador de biometria a partir desse commit, confere
+versão, arquitetura Windows, tamanho e SHA-256, e guarda o executável e seu
+manifesto como artefato. A publicação baixa esse mesmo artefato da mesma execução;
+não recompila o instalador nem usa uma URL de versão flutuante. Os dois arquivos
+entram no backup, no manifesto público, na verificação por hash e na restauração
+automática. Bibliotecas proprietárias NITGEN não são incluídas no repositório.
+
+Antes da publicação, outro job executa esse mesmo instalador em um runner Windows,
+com pasta temporária que contém espaços. Confere o protocolo, o registro do
+usuário, a inicialização e o reparo da instância autenticada. O runner não tem
+leitor NITGEN: esse teste exige o diagnóstico correto de SDK ausente e não
+representa captura USB. A publicação depende também da aprovação desse job.
 
 Antes de qualquer alteração, a implantação confere conta, tabela, Lambda, API,
 vínculo Cognito imutável, permissões de leitura/escrita do cliente, grupos e TTL.

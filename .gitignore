@@ -9,3 +9,5 @@ backend/src/data/caepi/
 .env.*
 !.env.example
 *.log
+frontend/EntregaEPI/assets/JP-Biometria-Setup-*.exe
+frontend/EntregaEPI/assets/biometria-release.json

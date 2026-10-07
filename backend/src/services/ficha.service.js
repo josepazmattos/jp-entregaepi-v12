@@ -1,7 +1,8 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { httpError } from '../middleware/auth.js';
 import { textField } from '../routes/_helpers.js';
 import { MODELO_FICHA_APROVADO, TERMO_APROVADO } from './ficha-modelo.js';
+import { validateCaptureImage } from './capture-image.js';
 
 export function fichaSnapshots(empresa, trabalhador) {
   return {
@@ -80,15 +81,22 @@ export function normalizeImageCapture(body, actor) {
   const image = [body.realFingerImage, body.fingerImageDataUrl, body.imageDataUrl, body.image]
     .find(value => typeof value === 'string' && value.trim());
   if (typeof image !== 'string') throw httpError(400, 'Uma imagem da captura é obrigatória.', 'CAPTURA_AUSENTE');
-  const match = image.match(/^data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/);
-  if (!match) throw httpError(400, 'Envie uma imagem PNG ou JPEG válida.', 'CAPTURA_INVALIDA');
-  const decoded = Buffer.from(match[2], 'base64');
-  const png = match[1] === 'png' && decoded.length > 32 && decoded.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
-  const jpeg = match[1] === 'jpeg' && decoded.length > 4 && decoded[0] === 255 && decoded[1] === 216 && decoded.at(-2) === 255 && decoded.at(-1) === 217;
-  if ((!png && !jpeg) || decoded.length > 150 * 1024) throw httpError(400, 'Imagem de captura inválida ou acima de 150 KB.', 'CAPTURA_INVALIDA');
+  const capture = validateCaptureImage(image);
+  const dedo = textField(body.dedo || body.fingerCode, { required: true, field: 'Dedo utilizado', max: 100 });
+  let request = {};
+  if (body.captureRequestId != null) {
+    if (typeof body.captureRequestId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.captureRequestId)) {
+      throw httpError(400, 'Identificador da tentativa de captura inválido. Inicie uma nova captura.', 'CAPTURA_SOLICITACAO_INVALIDA');
+    }
+    request = {
+      captureRequestId: body.captureRequestId.toLowerCase(),
+      captureRequestHash: createHash('sha256').update(JSON.stringify([capture.mime, dedo])).update('\0').update(capture.bytes).digest('hex')
+    };
+  }
   return {
-    realFingerImage: image,
-    dedo: textField(body.dedo || body.fingerCode, { required: true, field: 'Dedo utilizado', max: 100 }),
+    realFingerImage: capture.dataUrl,
+    dedo,
+    ...request,
     id: randomUUID(),
     signedAt: new Date().toISOString(),
     capturadoPor: actor,
@@ -96,4 +104,14 @@ export function normalizeImageCapture(body, actor) {
     verificada: false,
     status: 'registrada_sem_verificacao_biometrica'
   };
+}
+
+export function isImageCaptureReplay(ficha, capture) {
+  const previous = ficha?.assinaturaBiometrica;
+  // The fetched ficha is the operation scope. The ID alone never authorizes
+  // replay: actor and canonical image/finger content must also match.
+  return Boolean(ficha?.status === 'assinada' && capture.captureRequestId
+    && previous?.captureRequestId === capture.captureRequestId
+    && previous.capturadoPor === capture.capturadoPor
+    && previous.captureRequestHash === capture.captureRequestHash);
 }

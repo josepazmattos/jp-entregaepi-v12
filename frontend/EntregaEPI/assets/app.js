@@ -1,8 +1,9 @@
-(function ensureConfig(){if(!window.JP_CONFIG||!window.JP_CONFIG.apiBaseUrl){window.JP_CONFIG={version:"12.8.0",appBasePath:"/EntregaEPI/",apiBaseUrl:"https://g4pdu3t1va.execute-api.sa-east-1.amazonaws.com",cognitoRegion:"sa-east-1",userPoolId:"sa-east-1_3FNCoTvr0",clientId:"2q2inha617oeer4vb0m0hjoja0",ambiente:"producao"}}})();
+(function ensureConfig(){if(!window.JP_CONFIG||!window.JP_CONFIG.apiBaseUrl){window.JP_CONFIG={version:"12.8.1",appBasePath:"/EntregaEPI/",apiBaseUrl:"https://g4pdu3t1va.execute-api.sa-east-1.amazonaws.com",cognitoRegion:"sa-east-1",userPoolId:"sa-east-1_3FNCoTvr0",clientId:"2q2inha617oeer4vb0m0hjoja0",ambiente:"producao"}}})();
 const $=id=>document.getElementById(id), tokenKey="jp-v12-auth", rememberedUserKey="jp-v12-remembered-user", activeCompanyKey="jp-v12-active-company";
 let sessionGeneration=0,companyGeneration=0,authAttempt=0,importAttempt=0,logoCreateGeneration=0,logoEditGeneration=0;let lastSessionUsername="";let cache={empresas:[],trabalhadores:[],epis:[],fichas:[]};let activeEmpresaId=sessionStorage.getItem(activeCompanyKey)||"";
 let firstAccessChallenge=null,empresaLogoDraft="",empresaLogoEdit=null,empresaRequestId="",importPreview=null,companyLoginAutomatic=true;
 let logoCreateLoading=false,companySaving=false;
+let biometricClient=null,biometricGeneration=0,biometricBusy=false,biometricCapture=null,biometricAbort=null,biometricStartAt=0;
 const screenLabels={dashboard:"Dashboard",empresas:"Empresas",trabalhadores:"Trabalhadores",epis:"EPIs e CA",entrega:"Entrega de EPI",fichas:"Fichas de EPI",biometria:"Biometria",config:"Configurações"};
 const navigationMedia=typeof window.matchMedia==="function"?window.matchMedia("(max-width: 1024px)"):null;
 function setText(id,value){const node=$(id);if(node)node.textContent=value;}
@@ -33,6 +34,7 @@ function renderConfigSummary(){
   setText("configOutput",JSON.stringify(cfg,null,2));
 }
 function resetDiagnostics(){
+  resetBiometricCapture(true);
   setStatusBadge("apiStatusBadge","Não verificado","idle");setText("apiStatusText","Verifique a conexão com o sistema quando precisar.");
   setStatusBadge("caStatusBadge","Não verificada","idle");setText("caStatusText","Consulte um CA para verificar a disponibilidade da base.");
   setStatusBadge("bioStatusBadge","Não verificado","idle");setText("bioStatusTitle","Verifique a conexão local");
@@ -54,6 +56,7 @@ function setSidebarOpen(open,returnFocus=false){
 }
 function activateScreen(screen,focusContent=true){
   if(!Object.prototype.hasOwnProperty.call(screenLabels,screen))return;
+  if(screen!=="biometria"&&(biometricCapture||biometricBusy))resetBiometricCapture();
   document.querySelectorAll(".nav button").forEach(button=>{
     const active=button.dataset.screen===screen;button.classList.toggle("active",active);
     if(active)button.setAttribute("aria-current","page");else button.removeAttribute("aria-current");
@@ -206,7 +209,7 @@ function renderDashboard(){const banner=$("actionBanner");if(!activeEmpresaId&&i
 async function refreshEmpresas(update=true){const r=await api("/api/empresas");ensureSuccess(r,"Não foi possível carregar as empresas.");cache.empresas=asArray(r);renderEmpresas();if(update)await refreshAllSafe();return r}
 function renderEmpresas(){
   const el=$("empresasList"),sel=$("empresaAtivaSelect");if(!el||!sel)return;sel.innerHTML='<option value="">Selecione uma empresa</option>';
-  if(!cache.empresas.some(e=>String(e.id)===String(activeEmpresaId))){companyGeneration++;clearImportPreview();saveActiveCompany(cache.empresas[0]?.id||"");}
+  if(!cache.empresas.some(e=>String(e.id)===String(activeEmpresaId))){companyGeneration++;resetBiometricCapture();clearImportPreview();saveActiveCompany(cache.empresas[0]?.id||"");}
   renderRoleAccess();renderCompanyLogoEditor();
   if(!cache.empresas.length){el.textContent="Nenhuma empresa cadastrada.";return;}
   el.innerHTML=cache.empresas.map(e=>{
@@ -231,7 +234,10 @@ function renderEpis(){
   $("episList").innerHTML=rows.length?rows.map(e=>itemHtml(e,[equipmentLabel(e),e.fabricante,[e.modelo?"Modelo: "+e.modelo:"",e.tamanho?"Tamanho: "+e.tamanho:""].filter(Boolean).join(" · "),isWithoutCA(e)?"":e.validade||e.validity,isWithoutCA(e)?"Equipamento sem Certificado de Aprovação":e.situacao||e.status])).join(""):search?"Nenhum equipamento corresponde à busca.":"Nenhum equipamento cadastrado no catálogo compartilhado.";
 }
 async function refreshEpis(update=true){const r=await api("/api/epis");ensureSuccess(r,"Não foi possível carregar o catálogo de equipamentos.");cache.epis=alphabetical(asArray(r),e=>e.descricao||e.name);renderEpis();renderEntregaOptions();if(update)await refreshAllSafe();return r;}
-async function refreshFichas(update=true){if(!activeEmpresaId){$("fichasList").textContent="Selecione uma empresa.";return}const r=await api("/api/fichas");ensureSuccess(r,"Não foi possível carregar as fichas.");cache.fichas=asArray(r);$("fichasList").innerHTML=cache.fichas.length?cache.fichas.map(f=>itemHtml(f,[f.trabalhadorNome||f.trabalhadorId,f.tipo,f.status,f.data],`<div style="margin-top:10px"><button class="btn btn-secondary" data-ficha-id="${escapeHtml(f.id)}" onclick="imprimirFicha(this.dataset.fichaId)">Visualizar/Imprimir</button></div>`)).join(""):"Nenhuma ficha cadastrada.";if(update)await refreshAllSafe();return r}
+function renderFichas(){
+  $("fichasList").innerHTML=cache.fichas.length?cache.fichas.map(f=>itemHtml(f,[f.trabalhadorNome||f.trabalhadorId,f.tipo,f.status,f.data],`<div class="item-actions"><button class="btn btn-secondary" type="button" data-ficha-id="${escapeHtml(f.id)}" onclick="imprimirFicha(this.dataset.fichaId)">Visualizar/Imprimir</button>${f.status==="pendente"?`<button class="btn btn-primary" type="button" data-capture-ficha-id="${escapeHtml(f.id)}" onclick="openBiometricCapture(this.dataset.captureFichaId)">Capturar digital</button>`:""}</div>`)).join(""):"Nenhuma ficha cadastrada.";
+}
+async function refreshFichas(update=true){if(!activeEmpresaId){$("fichasList").textContent="Selecione uma empresa.";return}const r=await api("/api/fichas");ensureSuccess(r,"Não foi possível carregar as fichas.");cache.fichas=asArray(r);renderFichas();if(update)await refreshAllSafe();return r}
 async function refreshAllSafe(){try{await refreshAll()}catch(error){handleAppError(error)}}
 function renderEntregaOptions(){const tsel=$("entregaTrabalhador"),esel=$("entregaEpi");if(tsel)tsel.innerHTML=cache.trabalhadores.map(t=>`<option value="${escapeHtml(t.id)}">${escapeHtml(t.nomeCompleto||t.nome||"Trabalhador")}</option>`).join("");if(esel)esel.innerHTML=cache.epis.map(e=>`<option value="${escapeHtml(e.id)}">${escapeHtml(equipmentDescription(e)+" - "+equipmentLabel(e))}</option>`).join("");}
 function updateEquipmentKind(){
@@ -513,30 +519,149 @@ async function consultarCA(){
       : (item.warning||"Dados de base complementar, sem confirmação atual no MTE. Confira o CA na consulta oficial antes de inserir no cadastro.");
   }catch(error){if(error.code==="SESSION_CHANGED")return;message.className="message error";message.textContent=error.message;}
 }
-async function testBiometriaLocal(){
-  const button=$("bioTestButton"),generation=sessionGeneration;if(button?.disabled)return;
-  if(button)button.disabled=true;
-  setStatusBadge("bioStatusBadge","Verificando","loading");setText("bioStatusTitle","Consultando o serviço local");
-  setText("bioStatusText","Aguarde enquanto verificamos a resposta do serviço neste computador.");setText("bioOutput","Consultando JP Biometria local...");
-  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);
-  try{
-    const response=await fetch("http://127.0.0.1:8789/status",{signal:controller.signal});
-    const text=await response.text();let body=text;try{body=JSON.parse(text);}catch(error){}
-    if(generation!==sessionGeneration)return;
-    setText("bioOutput",JSON.stringify({status:response.status,body},null,2));
-    if(!response.ok)throw new Error("O serviço local respondeu com erro "+response.status+".");
-    setStatusBadge("bioStatusBadge","Serviço acessível","success");setText("bioStatusTitle","O serviço local respondeu");
-    setText("bioStatusText","A conexão com o serviço foi confirmada. Este teste não confirma a detecção do leitor, a captura ou a verificação de uma assinatura biométrica.");
-  }catch(error){
-    if(generation!==sessionGeneration)return;
-    setStatusBadge("bioStatusBadge","Sem conexão","error");setText("bioStatusTitle","Não foi possível confirmar a conexão");
-    setText("bioStatusText","Confira se o serviço JP Biometria está aberto neste computador e se o navegador permite o acesso local. Depois, tente novamente.");
-    setText("bioOutput",error.name==="AbortError"?"O serviço local não respondeu em 8 segundos.":error.message);
-  }finally{
-    clearTimeout(timeout);
-    if(generation===sessionGeneration){if(button)button.disabled=false;setText("bioCheckedAt","Última verificação: "+new Date().toLocaleString("pt-BR"));}
-  }
+function getBiometricClient(){
+  if(!window.JP_BIOMETRIA)throw new Error('Atualize a página para carregar a integração do leitor.');
+  if(!biometricClient)biometricClient=window.JP_BIOMETRIA.createClient();
+  return biometricClient;
 }
+function setBiometricControls(busy){
+  biometricBusy=busy;
+  ['bioTestButton','bioOpenTestButton','bioStartButton'].forEach(id=>{if($(id))$(id).disabled=busy;});
+  if($('bioCaptureButton'))$('bioCaptureButton').disabled=busy||biometricCapture?.confirmationStarted===true;
+  if($('bioRegisterButton'))$('bioRegisterButton').disabled=busy||!biometricCapture?.image||!biometricCapture?.fichaId;
+  if($('bioFingerSelect'))$('bioFingerSelect').disabled=busy||biometricCapture?.confirmationStarted===true;
+  setText('bioCancelButton',biometricCapture?.confirmationStarted?'Fechar e consultar fichas':'Fechar e descartar');
+}
+function clearBiometricImage(){
+  const image=$('bioCaptureImage');if(image){image.removeAttribute('src');image.classList.add('hidden');}
+  $('bioCapturePlaceholder')?.classList.remove('hidden');
+  if(biometricCapture){biometricCapture.image='';biometricCapture.captureRequestId='';biometricCapture.confirmationStarted=false;}
+  $('bioRegisterButton')?.classList.add('hidden');
+  setText('bioCaptureResult','');$('bioCaptureResult')?.classList.add('hidden');
+}
+function resetBiometricCapture(resetConnection=false){
+  biometricGeneration++;biometricAbort?.abort();biometricAbort=null;
+  if(resetConnection)biometricClient?.clear();else biometricClient?.cancel();
+  clearBiometricImage();biometricCapture=null;
+  $('bioCapturePanel')?.classList.add('hidden');
+  ['bioCaptureCompany','bioCaptureWorker','bioCaptureFicha'].forEach(id=>setText(id,''));
+  setBiometricControls(false);
+}
+function biometricContextCurrent(context,generation){
+  return biometricCapture===context&&generation===biometricGeneration&&context.session===sessionGeneration&&context.companyGeneration===companyGeneration&&context.empresaId===activeEmpresaId;
+}
+function closeBiometricCapture(){
+  const confirmationStarted=biometricCapture?.confirmationStarted===true;
+  resetBiometricCapture();
+  if(confirmationStarted){activateScreen('fichas');$('appMessage').className='message warn';setText('appMessage','O envio da captura foi iniciado. Confira a situação atual da ficha na lista.');refreshFichas(false).catch(handleAppError);}
+}
+function biometricMessage(kind,message){const element=$('bioCaptureResult');if(element){element.className='message '+kind;element.textContent=message;}}
+function showBiometricStatus(status){
+  setStatusBadge('bioStatusBadge',status.ready?'Leitor conectado':status.upgradeRequired?'Atualizar componente local':'Requer atenção',status.ready?'success':'warning');
+  setText('bioStatusTitle',status.ready?'O agente informou um leitor conectado':status.upgradeRequired?'O agente local precisa ser atualizado':status.runtimeTitle||'O agente local precisa de atenção');
+  setText('bioStatusText',status.ready?'Faça uma captura para conferir o funcionamento. A detecção do leitor não confirma a identidade de um trabalhador.':status.upgradeRequired?window.JP_BIOMETRIA.failure('BIO_AGENT_UPDATE').message:status.runtimeMessage|| (status.busy?'O agente informou uma operação em andamento. Aguarde a conclusão antes de verificar ou capturar novamente.':status.checking?window.JP_BIOMETRIA.failure('BIO_CHECKING').message:status.sdkMissing?'O agente respondeu, mas informou que o SDK NITGEN não está disponível. Confira a instalação local.':status.captureAvailable===false?'O componente local está atualizado, mas a captura não está disponível. Confira a configuração de Java e do SDK NITGEN.':'O agente respondeu, mas não confirmou um leitor pronto. Feche o utilitário de diagnóstico NITGEN, confira o cabo USB e verifique novamente.'));
+  setText('bioOutput',JSON.stringify({agente:status.service,versao:status.version,porta:status.port,leitorDetectado:status.readerDetected,resultado:status.code,tentativas:biometricClient?.getDiagnostics()||[]},null,2));
+}
+function showBiometricFailure(error,step='conexao'){
+  const known=String(error.code||'').startsWith('BIO_'),code=known?error.code:'BIO_NETWORK';
+  const message=known?error.message:window.JP_BIOMETRIA?.failure(code).message||'Não foi possível acessar o agente local.';
+  if(step==='conexao'){
+    setStatusBadge('bioStatusBadge',code==='BIO_PERMISSION'?'Permissão bloqueada':'Sem conexão','error');
+    setText('bioStatusTitle',code==='BIO_PERMISSION'?'Permita o acesso local nas configurações do site':'Não foi possível confirmar a conexão');
+    setText('bioStatusText',message);
+  }
+  setText('bioOutput',JSON.stringify({etapa:step,codigo:code,...(Number.isInteger(error.httpStatus)?{http:error.httpStatus}:{}),tentativas:biometricClient?.getDiagnostics()||[]},null,2));
+  return message;
+}
+function startBiometriaLocal(){
+  if(biometricBusy||Date.now()-biometricStartAt<3000)return;
+  biometricStartAt=Date.now();
+  const frame=document.createElement('iframe');frame.hidden=true;frame.setAttribute('title','Abrir JP Biometria');frame.src='jpbiometria://start';document.body.appendChild(frame);
+  setTimeout(()=>frame.remove(),3000);
+  setText('bioStatusTitle','Solicitação de abertura enviada ao Windows');
+  setText('bioStatusText','Se o navegador perguntar, autorize abrir o JP Biometria. Depois, clique em Verificar leitor. A abertura será confirmada somente quando o agente responder.');
+  setStatusBadge('bioStatusBadge','Aguardando verificação','idle');
+}
+async function testBiometriaLocal(){
+  if(biometricBusy)return;
+  const generation=biometricGeneration,session=sessionGeneration,controller=new AbortController();biometricAbort=controller;
+  setBiometricControls(true);setStatusBadge('bioStatusBadge','Verificando','loading');
+  setText('bioStatusTitle','Procurando o JP Biometria neste computador');
+  setText('bioStatusText','Se o navegador solicitar acesso à rede local, permita para conectar o leitor.');setText('bioOutput','Procurando o agente local...');
+  try{
+    const status=await getBiometricClient().discover({signal:controller.signal});
+    if(generation!==biometricGeneration||session!==sessionGeneration)return;
+    showBiometricStatus(status);
+  }catch(error){if(generation!==biometricGeneration||session!==sessionGeneration||error.code==='BIO_CANCELLED')return;showBiometricFailure(error);}
+  finally{if(generation===biometricGeneration&&session===sessionGeneration){biometricAbort=null;setBiometricControls(false);setText('bioCheckedAt','Última verificação: '+new Date().toLocaleString('pt-BR'));}}
+}
+function openBiometricCapture(fichaId=''){
+  if(biometricBusy)return;
+  let ficha=null;
+  if(fichaId){
+    ficha=cache.fichas.find(item=>item.id===fichaId);
+    if(!ficha||String(ficha.empresaId)!==String(activeEmpresaId)){handleAppError(new Error('Selecione a empresa e atualize a ficha antes de capturar.'));return;}
+    if(ficha.status!=='pendente'){handleAppError(new Error('Esta ficha já não está pendente de assinatura. Atualize a lista.'));return;}
+  }
+  resetBiometricCapture();activateScreen('biometria');
+  const empresa=cache.empresas.find(item=>String(item.id)===String(activeEmpresaId));
+  const trabalhador=ficha?cache.trabalhadores.find(item=>item.id===ficha.trabalhadorId):null;
+  biometricCapture={fichaId:ficha?.id||'',empresaId:activeEmpresaId,session:sessionGeneration,companyGeneration,image:'',captureRequestId:'',confirmationStarted:false,fingerCode:'R_INDEX'};
+  $('bioCapturePanel').classList.remove('hidden');
+  setText('bioCaptureTitle',ficha?'Capturar digital para a ficha':'Testar captura do leitor');
+  setText('bioCaptureCompany',ficha?(ficha.empresaSnapshot?.nome||empresa?.nome||'Empresa selecionada'):'Teste local, sem gravação');
+  setText('bioCaptureWorker',ficha?(ficha.trabalhadorSnapshot?.nomeCompleto||ficha.trabalhadorNome||trabalhador?.nomeCompleto||'Trabalhador da ficha'):'Nenhum trabalhador vinculado');
+  setText('bioCaptureFicha',ficha?(ficha.numero||ficha.id):'Nenhuma ficha será alterada');
+  $('bioFingerSelect').innerHTML=window.JP_BIOMETRIA.FINGERS.map(item=>`<option value="${item[0]}">${item[1]}</option>`).join('');$('bioFingerSelect').value='R_INDEX';
+  setText('bioCapturePlaceholder','A imagem aparecerá após a captura.');setText('bioCaptureButton','Capturar digital');setText('bioRegisterButton','Registrar captura na ficha');
+  setBiometricControls(false);$('bioFingerSelect')?.focus({preventScroll:true});$('bioCapturePanel').scrollIntoView?.({block:'nearest',behavior:'smooth'});
+}
+async function captureBiometricImage(){
+  const context=biometricCapture,generation=biometricGeneration;
+  if(!context||biometricBusy||context.confirmationStarted||!biometricContextCurrent(context,generation))return;
+  const fingerCode=$('bioFingerSelect').value;
+  if(!window.JP_BIOMETRIA.FINGERS.some(item=>item[0]===fingerCode)){biometricMessage('error','Selecione o dedo utilizado na captura.');return;}
+  clearBiometricImage();context.fingerCode=fingerCode;
+  const controller=new AbortController();biometricAbort=controller;setBiometricControls(true);
+  setText('bioCaptureButton','Capturando...');biometricMessage('warn','Mantenha o dedo selecionado no leitor quando a luz acender. Feche o diagnóstico NITGEN se ele estiver aberto.');
+  try{
+    const client=getBiometricClient(),status=await client.discover({signal:controller.signal});
+    if(!biometricContextCurrent(context,generation))return;showBiometricStatus(status);
+    if(!status.ready)throw window.JP_BIOMETRIA.unavailableError(status);
+    const response=await client.capture({fingerCode,purpose:context.fichaId?'signature':'test',signal:controller.signal});
+    if(!biometricContextCurrent(context,generation))return;
+    const image=await window.JP_BIOMETRIA.prepareCaptureImage(response,{signal:controller.signal});
+    if(!biometricContextCurrent(context,generation))return;
+    context.image=image;
+    const preview=$('bioCaptureImage');preview.src=image;preview.classList.remove('hidden');$('bioCapturePlaceholder').classList.add('hidden');
+    $('bioRegisterButton').classList.toggle('hidden',!context.fichaId);
+    biometricMessage('success',context.fichaId?'Captura recebida. Confira o trabalhador e a ficha acima; depois clique em Registrar captura na ficha.':'Captura de teste recebida. A imagem será descartada ao fechar; nenhum cadastro ou ficha foi alterado.');
+  }catch(error){if(!biometricContextCurrent(context,generation)||error.code==='BIO_CANCELLED')return;biometricMessage('error',showBiometricFailure(error,'captura'));}
+  finally{if(biometricContextCurrent(context,generation)){biometricAbort=null;setBiometricControls(false);setText('bioCaptureButton','Capturar novamente');setText('bioCheckedAt','Última verificação: '+new Date().toLocaleString('pt-BR'));}}
+}
+async function registerBiometricCapture(){
+  const context=biometricCapture,generation=biometricGeneration;
+  if(!context?.fichaId||!context.image||biometricBusy||!biometricContextCurrent(context,generation))return;
+  if(!context.captureRequestId)context.captureRequestId=crypto.randomUUID();
+  context.confirmationStarted=true;const controller=new AbortController();biometricAbort=controller;setBiometricControls(true);
+  biometricMessage('warn','Registrando a captura na ficha selecionada...');
+  try{
+    const payload={fingerImageDataUrl:context.image,fingerCode:context.fingerCode,captureRequestId:context.captureRequestId};
+    const result=ensureSuccess(await api('/api/fichas/'+encodeURIComponent(context.fichaId)+'/assinar',{method:'POST',body:JSON.stringify(payload),signal:controller.signal}),'Não foi possível confirmar o registro da captura.');
+    if(!biometricContextCurrent(context,generation))return;
+    const item=result.body?.item;
+    if(!item||item.id!==context.fichaId||String(item.empresaId)!==String(context.empresaId)||item.status!=='assinada')throw new Error('O sistema não confirmou a ficha esperada. Atualize as fichas antes de tentar novamente.');
+    cache.fichas=cache.fichas.map(ficha=>ficha.id===item.id?item:ficha);renderFichas();renderDashboard();
+    resetBiometricCapture();activateScreen('fichas');
+    $('appMessage').className='message success';setText('appMessage','Captura registrada na ficha. O documento apresenta a imagem e o registro de assinatura, sem afirmar verificação automática da identidade.');
+  }catch(error){
+    if(!biometricContextCurrent(context,generation)||error.code==='SESSION_CHANGED')return;
+    if(error.status===401){handleAppError(error);return;}
+    const message=error.status===409?'A ficha foi alterada ou já possui outra captura. Atualize a lista antes de continuar.':error.status===403?'Seu acesso não permite registrar esta ficha. Confira a empresa selecionada.':error.status&&error.status<500?'O sistema recusou o registro da captura. Confira a ficha antes de tentar novamente.':'Não foi possível confirmar o registro. Clique em Tentar registrar novamente para reenviar a mesma captura sem duplicar o registro.';
+    biometricMessage('error',message);setText('bioRegisterButton','Tentar registrar novamente');
+  }finally{if(biometricContextCurrent(context,generation)){biometricAbort=null;setBiometricControls(false);}}
+}
+
 function imprimirFicha(id){
   let documentUrl="";
   const releaseDocument=()=>{if(documentUrl){URL.revokeObjectURL(documentUrl);documentUrl="";}};
@@ -576,7 +701,7 @@ function showApp(){const auth=getAuth();if(!auth)return;$("loginPage").classList
 function showLogin(clearDrafts=false){clearSessionData(clearDrafts);if(clearDrafts)$("password").value="";$("appShell").classList.add("hidden");$("loginPage").classList.remove("hidden")}
 $("empresaAtivaSelect").addEventListener("change",async e=>{
   if(!isMaster()){renderEmpresas();return;}
-  companyGeneration++;logoEditGeneration++;clearCredentials();clearImportPreview();resetCompanyLogoEditor();
+  companyGeneration++;resetBiometricCapture();logoEditGeneration++;clearCredentials();clearImportPreview();resetCompanyLogoEditor();
   ["trabalhadorForm","entregaForm"].forEach(id=>{$(id).reset();const button=$(id).querySelector('button[type="submit"]');if(button)button.disabled=false;});if($("trabalhadorSearch"))$("trabalhadorSearch").value="";
   cache.trabalhadores=[];cache.fichas=[];$("trabalhadoresList").textContent="Carregando...";$("fichasList").textContent="Carregando...";$("dashboardFichas").textContent="";renderEntregaOptions();
   saveActiveCompany(e.target.value);await refreshAllSafe();
@@ -697,3 +822,6 @@ if(navigationMedia?.addEventListener)navigationMedia.addEventListener("change",(
 setSidebarOpen(false);
 renderRoleAccess();updateEquipmentKind();
 const remembered=localStorage.getItem(rememberedUserKey);if(remembered){$("username").value=remembered;$("rememberUser").checked=true}if(getAuth())showApp();
+
+$("bioFingerSelect").addEventListener("change",()=>{if(biometricCapture&&!biometricBusy&&!biometricCapture.confirmationStarted){clearBiometricImage();biometricCapture.fingerCode=$("bioFingerSelect").value;setBiometricControls(false);}});
+window.addEventListener("pagehide",()=>resetBiometricCapture(true));

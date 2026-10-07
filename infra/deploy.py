@@ -25,8 +25,9 @@ import urllib.request
 import zipfile
 
 from fetch_ca_snapshot import read_source, verify_installed
+from biometria_release import verify_release, ReleaseError, EXECUTABLE, MANIFEST
 
-VERSION = "12.8.0"
+VERSION = "12.8.1"
 REPOSITORY = "josepazmattos/jp-entregaepi-v12"
 ACCOUNT = "003020057405"
 REGION = "sa-east-1"
@@ -291,6 +292,7 @@ def merged_environment(config: dict, commit: str) -> dict:
 def content_type(path: Path) -> str:
     return {".js": "application/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
             ".html": "text/html; charset=utf-8", ".json": "application/json; charset=utf-8",
+            ".exe": "application/octet-stream",
             ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}.get(
                 path.suffix.lower(), mimetypes.guess_type(path.name)[0] or "application/octet-stream")
 
@@ -311,7 +313,7 @@ def prepare_frontend(root: Path, stage: Path, commit: str, run_id: str) -> list[
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(path.read_bytes())
         files.append(PublicFile(f"{PREFIX}/{relative.as_posix()}", target, content_type(path)))
-    required = {f"{PREFIX}/assets/{name}" for name in ("app.js", "ficha.js", "styles.css")}
+    required = {f"{PREFIX}/assets/{name}" for name in ("app.js", "ficha.js", "biometria.js", "styles.css", EXECUTABLE, MANIFEST)}
     if not required.issubset({item.key for item in files}):
         raise DeployError("Arquivos obrigatórios do frontend estão ausentes.")
     cfg = {"version": VERSION, "buildSha": commit, "appBasePath": f"/{PREFIX}/", "apiBaseUrl": API_URL,
@@ -332,6 +334,9 @@ def prepare_frontend(root: Path, stage: Path, commit: str, run_id: str) -> list[
     source_info = read_source(root / "data/caepi-source.json")
     manifest["caepiSnapshot"] = {field: source_info[field] for field in (
         "sha256", "manifestSha256", "records", "ambiguousRecords", "downloadedAt", "sourceUrl")}
+    release = verify_release(stage / "assets", commit)
+    manifest["biometria"] = {field: release[field] for field in (
+        "version", "buildSha", "filename", "sha256", "sizeBytes")}
     save_json(version_file, manifest, private=False)
     files.append(PublicFile(f"{PREFIX}/version.json", version_file, content_type(version_file)))
     return files + tail
@@ -389,6 +394,14 @@ class Deployment:
 
     def preflight(self) -> None:
         self.log("Conferindo conta, vínculo Cognito, TTL, função e integração existentes.")
+        try:
+            release = verify_release(self.root / "frontend/EntregaEPI/assets", self.commit)
+        except (ReleaseError, OSError) as error:
+            raise DeployError(str(error) if isinstance(error, ReleaseError)
+                              else "Não foi possível verificar o componente local de biometria.") from None
+        self.report["biometriaRelease"] = {field: release[field] for field in (
+            "version", "buildSha", "filename", "sha256", "sizeBytes")}
+        self.check("biometria-windows-tested-artifact-version-commit-pe64-and-sha256-verified")
         if isinstance(self.aws, AwsCli):
             self.aws.check_support()
         verify_installed(self.root / "backend/src/data/caepi", self.ca_source)
@@ -638,6 +651,7 @@ class Deployment:
             if status != 200 or hashlib.sha256(body).hexdigest() != sha256(item.path):
                 raise DeployError("Um arquivo público diverge dos bytes aprovados nesta implantação.")
         self.check("cloudfront-invalidation-completed-and-public-sha256-matched")
+        self.check("biometria-installer-and-manifest-public-sha256-matched")
 
     def rollback_frontend(self) -> None:
         expected = {item.key: item for item in self.files}

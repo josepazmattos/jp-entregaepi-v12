@@ -157,7 +157,7 @@ test('API Lambda: autorização, empresa, emissão e captura em isolamento local
     assert.equal((await request('POST', `/api/fichas/${ficha.id}/assinar`, { claims: foreignClaims, body: {} })).status, 403);
     assert.equal((await request('DELETE', `/api/fichas/${ficha.id}`, { claims: foreignClaims })).status, 403);
     assert.equal((await request('POST', `/api/fichas/${ficha.id}/assinar`, { company: companyA, body: { realFingerImage: 'invented', dedo: 'teste' } })).status, 400);
-    const image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jBxkAAAAASUVORK5CYII=';
+    const image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
     const capture = await request('POST', `/api/fichas/${ficha.id}/assinar`, { company: companyA, body: { realFingerImage: true, fingerImageDataUrl: image, fingerCode: 'sintetico', verificada: true, matchScore: 100, signedAt: 'falsified' } });
     assert.equal(capture.status, 200);
     assert.equal(capture.body.item.status, 'assinada');
