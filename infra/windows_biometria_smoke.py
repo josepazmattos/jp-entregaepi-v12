@@ -346,8 +346,8 @@ class WindowsSmoke:
             "checking": result.get("checking") is True,
             "capture": capabilities.get("capture") is True if isinstance(capabilities, dict) else False,
             "captureContract": isinstance(capabilities, dict) and capabilities.get("captureMethod") == "POST" and capabilities.get("capturePath") == "/api/capture",
-            "templatesDisabled": isinstance(capabilities, dict) and capabilities.get("templates") is False,
-            "verifyDisabled": isinstance(capabilities, dict) and capabilities.get("verify") is False,
+            "templatesSupported": isinstance(capabilities, dict) and capabilities.get("templates") is True,
+            "verifySupported": isinstance(capabilities, dict) and capabilities.get("verify") is True,
         }
         self.report["observedSDKStatus"] = observed
         print("SDK status contract: " + json.dumps(observed, sort_keys=True))
@@ -355,8 +355,10 @@ class WindowsSmoke:
                 and result.get("runtime") != "diagnostic-only" and result.get("errorCode") == "SDK_NOT_FOUND"
                 and result.get("busy") is False and isinstance(capabilities, dict)
                 and capabilities.get("capture") is True and capabilities.get("captureMethod") == "POST"
-                and capabilities.get("capturePath") == "/api/capture" and capabilities.get("templates") is False
-                and capabilities.get("verify") is False,
+                # Capabilities describe the installed protocol, not device readiness.
+                # The checks above still require ok/sdk/reader=False without the SDK.
+                and capabilities.get("capturePath") == "/api/capture" and capabilities.get("templates") is True
+                and capabilities.get("verify") is True,
                 "SDK_DIAGNOSTIC_INVALID", "O agente Java não confirmou o diagnóstico esperado de SDK NITGEN ausente.")
         require(self.control.command(own["port"], "ping") == own, "STATUS_INSTANCE_CHANGED",
                 "A instância mudou durante a conferência de seu status.")
