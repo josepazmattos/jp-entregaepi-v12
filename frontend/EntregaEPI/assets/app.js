@@ -1,6 +1,51 @@
-(function ensureConfig(){if(!window.JP_CONFIG||!window.JP_CONFIG.apiBaseUrl){window.JP_CONFIG={version:"12.7.1",appBasePath:"/EntregaEPI/",apiBaseUrl:"https://g4pdu3t1va.execute-api.sa-east-1.amazonaws.com",cognitoRegion:"sa-east-1",userPoolId:"sa-east-1_3FNCoTvr0",clientId:"2q2inha617oeer4vb0m0hjoja0",ambiente:"producao"}}})();
+(function ensureConfig(){if(!window.JP_CONFIG||!window.JP_CONFIG.apiBaseUrl){window.JP_CONFIG={version:"12.7.2",appBasePath:"/EntregaEPI/",apiBaseUrl:"https://g4pdu3t1va.execute-api.sa-east-1.amazonaws.com",cognitoRegion:"sa-east-1",userPoolId:"sa-east-1_3FNCoTvr0",clientId:"2q2inha617oeer4vb0m0hjoja0",ambiente:"producao"}}})();
 const $=id=>document.getElementById(id), tokenKey="jp-v12-auth", rememberedUserKey="jp-v12-remembered-user", activeCompanyKey="jp-v12-active-company";
 let sessionGeneration=0;let lastSessionUsername="";let cache={empresas:[],trabalhadores:[],epis:[],fichas:[]};let activeEmpresaId=localStorage.getItem(activeCompanyKey)||"";
+const screenLabels={dashboard:"Dashboard",empresas:"Empresas",trabalhadores:"Trabalhadores",epis:"EPIs e CA",entrega:"Entrega de EPI",fichas:"Fichas de EPI",biometria:"Biometria",config:"Configurações"};
+const navigationMedia=typeof window.matchMedia==="function"?window.matchMedia("(max-width: 1024px)"):null;
+function setText(id,value){const node=$(id);if(node)node.textContent=value;}
+function setStatusBadge(id,label,state){const node=$(id);if(node){node.textContent=label;node.dataset.state=state;}}
+function renderConfigSummary(){
+  const cfg=window.JP_CONFIG||{},auth=getAuth();
+  const empresa=cache.empresas.find(item=>String(item.id)===String(activeEmpresaId));
+  const rawGroups=auth?.payload?.["cognito:groups"];
+  const groups=Array.isArray(rawGroups)?rawGroups:typeof rawGroups==="string"?rawGroups.split(",").map(value=>value.trim()):[];
+  setText("configVersion",cfg.version||"Não informada");
+  setText("configEnvironment",cfg.ambiente==="producao"?"Produção":cfg.ambiente||"Não informado");
+  setText("configCompany",empresa?.nome||"Nenhuma empresa selecionada");
+  setText("configProfile",!auth?"Não autenticado":groups.includes("MASTER")?"Master":groups.includes("EMPRESA")?"Empresa":"Perfil não configurado");
+  setText("configOutput",JSON.stringify(cfg,null,2));
+}
+function resetDiagnostics(){
+  setStatusBadge("apiStatusBadge","Não verificado","idle");setText("apiStatusText","Verifique a conexão com o sistema quando precisar.");
+  setStatusBadge("caStatusBadge","Não verificada","idle");setText("caStatusText","Consulte um CA para verificar a disponibilidade da base.");
+  setStatusBadge("bioStatusBadge","Não verificado","idle");setText("bioStatusTitle","Verifique a conexão local");
+  setText("bioStatusText","Inicie a verificação para saber se o serviço do leitor responde neste computador.");
+  setText("bioCheckedAt","Nenhuma verificação nesta sessão.");
+  setText("apiOutput","Nenhuma verificação realizada nesta sessão.");setText("bioOutput","Nenhuma verificação realizada nesta sessão.");
+  ["healthTestButton","caTestButton","bioTestButton"].forEach(id=>{if($(id))$(id).disabled=false;});
+}
+function setSidebarOpen(open,returnFocus=false){
+  const mobile=navigationMedia?.matches===true,expanded=mobile&&open;
+  $("appShell").classList.toggle("sidebar-open",expanded);
+  document.body.classList.toggle("menu-open",expanded);
+  const sidebar=$("primarySidebar"),main=$("mainContent"),toggle=$("menuToggle");
+  if(sidebar)sidebar.inert=mobile&&!expanded;
+  if(main)main.inert=expanded;
+  if(toggle){toggle.setAttribute("aria-expanded",String(expanded));toggle.setAttribute("aria-label",expanded?"Fechar menu":"Abrir menu");}
+  if(expanded)$("sidebarClose")?.focus();
+  else if(returnFocus&&mobile)toggle?.focus();
+}
+function activateScreen(screen,focusContent=true){
+  if(!Object.prototype.hasOwnProperty.call(screenLabels,screen))return;
+  document.querySelectorAll(".nav button").forEach(button=>{
+    const active=button.dataset.screen===screen;button.classList.toggle("active",active);
+    if(active)button.setAttribute("aria-current","page");else button.removeAttribute("aria-current");
+  });
+  document.querySelectorAll(".screen").forEach(section=>section.classList.toggle("active",section.id==="screen-"+screen));
+  setText("currentSectionLabel",screenLabels[screen]);setSidebarOpen(false);
+  if(focusContent)$("mainContent")?.focus({preventScroll:true});
+}
 function setMsg(type,text){const el=$("loginMessage");el.className="message "+type;el.textContent=text}function hideMsg(){$("loginMessage").className="message hidden";$("loginMessage").textContent=""}
 function parseJwt(token){try{const payload=token.split(".")[1];const json=atob(payload.replace(/-/g,"+").replace(/_/g,"/"));return JSON.parse(decodeURIComponent(escape(json)))}catch(e){return {}}}
 function saveAuth(auth,username){if(lastSessionUsername&&lastSessionUsername!==username)clearSessionData(true);lastSessionUsername=username;sessionStorage.setItem(tokenKey,JSON.stringify({username,idToken:auth.IdToken,accessToken:auth.AccessToken,refreshToken:auth.RefreshToken,expiresAt:Date.now()+((auth.ExpiresIn||3600)*1000),payload:parseJwt(auth.IdToken||"")}))}
@@ -25,6 +70,7 @@ function clearSessionData(clearDrafts=false) {
   ["metricEmpresas","metricTrabalhadores","metricEpis","metricFichas"].forEach(id=>$(id).textContent=0);
   $("empresaAtivaSelect").innerHTML='<option value="">Selecione uma empresa</option>';
   $("userBadge").textContent="Usuário autenticado";
+  resetDiagnostics();renderConfigSummary();setSidebarOpen(false);
   clearAppError();renderEntregaOptions();$("caMessage").className="message hidden";$("caMessage").textContent="";
   if(clearDrafts)["empresaForm","trabalhadorForm","epiForm","entregaForm"].forEach(id=>$(id).reset());
 }
@@ -45,8 +91,40 @@ function handleAppError(error) {
 function clearAppError() { $("appMessage").className="message hidden"; $("appMessage").textContent=""; }
 function itemHtml(obj,lines=[],actions=""){return `<div class="item"><strong>${escapeHtml(obj.nome||obj.nomeCompleto||obj.name||obj.descricao||obj.numero||obj.id||"Registro")}</strong>${lines.filter(Boolean).map(x=>`<small>${escapeHtml(x)}</small>`).join("")}${actions}</div>`}
 function formDataObj(form){return Object.fromEntries(new FormData(form).entries())}function requireEmpresa(){if(!activeEmpresaId){alert("Cadastre ou selecione uma empresa antes de continuar.");goScreen("empresas");return false}return true}
-async function testHealth(){try{write("Testando API...");write(await api("/health"))}catch(error){write(error.message)}}
-async function testCA(){try{write("Consultando CA 365...");write(await api("/api/caepi/365"))}catch(error){write(error.message)}}
+async function testHealth(){
+  const button=$("healthTestButton"),generation=sessionGeneration;if(button?.disabled)return;
+  if(button)button.disabled=true;
+  setStatusBadge("apiStatusBadge","Verificando","loading");setText("apiStatusText","Conferindo a conexão e o armazenamento dos cadastros.");write("Verificando conexão...");
+  try{
+    const result=ensureSuccess(await api("/health"),"O sistema não respondeu à verificação.");write(result);
+    const ready=result.body?.ok===true&&result.body?.durable===true&&result.body?.storageReady===true;
+    setStatusBadge("apiStatusBadge",ready?"Operacional":"Requer atenção",ready?"success":"warning");
+    setText("apiStatusText",ready?"Conexão disponível e armazenamento dos cadastros pronto para uso.":"O serviço respondeu, mas não confirmou que o armazenamento está pronto. Tente novamente ou contate o administrador.");
+  }catch(error){if(generation!==sessionGeneration||error.code==="SESSION_CHANGED")return;setStatusBadge("apiStatusBadge","Indisponível","error");setText("apiStatusText","Não foi possível verificar o sistema. Confira a conexão e tente novamente.");write(error.message);}
+  finally{if(button&&generation===sessionGeneration)button.disabled=false;}
+}
+async function testCA(){
+  const button=$("caTestButton"),generation=sessionGeneration;if(button?.disabled)return;
+  if(button)button.disabled=true;
+  setStatusBadge("caStatusBadge","Consultando","loading");setText("caStatusText","Verificando a consulta do CA 365.");write("Consultando CA 365...");
+  try{
+    const result=ensureSuccess(await api("/api/caepi/365"),"A consulta de CA não respondeu.");write(result);
+    const item=result.body?.item||{};
+    if(item.ambiguous===true||item.autofillAllowed===false||item.found!==true){
+      setStatusBadge("caStatusBadge","Conferência necessária","warning");
+      setText("caStatusText",item.warning||"O CA consultado precisa de confirmação na fonte oficial.");
+    }else if(item.officialSnapshot===true){
+      const date=new Date(item.downloadedAt||"");
+      const label=Number.isNaN(date.getTime())?"":" em "+date.toLocaleDateString("pt-BR");
+      setStatusBadge("caStatusBadge","Base disponível","success");
+      setText("caStatusText",`CA 365 localizado na cópia oficial obtida${label}. Atualizações devem ser conferidas no portal do MTE.`);
+    }else{
+      setStatusBadge("caStatusBadge","Base complementar","warning");
+      setText("caStatusText","CA localizado em base complementar, sem confirmação atual no MTE. Confira os dados no portal oficial.");
+    }
+  }catch(error){if(generation!==sessionGeneration||error.code==="SESSION_CHANGED")return;setStatusBadge("caStatusBadge","Indisponível","error");setText("caStatusText","Não foi possível consultar o CA. Tente novamente ou abra a consulta oficial do MTE.");write(error.message);}
+  finally{if(button&&generation===sessionGeneration)button.disabled=false;}
+}
 async function refreshAll(){
   clearAppError();
   await refreshEmpresas(false);
@@ -64,7 +142,7 @@ async function refreshAll(){
   $("metricEpis").textContent=cache.epis.length;
   $("metricFichas").textContent=cache.fichas.length;
   renderDashboard();
-  $("configOutput").textContent=JSON.stringify(window.JP_CONFIG,null,2);
+  renderConfigSummary();
 }
 function renderDashboard(){const banner=$("actionBanner");if(!activeEmpresaId){banner.classList.remove("hidden")}else banner.classList.add("hidden");const actions=[];if(!cache.empresas.length)actions.push("Cadastre a primeira empresa.");if(activeEmpresaId&&!cache.trabalhadores.length)actions.push("Cadastre trabalhadores da empresa selecionada.");if(activeEmpresaId&&!cache.epis.length)actions.push("Cadastre EPIs ou consulte o CA 365.");if(activeEmpresaId&&cache.trabalhadores.length&&cache.epis.length)actions.push("Gere uma ficha de EPI.");$("nextActions").innerHTML=actions.length?actions.map(a=>`<div class="item"><strong>${escapeHtml(a)}</strong></div>`).join(""):'<div class="item"><strong>Fluxo inicial concluído.</strong><small>Você já pode gerar e acompanhar fichas de EPI.</small></div>';$("dashboardFichas").innerHTML=cache.fichas.length?cache.fichas.slice(0,6).map(f=>itemHtml(f,[f.trabalhadorNome||f.trabalhadorId,f.tipo,f.status,f.data])).join(""):"Nenhuma ficha gerada para a empresa selecionada."}
 async function refreshEmpresas(update=true){const r=await api("/api/empresas");ensureSuccess(r,"Não foi possível carregar as empresas.");cache.empresas=asArray(r);renderEmpresas();if(update)await refreshAllSafe();return r}
@@ -111,7 +189,30 @@ async function consultarCA(){
       : (item.warning||"Dados de base complementar, sem confirmação atual no MTE. Confira o CA na consulta oficial antes de inserir no cadastro.");
   }catch(error){if(error.code==="SESSION_CHANGED")return;message.className="message error";message.textContent=error.message;}
 }
-async function testBiometriaLocal(){const out=$("bioOutput");out.textContent="Consultando JP Biometria local...";try{const r=await fetch("http://127.0.0.1:8789/status");const text=await r.text();let body=text;try{body=JSON.parse(text)}catch(e){}out.textContent=JSON.stringify({status:r.status,body},null,2)}catch(e){out.textContent="JP Biometria local não respondeu: "+e.message}}
+async function testBiometriaLocal(){
+  const button=$("bioTestButton"),generation=sessionGeneration;if(button?.disabled)return;
+  if(button)button.disabled=true;
+  setStatusBadge("bioStatusBadge","Verificando","loading");setText("bioStatusTitle","Consultando o serviço local");
+  setText("bioStatusText","Aguarde enquanto verificamos a resposta do serviço neste computador.");setText("bioOutput","Consultando JP Biometria local...");
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);
+  try{
+    const response=await fetch("http://127.0.0.1:8789/status",{signal:controller.signal});
+    const text=await response.text();let body=text;try{body=JSON.parse(text);}catch(error){}
+    if(generation!==sessionGeneration)return;
+    setText("bioOutput",JSON.stringify({status:response.status,body},null,2));
+    if(!response.ok)throw new Error("O serviço local respondeu com erro "+response.status+".");
+    setStatusBadge("bioStatusBadge","Serviço acessível","success");setText("bioStatusTitle","O serviço local respondeu");
+    setText("bioStatusText","A conexão com o serviço foi confirmada. Este teste não confirma a detecção do leitor, a captura ou a verificação de uma assinatura biométrica.");
+  }catch(error){
+    if(generation!==sessionGeneration)return;
+    setStatusBadge("bioStatusBadge","Sem conexão","error");setText("bioStatusTitle","Não foi possível confirmar a conexão");
+    setText("bioStatusText","Confira se o serviço JP Biometria está aberto neste computador e se o navegador permite o acesso local. Depois, tente novamente.");
+    setText("bioOutput",error.name==="AbortError"?"O serviço local não respondeu em 8 segundos.":error.message);
+  }finally{
+    clearTimeout(timeout);
+    if(generation===sessionGeneration){if(button)button.disabled=false;setText("bioCheckedAt","Última verificação: "+new Date().toLocaleString("pt-BR"));}
+  }
+}
 function imprimirFicha(id){
   let documentUrl="";
   const releaseDocument=()=>{if(documentUrl){URL.revokeObjectURL(documentUrl);documentUrl="";}};
@@ -147,7 +248,7 @@ function imprimirFicha(id){
   }catch(error){releaseDocument();handleAppError(error);}
 }
 function goScreen(screen){document.querySelector(`[data-screen="${screen}"]`)?.click()}
-function showApp(){const auth=getAuth();if(!auth)return;$("loginPage").classList.add("hidden");$("appShell").classList.remove("hidden");$("userBadge").textContent=auth.username||"Usuário autenticado";$("configOutput").textContent=JSON.stringify(window.JP_CONFIG,null,2);refreshAll().catch(handleAppError)}
+function showApp(){const auth=getAuth();if(!auth)return;$("loginPage").classList.add("hidden");$("appShell").classList.remove("hidden");$("userBadge").textContent=auth.username||"Usuário autenticado";renderConfigSummary();activateScreen("dashboard",false);refreshAll().catch(handleAppError)}
 function showLogin(clearDrafts=false){clearSessionData(clearDrafts);if(clearDrafts)$("password").value="";$("appShell").classList.add("hidden");$("loginPage").classList.remove("hidden")}
 $("empresaAtivaSelect").addEventListener("change",async e=>{activeEmpresaId=e.target.value;localStorage.setItem(activeCompanyKey,activeEmpresaId);await refreshAllSafe()});
 $("togglePassword").addEventListener("click",()=>{const i=$("password");const show=i.type==="password";i.type=show?"text":"password";$("togglePassword").textContent=show?"Ocultar":"Mostrar"});
@@ -196,5 +297,20 @@ $("entregaForm").addEventListener("submit",async event=>{
   }catch(error){handleAppError(error);}finally{button.disabled=false;}
 });
 $("logoutButton").addEventListener("click",()=>{sessionStorage.removeItem(tokenKey);showLogin(true)});$("refreshButton").addEventListener("click",()=>refreshAllSafe());
-document.querySelectorAll(".nav button").forEach(btn=>btn.addEventListener("click",()=>{document.querySelectorAll(".nav button").forEach(b=>b.classList.remove("active"));btn.classList.add("active");document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));$("screen-"+btn.dataset.screen).classList.add("active")}));
+document.querySelectorAll(".nav button").forEach(btn=>btn.addEventListener("click",()=>activateScreen(btn.dataset.screen)));
+$("menuToggle")?.addEventListener("click",()=>setSidebarOpen(!$("appShell").classList.contains("sidebar-open"),true));
+$("sidebarClose")?.addEventListener("click",()=>setSidebarOpen(false,true));
+$("sidebarBackdrop")?.addEventListener("click",()=>setSidebarOpen(false,true));
+document.addEventListener("keydown",event=>{
+  if(!$("appShell").classList.contains("sidebar-open"))return;
+  if(event.key==="Escape"){event.preventDefault();setSidebarOpen(false,true);return;}
+  if(event.key==="Tab"){
+    const controls=Array.from($("primarySidebar").querySelectorAll('button:not([disabled]),a[href],select:not([disabled]),input:not([disabled])'));
+    const first=controls[0],last=controls[controls.length-1];
+    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
+    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
+  }
+});
+if(navigationMedia?.addEventListener)navigationMedia.addEventListener("change",()=>setSidebarOpen(false));
+setSidebarOpen(false);
 const remembered=localStorage.getItem(rememberedUserKey);if(remembered){$("username").value=remembered;$("rememberUser").checked=true}if(getAuth())showApp();

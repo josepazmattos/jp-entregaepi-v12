@@ -1,6 +1,6 @@
 {
   "name": "jp-entregaepi-v12-api",
-  "version": "12.7.1",
+  "version": "12.7.2",
   "type": "module",
   "main": "src/lambda.js",
   "engines": { "node": ">=20" },

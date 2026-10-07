@@ -3,31 +3,58 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#146544" />
   <title>JP EntregaEPI V12</title>
-  <script src="/__APP_PREFIX__/config.js?v=1271"></script>
-  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=1271" />
+  <script src="/__APP_PREFIX__/config.js?v=1272"></script>
+  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=1272" />
 </head>
 <body>
+  <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+    <symbol id="icon-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="icon-building" viewBox="0 0 24 24"><path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M16 9h3a1 1 0 0 1 1 1v11M2 21h20M8 7h4M8 11h4M8 15h4M9 21v-3h2v3"/></symbol>
+    <symbol id="icon-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4v3"/></symbol>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 4-3.5 7-8 9-4.5-2-8-5-8-9V6l8-3Z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></symbol>
+    <symbol id="icon-package" viewBox="0 0 24 24"><path d="m3 7 9-4 9 4v10l-9 4-9-4V7Zm0 0 9 4 9-4M12 11v10M7.5 5l9 4"/></symbol>
+    <symbol id="icon-file" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></symbol>
+    <symbol id="icon-fingerprint" viewBox="0 0 24 24"><path d="M8 3a10 10 0 0 1 13 9M3 11a9 9 0 0 1 2-5M7 21c2-3 2-5 2-9a3 3 0 0 1 6 0c0 5 1 7 3 9M3 17c2-2 2-3 2-5a7 7 0 0 1 14 0c0 3 0 5 2 6M11 21c2-4 2-6 2-9M16 3l2 1"/></symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24"><path d="m9 3-.5 2-2 1-2-.5-2 3 1.5 1.5v3L2.5 15l2 3 2-.5 2 1 .5 2h4l.5-2 2-1 2 .5 2-3-1.5-2v-3l1.5-1.5-2-3-2 .5-2-1L14 3H9Z"/><circle cx="11.5" cy="12" r="3"/></symbol>
+    <symbol id="icon-logout" viewBox="0 0 24 24"><path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M9 12h12m-4-4 4 4-4 4"/></symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6.5 6a8 8 0 0 1 13 3M4.5 15a8 8 0 0 0 13 3"/></symbol>
+    <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="icon-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="icon-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+    <symbol id="icon-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+    <symbol id="icon-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="icon-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol>
+    <symbol id="icon-connection" viewBox="0 0 24 24"><path d="M8 3v4m8-4v4M6 7h12v3a6 6 0 0 1-12 0V7Zm6 9v5"/></symbol>
+    <symbol id="icon-server" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01M11 6.5h6M11 17.5h6"/></symbol>
+    <symbol id="icon-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v7c0 1.7 4 3 9 3s9-1.3 9-3V5M3 12v7c0 1.7 4 3 9 3s9-1.3 9-3v-7"/></symbol>
+    <symbol id="icon-lock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></symbol>
+    <symbol id="icon-external" viewBox="0 0 24 24"><path d="M14 3h7v7m0-7L10 14M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"/></symbol>
+  </svg>
   <main id="loginPage" class="login-page">
-    <section class="login-layout">
+    <section class="login-layout" aria-label="Acesso ao JP EntregaEPI">
       <aside class="brand-panel">
         <div class="brand-content">
           <img class="brand-logo" src="/__APP_PREFIX__/assets/logo-jp.png" alt="JP Segurança do Trabalho" />
-          <span class="kicker">JP Segurança do Trabalho</span>
-          <h1>Entrega de EPI V12</h1>
-          <p>Gestão de empresas, trabalhadores, EPIs e fichas com cadastros organizados e emissão de documentos.</p>
+          <span class="kicker">Gestão de equipamentos de proteção</span>
+          <h1>Cuidado com as pessoas.<br>Controle em cada entrega.</h1>
+          <p>Empresas, trabalhadores e fichas de EPI em um só lugar, com a organização que a sua operação precisa.</p>
           <div class="feature-grid">
-            <div class="feature"><span>✓</span> Empresas e trabalhadores</div>
-            <div class="feature"><span>✓</span> Consulta CA / EPI</div>
-            <div class="feature"><span>✓</span> Fichas de EPI</div>
-            <div class="feature"><span>✓</span> Conexão com leitor local</div>
+            <div class="feature"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg><span>Empresas e equipes</span></div>
+            <div class="feature"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg><span>Consulta de CA</span></div>
+            <div class="feature"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-file"></use></svg><span>Fichas de EPI</span></div>
+            <div class="feature"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-fingerprint"></use></svg><span>Conexão com leitor</span></div>
           </div>
         </div>
+        <div class="brand-signature">JP Segurança do Trabalho <span>EntregaEPI V12</span></div>
       </aside>
       <section class="login-card">
         <div class="login-head">
           <div class="login-logo"><img src="/__APP_PREFIX__/assets/logo-jp.png" alt="JP" /></div>
-          <div><span class="kicker">Acesso ao sistema</span><h2>Entrega de EPI</h2><p>Entre com seu usuário e senha.</p></div>
+          <div><span class="eyebrow">Bem-vindo ao JP EntregaEPI</span><h2>Acesse sua conta</h2><p>Entre para continuar a gestão dos EPIs.</p></div>
         </div>
         <form id="loginForm" class="form">
           <div class="field"><label for="username">Usuário</label><input id="username" autocomplete="username" placeholder="Digite seu usuário" required /></div>
@@ -36,153 +63,179 @@
             <div class="password-wrap"><input id="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required /><button type="button" id="togglePassword" class="toggle-password">Mostrar</button></div>
           </div>
           <label class="remember-row"><input type="checkbox" id="rememberUser" /><span>Lembrar usuário neste computador</span></label>
-          <div id="loginMessage" class="message hidden"></div>
-          <button type="submit" class="btn btn-primary" id="loginButton">Entrar</button>
+          <div id="loginMessage" class="message hidden" role="alert" aria-live="polite"></div>
+          <button type="submit" class="btn btn-primary btn-full" id="loginButton">Entrar</button>
         </form>
-        <div class="info-box"><strong>V12.7.1:</strong> dashboard, cadastros, EPIs, fichas no modelo aprovado e verificação do leitor local.</div>
-        <div class="login-footer"><span>Versão <b>12.7.1</b></span><span>Ambiente <b>Produção</b></span></div>
+        <div class="login-help"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-lock"></use></svg><p>Use o acesso fornecido pelo administrador da sua empresa.</p></div>
+        <div class="login-footer"><span>Versão <b>12.7.2</b></span><span class="environment-label"><i aria-hidden="true"></i> Produção</span></div>
       </section>
     </section>
   </main>
 
   <section id="appShell" class="app-shell hidden">
-    <aside class="sidebar">
+    <a class="skip-link" href="#mainContent">Ir para o conteúdo</a>
+    <aside id="primarySidebar" class="sidebar" aria-label="Menu principal">
       <div class="sidebar-brand">
         <div class="sidebar-logo"><img src="/__APP_PREFIX__/assets/logo-jp.png" alt="JP" /></div>
-        <div class="brand-text"><strong>EntregaEPI V12</strong><span id="userBadge">Usuário autenticado</span></div>
+        <div class="brand-text"><strong>EntregaEPI<span>V12</span></strong><small>Segurança do Trabalho</small></div><button id="sidebarClose" class="icon-button sidebar-close" type="button" aria-label="Fechar menu"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-close"></use></svg></button>
       </div>
-      <div class="company-box">
-        <label>Empresa em uso</label>
-        <select id="empresaAtivaSelect"><option value="">Selecione ou cadastre uma empresa</option></select>
-        <small>Os dados são filtrados pela empresa selecionada.</small>
-      </div>
-      <nav class="nav">
-        <button class="active" data-screen="dashboard">▦ Dashboard</button>
-        <button data-screen="empresas">▤ Empresas</button>
-        <button data-screen="trabalhadores">♙ Trabalhadores</button>
-        <button data-screen="epis">◇ EPIs e CA</button>
-        <button data-screen="entrega">▣ Entrega de EPI</button>
-        <button data-screen="fichas">▧ Fichas</button>
-        <button data-screen="biometria">◉ Biometria</button>
-        <button data-screen="config">⚙ Configurações</button>
+      <nav class="nav" aria-label="Navegação do sistema">
+        <div class="nav-group"><p class="nav-label">Gestão</p>
+          <button type="button" class="nav-button active" data-screen="dashboard" aria-current="page"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-grid"></use></svg><span>Dashboard</span></button>
+          <button type="button" class="nav-button" data-screen="empresas"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg><span>Empresas</span></button>
+          <button type="button" class="nav-button" data-screen="trabalhadores"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-users"></use></svg><span>Trabalhadores</span></button>
+          <button type="button" class="nav-button" data-screen="epis"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg><span>EPIs e CA</span></button>
+          <button type="button" class="nav-button" data-screen="entrega"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-package"></use></svg><span>Entrega de EPI</span></button>
+          <button type="button" class="nav-button" data-screen="fichas"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-file"></use></svg><span>Fichas de EPI</span></button>
+        </div>
+        <div class="nav-group"><p class="nav-label">Sistema</p>
+          <button type="button" class="nav-button" data-screen="biometria"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-fingerprint"></use></svg><span>Biometria</span></button>
+          <button type="button" class="nav-button" data-screen="config"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-settings"></use></svg><span>Configurações</span></button>
+        </div>
       </nav>
-      <div class="sidebar-footer"><small>Ambiente: Produção</small><small>Versão: 12.7.1</small><button id="logoutButton" class="btn btn-secondary">Sair</button></div>
+      <div class="sidebar-support"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg><div><strong>Gestão com responsabilidade</strong><p>Organize os EPIs e acompanhe cada movimentação.</p></div></div>
+      <div class="sidebar-footer"><div class="sidebar-environment"><span class="environment-label"><i aria-hidden="true"></i> Produção</span><small>v12.7.2</small></div><button id="logoutButton" class="btn btn-logout" type="button"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-logout"></use></svg>Sair da conta</button></div>
     </aside>
+    <button id="sidebarBackdrop" class="sidebar-backdrop" type="button" aria-label="Fechar menu" tabindex="-1"></button>
 
-    <main class="main">
-      <div id="appMessage" class="message hidden" role="alert" aria-live="polite"></div>
-      <section id="screen-dashboard" class="screen active">
-        <div class="topbar">
-          <div><span class="kicker">Painel inicial</span><h1>Dashboard</h1><p>Visão geral de empresas, trabalhadores, EPIs e fichas de EPI.</p></div>
-          <button id="refreshButton" class="btn btn-dark">Atualizar</button>
+    <div class="workspace">
+      <header class="app-header">
+        <div class="header-context"><button id="menuToggle" class="icon-button menu-toggle" type="button" aria-label="Abrir menu" aria-controls="primarySidebar" aria-expanded="false"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-menu"></use></svg></button><div class="breadcrumb"><span>Gestão de EPI</span><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-chevron"></use></svg><strong id="currentSectionLabel">Dashboard</strong></div></div>
+        <div class="header-controls">
+          <div class="company-box"><label for="empresaAtivaSelect">Empresa em uso</label><select id="empresaAtivaSelect"><option value="">Selecione ou cadastre uma empresa</option></select></div>
+          <div class="user-menu"><span class="user-avatar"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-user"></use></svg></span><div><small>Usuário</small><strong id="userBadge">Usuário autenticado</strong></div></div>
         </div>
-
-        <div id="actionBanner" class="action-banner hidden">
-          <strong>Para começar:</strong> cadastre ou selecione uma empresa. Depois cadastre trabalhadores, EPIs e gere as fichas.
-          <button class="btn btn-secondary" onclick="goScreen('empresas')">Cadastrar empresa</button>
-        </div>
-
-        <div class="metrics">
-          <div class="metric-card"><span class="pill">Empresas</span><strong id="metricEmpresas">0</strong><p>Empresas cadastradas</p></div>
-          <div class="metric-card"><span class="pill">Trabalhadores</span><strong id="metricTrabalhadores">0</strong><p>Da empresa selecionada</p></div>
-          <div class="metric-card"><span class="pill">EPIs</span><strong id="metricEpis">0</strong><p>Banco de EPIs da empresa</p></div>
-          <div class="metric-card"><span class="pill">Fichas</span><strong id="metricFichas">0</strong><p>Fichas geradas</p></div>
-        </div>
-
-        <div class="dashboard-grid">
-          <div class="card list-card"><h2>Próximas ações</h2><div id="nextActions" class="list"></div></div>
-          <div class="card list-card"><h2>Últimas fichas</h2><div id="dashboardFichas" class="list"></div></div>
-        </div>
-      </section>
-
-      <section id="screen-empresas" class="screen">
-        <div class="topbar"><div><span class="kicker">Cadastro</span><h1>Empresas</h1><p>Cadastro de empresas com localidade para emissão das fichas.</p></div><button class="btn btn-primary" onclick="refreshEmpresas().catch(handleAppError)">Atualizar empresas</button></div>
-        <div class="two-col">
-          <form id="empresaForm" class="card form-card">
-            <h2>Nova empresa</h2>
-            <div class="field"><label>Nome da empresa</label><input name="nome" required placeholder="PAZ SEGURANÇA DO TRABALHO"></div>
-            <div class="field"><label>CNPJ</label><input name="cnpj" placeholder="00.000.000/0001-00"></div>
-            <div class="field"><label>Localidade</label><input name="localidade" placeholder="Dourados/MS"></div>
-            <div class="field"><label>Responsável</label><input name="responsavel" placeholder="Responsável pela empresa"></div>
-            <button class="btn btn-primary" type="submit">Salvar empresa</button>
-          </form>
-          <div class="card list-card"><h2>Empresas cadastradas</h2><div id="empresasList" class="list">Carregando...</div></div>
-        </div>
-      </section>
-
-      <section id="screen-trabalhadores" class="screen">
-        <div class="topbar"><div><span class="kicker">Cadastro</span><h1>Trabalhadores</h1><p>Campos no padrão de importação e ficha de EPI.</p></div><button class="btn btn-primary" onclick="refreshTrabalhadores().catch(handleAppError)">Atualizar trabalhadores</button></div>
-        <div class="two-col wide">
-          <form id="trabalhadorForm" class="card form-card">
-            <h2>Novo trabalhador</h2>
-            <div class="grid-form">
-              <div class="field"><label>Nome completo</label><input name="nomeCompleto" required></div>
-              <div class="field"><label>CPF</label><input name="cpf" required></div>
-              <div class="field"><label>Matrícula eSocial</label><input name="matriculaESocial" required></div>
-              <div class="field"><label>Função</label><input name="funcao" required></div>
-              <div class="field"><label>Setor</label><input name="setor"></div>
-              <div class="field"><label>Localidade</label><input name="localidade" required></div>
-              <div class="field"><label>Data de Admissão</label><input name="dataAdmissao" placeholder="dd/mm/aaaa"></div>
-              <div class="field"><label>Status</label><select name="status"><option>Ativo</option><option>Inativo</option></select></div>
-              <div class="field"><label>RG</label><input name="rg"></div>
-              <div class="field"><label>E-mail</label><input name="email"></div>
-              <div class="field"><label>Telefone</label><input name="telefone"></div>
-              <div class="field"><label>Observações</label><input name="observacoes"></div>
-            </div>
-            <button class="btn btn-primary" type="submit">Salvar trabalhador</button>
-          </form>
-          <div class="card list-card"><h2>Trabalhadores cadastrados</h2><div id="trabalhadoresList" class="list">Carregando...</div></div>
-        </div>
-      </section>
-
-      <section id="screen-epis" class="screen">
-        <div class="topbar"><div><span class="kicker">Banco de EPIs</span><h1>EPIs e CA</h1><p>Consulta de CA e cadastro de EPI por empresa.</p></div><button class="btn btn-primary" onclick="refreshEpis().catch(handleAppError)">Atualizar EPIs</button></div>
-        <div class="two-col">
-          <form id="epiForm" class="card form-card">
-            <h2>Consulta / cadastro</h2>
-            <div class="inline"><div class="field grow"><label>CA</label><input name="ca" id="caInput" placeholder="365"></div><button class="btn btn-secondary" type="button" onclick="consultarCA()">Consultar CA</button></div>
-            <div id="caMessage" class="message hidden" role="status"></div><a class="link" href="https://caepi.trabalho.gov.br/internet/ConsultaCAInternet.aspx" target="_blank" rel="noopener noreferrer">Abrir consulta oficial do CA no MTE</a>
-            <div class="field"><label>Descrição do EPI</label><input name="descricao" id="epiDescricao" required></div>
-            <div class="field"><label>Fabricante</label><input name="fabricante" id="epiFabricante"></div>
-            <div class="grid-form two"><div class="field"><label>Validade</label><input name="validade" id="epiValidade"></div><div class="field"><label>Situação</label><input name="situacao" id="epiSituacao"></div></div>
-            <button class="btn btn-primary" type="submit">Inserir no cadastro</button>
-          </form>
-          <div class="card list-card"><h2>EPIs cadastrados</h2><div id="episList" class="list">Carregando...</div></div>
-        </div>
-      </section>
-
-      <section id="screen-entrega" class="screen">
-        <div class="topbar"><div><span class="kicker">Movimentação</span><h1>Entrega de EPI</h1><p>Gera ficha de EPI no modelo aprovado, com os dados do trabalhador e o Termo de Responsabilidade.</p></div></div>
-        <form id="entregaForm" class="card form-card">
-          <div class="grid-form">
-            <div class="field"><label>Trabalhador</label><select name="trabalhadorId" id="entregaTrabalhador" required></select></div>
-            <div class="field"><label>Tipo</label><select name="tipo"><option>Entrega</option><option>Troca</option><option>Devolução</option></select></div>
-            <div class="field"><label>EPI</label><select name="epiId" id="entregaEpi" required></select></div>
-            <div class="field"><label>Quantidade</label><input name="quantidade" type="number" min="1" step="1" value="1" required></div>
+      </header>
+      <main id="mainContent" class="main" tabindex="-1">
+        <div id="appMessage" class="message hidden" role="alert" aria-live="polite"></div>
+        <section id="screen-dashboard" class="screen active" aria-labelledby="title-dashboard">
+          <div class="topbar"><div><span class="kicker">Painel de gestão</span><h1 id="title-dashboard">Dashboard</h1><p>Acompanhe os cadastros e as movimentações da sua operação.</p></div><button id="refreshButton" class="btn btn-secondary" type="button"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Atualizar</button></div>
+          <div id="actionBanner" class="action-banner hidden"><div><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-info"></use></svg><p><strong>Comece pela empresa.</strong><span>Cadastre ou selecione uma empresa para organizar os trabalhadores, EPIs e fichas.</span></p></div><button class="btn btn-secondary" type="button" onclick="goScreen('empresas')"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-plus"></use></svg>Cadastrar empresa</button></div>
+          <div class="metrics">
+            <article class="metric-card"><div class="metric-top"><span>Empresas</span><span class="metric-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg></span></div><strong id="metricEmpresas">0</strong><p>Empresas cadastradas</p></article>
+            <article class="metric-card"><div class="metric-top"><span>Trabalhadores</span><span class="metric-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-users"></use></svg></span></div><strong id="metricTrabalhadores">0</strong><p>Na empresa selecionada</p></article>
+            <article class="metric-card"><div class="metric-top"><span>EPIs</span><span class="metric-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg></span></div><strong id="metricEpis">0</strong><p>Equipamentos cadastrados</p></article>
+            <article class="metric-card"><div class="metric-top"><span>Fichas</span><span class="metric-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-file"></use></svg></span></div><strong id="metricFichas">0</strong><p>Documentos emitidos</p></article>
           </div>
-          <button class="btn btn-primary" type="submit">Gerar ficha de EPI</button>
-        </form>
-      </section>
+          <div class="section-heading"><div><h2>Acesso rápido</h2><p>As principais ações da sua rotina.</p></div></div>
+          <div class="quick-actions">
+            <button type="button" class="shortcut" onclick="goScreen('empresas')"><span class="shortcut-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg></span><span><strong>Nova empresa</strong><small>Organize seus cadastros</small></span><svg class="icon shortcut-arrow" aria-hidden="true" focusable="false"><use href="#icon-chevron"></use></svg></button>
+            <button type="button" class="shortcut" onclick="goScreen('trabalhadores')"><span class="shortcut-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-users"></use></svg></span><span><strong>Novo trabalhador</strong><small>Cadastre a equipe</small></span><svg class="icon shortcut-arrow" aria-hidden="true" focusable="false"><use href="#icon-chevron"></use></svg></button>
+            <button type="button" class="shortcut" onclick="goScreen('epis')"><span class="shortcut-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg></span><span><strong>Consultar CA</strong><small>Localize um equipamento</small></span><svg class="icon shortcut-arrow" aria-hidden="true" focusable="false"><use href="#icon-chevron"></use></svg></button>
+            <button type="button" class="shortcut" onclick="goScreen('entrega')"><span class="shortcut-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-package"></use></svg></span><span><strong>Gerar ficha</strong><small>Registre a movimentação</small></span><svg class="icon shortcut-arrow" aria-hidden="true" focusable="false"><use href="#icon-chevron"></use></svg></button>
+          </div>
+          <div class="dashboard-grid">
+            <div class="card list-card"><div class="section-heading"><div><h2>Próximas ações</h2><p>Continue a organização da empresa.</p></div><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-arrow"></use></svg></div><div id="nextActions" class="list"></div></div>
+            <div class="card list-card"><div class="section-heading"><div><h2>Últimas fichas</h2><p>Acompanhe os documentos mais recentes.</p></div><button class="text-button" type="button" onclick="goScreen('fichas')">Ver todas <svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-arrow"></use></svg></button></div><div id="dashboardFichas" class="list"></div></div>
+          </div>
+        </section>
 
-      <section id="screen-fichas" class="screen">
-        <div class="topbar"><div><span class="kicker">Documentos</span><h1>Fichas de EPI</h1><p>Fichas geradas na V12.</p></div><button class="btn btn-primary" onclick="refreshFichas().catch(handleAppError)">Atualizar fichas</button></div>
-        <div class="card list-card"><h2>Fichas cadastradas</h2><div id="fichasList" class="list">Carregando...</div></div>
-      </section>
+        <section id="screen-empresas" class="screen" aria-labelledby="title-empresas">
+          <div class="topbar"><div><span class="kicker">Cadastros</span><h1 id="title-empresas">Empresas</h1><p>Organize as empresas e os dados utilizados nas fichas de EPI.</p></div><button class="btn btn-secondary" type="button" onclick="refreshEmpresas().catch(handleAppError)"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Atualizar empresas</button></div>
+          <div class="two-col">
+            <form id="empresaForm" class="card form-card">
+              <div class="form-heading"><span class="heading-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg></span><div><h2>Nova empresa</h2><p>Informe os dados do cadastro.</p></div></div>
+              <div class="field"><label for="empresaNome">Nome da empresa <span class="required-mark" aria-hidden="true">*</span></label><input name="nome" id="empresaNome" required placeholder="Nome ou razão social"></div>
+              <div class="field"><label for="empresaCnpj">CNPJ</label><input name="cnpj" id="empresaCnpj" placeholder="00.000.000/0000-00" inputmode="numeric"></div>
+              <div class="field"><label for="empresaLocalidade">Localidade</label><input name="localidade" id="empresaLocalidade" placeholder="Cidade/UF"></div>
+              <div class="field"><label for="empresaResponsavel">Responsável</label><input name="responsavel" id="empresaResponsavel" placeholder="Nome do responsável"></div>
+              <div class="form-actions"><button class="btn btn-primary" type="submit"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>Salvar empresa</button></div>
+            </form>
+            <div class="card list-card"><div class="section-heading"><div><h2>Empresas cadastradas</h2><p>Selecione a empresa em uso no topo da página.</p></div></div><div id="empresasList" class="list">Carregando...</div></div>
+          </div>
+        </section>
 
-      <section id="screen-biometria" class="screen">
-        <div class="topbar"><div><span class="kicker">Assinatura</span><h1>Biometria</h1><p>Verificação da conexão com o leitor biométrico instalado neste computador.</p></div><button class="btn btn-primary" onclick="testBiometriaLocal()">Verificar leitor</button></div>
-        <div class="card"><div class="card-body"><h2>Status local</h2><p>A verificação abaixo testa a conexão com o serviço do leitor neste computador. Consulte as assinaturas registradas na aba Fichas.</p><pre id="bioOutput">Aguardando teste...</pre></div></div>
-      </section>
+        <section id="screen-trabalhadores" class="screen" aria-labelledby="title-trabalhadores">
+          <div class="topbar"><div><span class="kicker">Cadastros</span><h1 id="title-trabalhadores">Trabalhadores</h1><p>Mantenha os dados da equipe organizados para cada entrega.</p></div><button class="btn btn-secondary" type="button" onclick="refreshTrabalhadores().catch(handleAppError)"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Atualizar trabalhadores</button></div>
+          <div class="two-col wide">
+            <form id="trabalhadorForm" class="card form-card">
+              <div class="form-heading"><span class="heading-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-users"></use></svg></span><div><h2>Novo trabalhador</h2><p>Os campos com * são obrigatórios.</p></div></div>
+              <div class="grid-form">
+                <div class="field span-two"><label for="trabalhadorNome">Nome completo <span class="required-mark" aria-hidden="true">*</span></label><input name="nomeCompleto" id="trabalhadorNome" required placeholder="Nome completo do trabalhador"></div>
+                <div class="field"><label for="trabalhadorCpf">CPF <span class="required-mark" aria-hidden="true">*</span></label><input name="cpf" id="trabalhadorCpf" required placeholder="000.000.000-00" inputmode="numeric"></div>
+                <div class="field"><label for="trabalhadorMatricula">Matrícula eSocial <span class="required-mark" aria-hidden="true">*</span></label><input name="matriculaESocial" id="trabalhadorMatricula" required placeholder="Matrícula do trabalhador"></div>
+                <div class="field"><label for="trabalhadorFuncao">Função <span class="required-mark" aria-hidden="true">*</span></label><input name="funcao" id="trabalhadorFuncao" required placeholder="Função exercida"></div>
+                <div class="field"><label for="trabalhadorSetor">Setor</label><input name="setor" id="trabalhadorSetor" placeholder="Setor ou departamento"></div>
+                <div class="field"><label for="trabalhadorLocalidade">Localidade <span class="required-mark" aria-hidden="true">*</span></label><input name="localidade" id="trabalhadorLocalidade" required placeholder="Cidade/UF"></div>
+                <div class="field"><label for="trabalhadorAdmissao">Data de admissão</label><input name="dataAdmissao" id="trabalhadorAdmissao" placeholder="dd/mm/aaaa"></div>
+                <div class="field"><label for="trabalhadorStatus">Status</label><select name="status" id="trabalhadorStatus"><option>Ativo</option><option>Inativo</option></select></div>
+                <div class="field"><label for="trabalhadorRg">RG</label><input name="rg" id="trabalhadorRg" placeholder="Documento de identidade"></div>
+                <div class="field"><label for="trabalhadorEmail">E-mail</label><input name="email" id="trabalhadorEmail" placeholder="nome@empresa.com.br"></div>
+                <div class="field"><label for="trabalhadorTelefone">Telefone</label><input name="telefone" id="trabalhadorTelefone" placeholder="(00) 00000-0000" inputmode="tel"></div>
+                <div class="field span-two"><label for="trabalhadorObservacoes">Observações</label><input name="observacoes" id="trabalhadorObservacoes" placeholder="Informações complementares"></div>
+              </div>
+              <div class="form-actions"><button class="btn btn-primary" type="submit"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>Salvar trabalhador</button></div>
+            </form>
+            <div class="card list-card"><div class="section-heading"><div><h2>Trabalhadores cadastrados</h2><p>Equipe da empresa selecionada.</p></div></div><div id="trabalhadoresList" class="list">Carregando...</div></div>
+          </div>
+        </section>
 
-      <section id="screen-config" class="screen">
-        <div class="topbar"><div><span class="kicker">Sistema</span><h1>Configurações</h1><p>Diagnóstico técnico e parâmetros da V12.</p></div></div>
-        <div class="card"><div class="card-head"><h2>Diagnóstico técnico</h2><div class="actions"><button class="btn btn-secondary" onclick="testHealth()">Testar API</button><button class="btn btn-secondary" onclick="testCA()">Testar CA 365</button></div></div><pre id="apiOutput">Aguardando diagnóstico...</pre></div>
-        <div class="card"><div class="card-body"><h2>Configuração carregada</h2><pre id="configOutput"></pre></div></div>
-      </section>
-    </main>
+        <section id="screen-epis" class="screen" aria-labelledby="title-epis">
+          <div class="topbar"><div><span class="kicker">Equipamentos</span><h1 id="title-epis">EPIs e CA</h1><p>Consulte o Certificado de Aprovação e cadastre os equipamentos.</p></div><button class="btn btn-secondary" type="button" onclick="refreshEpis().catch(handleAppError)"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Atualizar EPIs</button></div>
+          <div class="two-col">
+            <form id="epiForm" class="card form-card">
+              <div class="form-heading"><span class="heading-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg></span><div><h2>Consulta e cadastro</h2><p>Busque pelo número do CA para começar.</p></div></div>
+              <div class="lookup-panel"><div class="inline"><div class="field grow"><label for="caInput">Certificado de Aprovação (CA)</label><input name="ca" id="caInput" placeholder="Informe o número do CA" inputmode="numeric"></div><button class="btn btn-secondary" type="button" onclick="consultarCA()">Consultar CA</button></div><div id="caMessage" class="message hidden" role="status"></div><a class="link external-link" href="https://caepi.trabalho.gov.br/internet/ConsultaCAInternet.aspx" target="_blank" rel="noopener noreferrer">Consulta oficial no MTE <svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-external"></use></svg></a></div>
+              <div class="field"><label for="epiDescricao">Descrição do EPI <span class="required-mark" aria-hidden="true">*</span></label><input name="descricao" id="epiDescricao" required placeholder="Nome e descrição do equipamento"></div>
+              <div class="field"><label for="epiFabricante">Fabricante</label><input name="fabricante" id="epiFabricante" placeholder="Nome do fabricante"></div>
+              <div class="grid-form two"><div class="field"><label for="epiValidade">Validade</label><input name="validade" id="epiValidade" placeholder="dd/mm/aaaa"></div><div class="field"><label for="epiSituacao">Situação</label><input name="situacao" id="epiSituacao" placeholder="Situação informada na consulta"></div></div>
+              <div class="form-actions"><button class="btn btn-primary" type="submit"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-plus"></use></svg>Inserir no cadastro</button></div>
+            </form>
+            <div class="card list-card"><div class="section-heading"><div><h2>EPIs cadastrados</h2><p>Equipamentos da empresa selecionada.</p></div></div><div id="episList" class="list">Carregando...</div></div>
+          </div>
+        </section>
+
+        <section id="screen-entrega" class="screen" aria-labelledby="title-entrega">
+          <div class="topbar"><div><span class="kicker">Movimentações</span><h1 id="title-entrega">Entrega de EPI</h1><p>Registre a movimentação e emita a ficha do trabalhador.</p></div></div>
+          <div class="two-col delivery-layout">
+            <form id="entregaForm" class="card form-card">
+              <div class="form-heading"><span class="heading-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-package"></use></svg></span><div><h2>Nova movimentação</h2><p>Selecione o trabalhador e o equipamento.</p></div></div>
+              <div class="grid-form">
+                <div class="field span-two"><label for="entregaTrabalhador">Trabalhador</label><select name="trabalhadorId" id="entregaTrabalhador" required></select></div>
+                <div class="field span-two"><label for="entregaEpi">EPI</label><select name="epiId" id="entregaEpi" required></select></div>
+                <div class="field"><label for="entregaTipo">Tipo de movimentação</label><select name="tipo" id="entregaTipo"><option>Entrega</option><option>Troca</option><option>Devolução</option></select></div>
+                <div class="field"><label for="entregaQuantidade">Quantidade</label><input name="quantidade" id="entregaQuantidade" type="number" min="1" step="1" value="1" required></div>
+              </div>
+              <div class="form-actions"><button class="btn btn-primary" type="submit"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-file"></use></svg>Gerar ficha de EPI</button></div>
+            </form>
+            <aside class="card guidance-card"><span class="guidance-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-file"></use></svg></span><h2>Uma ficha completa<br>para cada entrega</h2><p>A ficha reúne a identificação do trabalhador, a função, a matrícula eSocial e o tipo da movimentação.</p><div class="guidance-note"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg><span>O Termo de Responsabilidade permanece antes da relação dos EPIs, no modelo aprovado.</span></div><button class="text-button" type="button" onclick="goScreen('fichas')">Consultar fichas <svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-arrow"></use></svg></button></aside>
+          </div>
+        </section>
+
+        <section id="screen-fichas" class="screen" aria-labelledby="title-fichas">
+          <div class="topbar"><div><span class="kicker">Documentos</span><h1 id="title-fichas">Fichas de EPI</h1><p>Consulte as movimentações e visualize as fichas para impressão.</p></div><button class="btn btn-secondary" type="button" onclick="refreshFichas().catch(handleAppError)"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Atualizar fichas</button></div>
+          <div class="card list-card"><div class="section-heading"><div><h2>Fichas cadastradas</h2><p>Documentos da empresa selecionada.</p></div><button class="text-button" type="button" onclick="goScreen('entrega')"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-plus"></use></svg>Nova ficha</button></div><div id="fichasList" class="list document-list">Carregando...</div></div>
+        </section>
+
+        <section id="screen-biometria" class="screen" aria-labelledby="title-biometria">
+          <div class="topbar"><div><span class="kicker">Conexão local</span><h1 id="title-biometria">Biometria</h1><p>Verifique a conexão com o leitor instalado neste computador.</p></div></div>
+          <div class="connection-grid">
+            <div class="card connection-card">
+              <div class="connection-heading"><span class="device-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-fingerprint"></use></svg></span><span id="bioStatusBadge" class="status-badge" data-state="idle">Não verificado</span></div>
+              <h2 id="bioStatusTitle">Verifique a conexão local</h2><p id="bioStatusText" class="status-description" role="status" aria-live="polite">Conecte o equipamento e verifique se o serviço JP Biometria está disponível neste computador.</p>
+              <button id="bioTestButton" class="btn btn-primary" type="button" onclick="testBiometriaLocal()"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-connection"></use></svg>Verificar leitor</button><p id="bioCheckedAt" class="check-time">Aguardando a primeira verificação.</p>
+              <details class="technical-details"><summary>Detalhes da conexão</summary><pre id="bioOutput">Aguardando teste...</pre></details>
+            </div>
+            <aside class="card instructions-card"><div class="section-heading"><div><h2>Antes de verificar</h2><p>Prepare o equipamento em três passos.</p></div></div><ol class="setup-steps"><li><span>1</span><div><h3>Conecte o leitor</h3><p>Conecte o equipamento a uma porta USB deste computador.</p></div></li><li><span>2</span><div><h3>Abra o serviço local</h3><p>Mantenha o JP Biometria em execução durante a verificação.</p></div></li><li><span>3</span><div><h3>Verifique a conexão</h3><p>Clique em Verificar leitor e acompanhe o status ao lado.</p></div></li></ol></aside>
+          </div>
+          <div class="context-note"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-file"></use></svg><div><strong>Fichas e registros de assinatura</strong><p>Acesse as fichas para consultar os documentos e os registros de assinatura disponíveis.</p></div><button class="text-button" type="button" onclick="goScreen('fichas')">Ver fichas <svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-arrow"></use></svg></button></div>
+        </section>
+
+        <section id="screen-config" class="screen" aria-labelledby="title-config">
+          <div class="topbar"><div><span class="kicker">Sistema</span><h1 id="title-config">Configurações</h1><p>Informações do ambiente e verificação dos serviços do sistema.</p></div></div>
+          <div class="card installation-card"><div class="section-heading"><div class="section-title-with-icon"><span class="heading-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-settings"></use></svg></span><div><h2>Seu ambiente de trabalho</h2><p>Configuração atual do JP EntregaEPI.</p></div></div><span class="product-tag">JP EntregaEPI</span></div><dl class="settings-summary"><div><dt>Ambiente</dt><dd id="configEnvironment">Produção</dd></div><div><dt>Versão</dt><dd id="configVersion">12.7.2</dd></div><div><dt>Perfil de acesso</dt><dd id="configProfile">Usuário autenticado</dd></div><div><dt>Empresa em uso</dt><dd id="configCompany">Selecione uma empresa</dd></div></dl></div>
+          <div class="section-heading"><div><h2>Conexões e serviços</h2><p>Consulte a disponibilidade quando precisar.</p></div></div>
+          <div class="service-grid">
+            <div class="card service-card"><div class="service-top"><span class="service-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-server"></use></svg></span><span id="apiStatusBadge" class="status-badge" data-state="idle">Não verificado</span></div><h3>Serviço do sistema</h3><p id="apiStatusText" class="status-description" role="status" aria-live="polite">Confira o acesso aos cadastros e às fichas do sistema.</p><button id="healthTestButton" class="btn btn-secondary" type="button" onclick="testHealth()"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Verificar conexão</button></div>
+            <div class="card service-card"><div class="service-top"><span class="service-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-database"></use></svg></span><span id="caStatusBadge" class="status-badge" data-state="idle">Não verificado</span></div><h3>Base de Certificados de Aprovação</h3><p id="caStatusText" class="status-description" role="status" aria-live="polite">Consulte um CA de referência para verificar o acesso à base instalada.</p><button id="caTestButton" class="btn btn-secondary" type="button" onclick="testCA()"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg>Testar consulta CA</button></div>
+          </div>
+          <details class="card technical-details system-details"><summary><span><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-server"></use></svg>Detalhes dos diagnósticos</span><small>Respostas dos serviços</small></summary><pre id="apiOutput">Aguardando diagnóstico...</pre></details>
+          <details class="card technical-details system-details"><summary><span><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-settings"></use></svg>Configuração técnica</span><small>Parâmetros da instalação</small></summary><pre id="configOutput"></pre></details>
+        </section>
+      </main>
+    </div>
   </section>
-
-  <script src="/__APP_PREFIX__/assets/ficha.js?v=1271"></script>
-  <script src="/__APP_PREFIX__/assets/app.js?v=1271"></script>
+  <script src="/__APP_PREFIX__/assets/ficha.js?v=1272"></script>
+  <script src="/__APP_PREFIX__/assets/app.js?v=1272"></script>
 </body>
 </html>

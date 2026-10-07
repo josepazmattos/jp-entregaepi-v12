@@ -1,5 +1,12 @@
 # Implantação da V12.7.1
 
+## Aplicação à revisão visual V12.7.2
+
+Este guia histórico também rege a publicação da V12.7.2, que atualiza a
+diagramação da interface. A versão e o commit identificam a revisão publicada;
+o modelo da ficha, as regras do backend e os hashes da fonte CAEPI são
+preservados. O catálogo existente é reutilizado, sem nova coleta na fonte.
+
 ## Fluxo autorizado
 
 O repositório de aplicação é `josepazmattos/jp-entregaepi-v12`. O workflow

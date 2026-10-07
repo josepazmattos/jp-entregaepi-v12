@@ -1,4 +1,4 @@
-# JP EntregaEPI 12.7.1
+# JP EntregaEPI 12.7.2
 
 Aplicação de entrega e registro de EPIs com autenticação Cognito, API em Lambda
 e persistência em DynamoDB.
@@ -6,6 +6,20 @@ e persistência em DynamoDB.
 - Aplicação: https://www.jptreinamentos.com.br/EntregaEPI/
 - Versão e commit publicados: https://www.jptreinamentos.com.br/EntregaEPI/version.json
 - Guia de implantação: [docs/DEPLOY_V12_7_1.md](docs/DEPLOY_V12_7_1.md)
+
+## Revisão visual 12.7.2
+
+Esta revisão atualiza a diagramação da interface e a identificação da versão.
+A ficha aprovada, as regras do backend e a cópia oficial CAEPI são preservadas.
+A publicação segue o mesmo workflow com testes, backup e verificação do commit.
+O guia histórico da V12.7.1 continua descrevendo esse procedimento.
+
+A direção visual utiliza a proposta JP EntregaEPI do Canva como referência:
+verde corporativo, menu lateral compacto, cartões claros e espaçamentos
+consistentes. Empresa e usuário ficam no cabeçalho; os diagnósticos técnicos
+permanecem recolhidos em Configurações e Biometria. O menu móvel suporta
+teclado e fechamento por Escape. Os estados de conexão dependem da resposta
+do serviço e não representam validação biométrica.
 
 ## Ficha aprovada
 

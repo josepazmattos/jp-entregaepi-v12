@@ -8,7 +8,7 @@ const {chromium} = require('playwright');
 const frontend = path.resolve(__dirname, '../frontend/EntregaEPI');
 const output = path.join(__dirname, 'output');
 fs.mkdirSync(output,{recursive:true});
-const results={suite:'Interface e impressão V12.7.1',syntheticData:true,realApiUsed:false,checks:[],pdfs:{}};
+const results={suite:'Interface e impressão V12.7.2',syntheticData:true,realApiUsed:false,checks:[],pdfs:{},layouts:{}};
 const company={id:'EMPRESA-TESTE',nome:'EMPRESA EXEMPLO',cnpj:'00.000.000/0000-00',localidade:'Cidade de Teste',uf:'MS'};
 const worker={id:'TRABALHADOR-TESTE',empresaId:company.id,nomeCompleto:'TRABALHADOR DE TESTE',cpf:'000.000.000-00',funcao:'FUNÇÃO DE TESTE',matriculaESocial:'00042',status:'Ativo'};
 const epi={id:'EPI-TESTE',empresaId:company.id,descricao:'EQUIPAMENTO DE TESTE',ca:'00000',fabricante:'FABRICANTE DE TESTE'};
@@ -21,6 +21,7 @@ const printListeners=new Set();
 const imageRequests=[],imageResponses=[],failedRequests=[],consoleMessages=[],serverRequests=[];
 Object.assign(results,{printEvents,imageRequests,imageResponses,failedRequests,consoleMessages,serverRequests});
 let apiFailure=0;
+let biometricRequests=0;
 let browser;
 let page;
 const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -42,6 +43,50 @@ function pdfPages(file){const matches=fs.readFileSync(file).toString('latin1').m
 function diagnosticWithTimeout(promise,milliseconds){
   let timer;
   return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Tempo limite ao gerar evidência visual.')),milliseconds)})]).finally(()=>clearTimeout(timer));
+}
+
+async function inspectLayout(name){
+  const dimensions=await page.evaluate(()=>({
+    viewport:{width:window.innerWidth,height:window.innerHeight},
+    documentWidth:document.documentElement.scrollWidth,
+    bodyWidth:document.body.scrollWidth,
+    outsideViewport:Array.from(document.querySelectorAll('body *')).filter(element=>{
+      const bounds=element.getBoundingClientRect();
+      return bounds.width>0&&bounds.height>0&&(bounds.right>window.innerWidth+1||bounds.left< -1);
+    }).slice(0,12).map(element=>({tag:element.tagName,id:element.id,className:typeof element.className==='string'?element.className:''}))
+  }));
+  results.layouts[name]=dimensions;
+  assert.ok(dimensions.documentWidth<=dimensions.viewport.width+1,`${name}: documento sem rolagem horizontal global (${dimensions.documentWidth}px)`);
+  assert.ok(dimensions.bodyWidth<=dimensions.viewport.width+1,`${name}: conteúdo cabe na largura disponível (${dimensions.bodyWidth}px)`);
+  await page.screenshot({path:path.join(output,`${name}.png`),fullPage:true});
+}
+
+async function assertDiagnosticsClosed(screen){
+  const details=page.locator(`#screen-${screen} details`);
+  assert.ok(await details.count()>0,`${screen}: dados técnicos têm um controle de expansão`);
+  assert.equal(await details.evaluateAll(items=>items.every(item=>!item.open)),true,`${screen}: diagnósticos fechados por padrão`);
+  const rawIds=screen==='config'?['apiOutput','configOutput']:['bioOutput'];
+  for(const id of rawIds){
+    assert.equal(await page.locator('#'+id).isVisible(),false,`${id}: resposta técnica não ocupa a tela principal`);
+    assert.equal(await page.locator('#'+id).evaluate(item=>Boolean(item.closest('details'))),true,`${id}: dados técnicos podem ser expandidos`);
+  }
+}
+
+async function assertMenuClosed(){
+  await page.waitForFunction(()=>document.getElementById('menuToggle').getAttribute('aria-expanded')==='false');
+  assert.equal(await page.locator('#appShell').evaluate(element=>element.classList.contains('sidebar-open')),false);
+  await page.locator('#primarySidebar').waitFor({state:'hidden'});
+}
+
+async function mobileNavigate(screen){
+  await page.locator('#menuToggle').click();
+  await page.waitForFunction(()=>document.getElementById('menuToggle').getAttribute('aria-expanded')==='true');
+  const navigation=page.locator(`.nav [data-screen="${screen}"]`);
+  await navigation.waitFor({state:'visible'});
+  assert.equal(await navigation.isVisible(),true);
+  await navigation.click();
+  await assertMenuClosed();
+  assert.equal(await page.locator(`#screen-${screen}`).isVisible(),true);
 }
 
 function waitForPrintCall(afterIndex){
@@ -130,7 +175,7 @@ async function main(){
   const origin=`http://127.0.0.1:${server.address().port}`;
   browser=await chromium.launch({headless:true,args:['--no-sandbox']});
   results.browser=await browser.version();
-  const context=await browser.newContext({viewport:{width:1365,height:1000},locale:'pt-BR',timezoneId:'America/Campo_Grande'});
+  const context=await browser.newContext({viewport:{width:1366,height:900},locale:'pt-BR',timezoneId:'America/Campo_Grande'});
   context.on('page',newPage=>newPage.on('pageerror',error=>pageErrors.push(error.message)));
   context.on('console',message=>{if(['error','warning'].includes(message.type()))consoleMessages.push({type:message.type(),text:message.text(),location:message.location()})});
   context.on('request',request=>{
@@ -165,12 +210,19 @@ async function main(){
       assert.equal(body.AuthParameters.USERNAME,'USUARIO-TESTE');
       await json(200,{AuthenticationResult:{IdToken:idToken,AccessToken:'ACCESS_TOKEN_SINTETICO',ExpiresIn:3600}});return;
     }
+    if(url.origin==='http://127.0.0.1:8789'&&url.pathname==='/status'){
+      biometricRequests++;
+      await json(200,{ok:true,service:'SERVICO-BIOMETRICO-SINTETICO'});return;
+    }
     if(!url.hostname.endsWith('.execute-api.sa-east-1.amazonaws.com')){
       results.unexpectedExternalRequest=true;
       await route.abort();return;
     }
     requests.push({path:url.pathname,method:request.method(),authorizationPresent:request.headers().authorization===`Bearer ${idToken}`,empresaId:request.headers()['x-empresa-id']});
     if(apiFailure){await json(apiFailure,{ok:false,error:apiFailure===403?'Perfil não configurado. Solicite ao administrador.':'Sessão expirada.'});return;}
+    if(url.pathname==='/health'){
+      await json(200,{ok:true,version:'12.7.2',mode:'dynamodb',durable:true,storageReady:true,buildSha:'BUILD-SINTETICO',caepi:{sourceKind:'official-snapshot',officialSnapshot:true,live:false,downloadedAt:'2026-10-06T16:00:00Z'}});return;
+    }
     if(url.pathname.startsWith('/api/caepi/')){
       if(url.pathname.endsWith('/654321')){
         await json(200,{ok:true,item:{found:false,ambiguous:true,autofillAllowed:false,officialSnapshot:true,live:false,requiresOfficialConfirmation:true,name:'',description:'',manufacturer:'',validity:'',warning:'Registros divergentes para este CA. Confirme no portal do MTE. <strong>Mensagem sintética</strong>'}});return;
@@ -195,6 +247,7 @@ async function main(){
   });
   page=await context.newPage();
   await page.goto(`${origin}/EntregaEPI/`);
+  await inspectLayout('desktop-login');
   await page.locator('#username').fill('USUARIO-TESTE');
   await page.locator('#password').fill('SENHA-SINTETICA-SEM-VALIDADE');
   await page.locator('#loginButton').click();
@@ -206,6 +259,7 @@ async function main(){
   assert.equal(await page.locator('#appMessage').isVisible(),false);
   await page.screenshot({path:path.join(output,'dashboard.png'),fullPage:true});
   passed('login Cognito simulado e dashboard operacional sem erro');
+  await inspectLayout('desktop-dashboard');
 
   await page.locator('[data-screen="epis"]').click();
   await page.locator('#caInput').fill('123456');
@@ -261,6 +315,38 @@ async function main(){
   assert.ok(longText.includes('ITEM 060'));
   passed('ficha com 60 EPIs preserva todos os itens e pagina em A4');
 
+  await page.locator('.nav [data-screen="config"]').click();
+  await assertDiagnosticsClosed('config');
+  assert.ok((await page.locator('#configVersion').innerText()).includes('12.7.2'));
+  assert.ok((await page.locator('#configCompany').innerText()).includes(company.nome));
+  await inspectLayout('desktop-config');
+  await page.locator('#healthTestButton').click();
+  await page.waitForFunction(()=>document.getElementById('apiStatusBadge').dataset.state==='success');
+  assert.ok((await page.locator('#apiStatusText').innerText()).length>0);
+  await page.locator('#caTestButton').click();
+  await page.waitForFunction(()=>['success','warning'].includes(document.getElementById('caStatusBadge').dataset.state));
+  const caSummary=await page.locator('#caStatusText').innerText();
+  assert.match(caSummary,/cópia oficial obtida/i);
+  assert.match(caSummary,/atualizações.*portal do MTE/i);
+  assert.ok(!/consulta ao vivo confirmada|atualiza[çc][aã]o em tempo real|conex[aã]o ao vivo confirmada/i.test(caSummary),'resumo do CA não apresenta uma cópia oficial como consulta ao vivo');
+  await assertDiagnosticsClosed('config');
+  passed('configuração mostra resumos de API e base CA com diagnóstico técnico fechado');
+
+  await page.locator('.nav [data-screen="biometria"]').click();
+  await assertDiagnosticsClosed('biometria');
+  assert.equal(biometricRequests,0,'o serviço local só é consultado por ação do usuário');
+  await page.locator('#bioTestButton').click();
+  await page.waitForFunction(()=>document.getElementById('bioStatusBadge').dataset.state==='success');
+  assert.equal(await page.locator('#bioStatusBadge').innerText(),'Serviço acessível');
+  const bioSummary=(await page.locator('#bioStatusTitle').innerText())+' '+(await page.locator('#bioStatusText').innerText());
+  assert.match(bioSummary,/não confirma .*detecção do leitor.*captura.*verificação.*assinatura biométrica/i);
+  assert.ok(!/leitor detectado|assinatura (validada|confirmada)|biometria verificada/i.test(bioSummary));
+  assert.equal(biometricRequests,1);
+  await assertDiagnosticsClosed('biometria');
+  await inspectLayout('desktop-biometria');
+  passed('HTTP 200 do serviço biométrico informa acesso sem atribuir detecção ou verificação');
+  passed('login, dashboard, configurações e biometria cabem em desktop de 1366 por 900');
+
   apiFailure=403;
   await page.locator('[data-screen="empresas"]').click();
   await page.locator('#empresaForm input[name="nome"]').fill('CADASTRO SINTÉTICO NÃO SALVO');
@@ -278,6 +364,35 @@ async function main(){
   assert.ok((await page.locator('#loginMessage').innerText()).includes('sessão expirou'));
   assert.equal(await page.locator('#password').inputValue(),'SENHA-SINTETICA-SEM-VALIDADE');
   passed('401 encerra sessão expirada sem apagar a senha digitada');
+
+  await page.setViewportSize({width:390,height:844});
+  await inspectLayout('mobile-login');
+  apiFailure=0;
+  await page.locator('#loginButton').click();
+  await page.waitForFunction(count=>document.getElementById('metricFichas').textContent===String(count),database.fichas.length);
+  await assertMenuClosed();
+  await inspectLayout('mobile-dashboard');
+  await page.locator('#menuToggle').click();
+  await page.waitForFunction(()=>document.getElementById('menuToggle').getAttribute('aria-expanded')==='true');
+  await page.locator('#sidebarClose').waitFor({state:'visible'});
+  assert.equal(await page.locator('#sidebarClose').isVisible(),true);
+  await page.locator('#sidebarClose').click();
+  await assertMenuClosed();
+  await page.locator('#menuToggle').click();
+  await page.waitForFunction(()=>document.getElementById('menuToggle').getAttribute('aria-expanded')==='true');
+  await page.keyboard.press('Escape');
+  await assertMenuClosed();
+  assert.equal(await page.evaluate(()=>document.activeElement.id),'menuToggle','Escape devolve o foco ao controle do menu');
+  await mobileNavigate('config');
+  assert.match(await page.locator('#currentSectionLabel').innerText(),/Configurações/i);
+  await assertDiagnosticsClosed('config');
+  await inspectLayout('mobile-config');
+  await mobileNavigate('biometria');
+  assert.match(await page.locator('#currentSectionLabel').innerText(),/Biometria/i);
+  await assertDiagnosticsClosed('biometria');
+  await inspectLayout('mobile-biometria');
+  passed('menu móvel abre, fecha pelo botão e Escape, e fecha após navegar');
+  passed('login, dashboard, configurações e biometria cabem em celular de 390 por 844');
   assert.deepEqual(pageErrors,[],'nenhuma exceção JavaScript não tratada');
   assert.ok(!results.unexpectedExternalRequest,'nenhuma conexão a serviços reais');
   results.passed=true;

@@ -1,6 +1,7 @@
-# Instalação JP EntregaEPI 12.7.1
+# Instalação JP EntregaEPI 12.7.2
 
 O procedimento atual está em [DEPLOY_V12_7_1.md](DEPLOY_V12_7_1.md).
+O guia mantém seu nome histórico e também se aplica à revisão visual V12.7.2.
 
 A instalação usa o workflow **Testar e publicar JP EntregaEPI**, no repositório
 `josepazmattos/jp-entregaepi-v12`. Somente a branch `main` publica, após passar

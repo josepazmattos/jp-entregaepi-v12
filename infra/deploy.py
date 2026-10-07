@@ -26,7 +26,7 @@ import zipfile
 
 from fetch_ca_snapshot import read_source, verify_installed
 
-VERSION = "12.7.1"
+VERSION = "12.7.2"
 REPOSITORY = "josepazmattos/jp-entregaepi-v12"
 ACCOUNT = "003020057405"
 REGION = "sa-east-1"

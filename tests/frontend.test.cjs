@@ -115,31 +115,54 @@ test('ficha ausente, sem trabalhador e sem EPIs tem erro explícito',()=>{
 
 function element(id){
   const classNames=new Set();
-  return {id,value:'',textContent:'',innerHTML:'',className:'',disabled:false,dataset:{},listeners:{},children:[],
-    classList:{add:name=>classNames.add(name),remove:name=>classNames.delete(name),contains:name=>classNames.has(name)},
+  const attributes=new Map();
+  const item={id,value:'',textContent:'',innerHTML:'',disabled:false,dataset:{},listeners:{},children:[],
+    classList:{add:(...names)=>names.forEach(name=>classNames.add(name)),remove:(...names)=>names.forEach(name=>classNames.delete(name)),contains:name=>classNames.has(name),
+      toggle(name,force){const added=force===undefined?!classNames.has(name):Boolean(force);if(added)classNames.add(name);else classNames.delete(name);return added}},
+    setAttribute(name,value){
+      attributes.set(name,String(value));
+      if(name==='class')this.className=String(value);
+      if(name.startsWith('data-'))this.dataset[name.slice(5).replace(/-([a-z])/g,(_,letter)=>letter.toUpperCase())]=String(value);
+    },
+    getAttribute(name){return name==='class'?this.className:attributes.get(name)??null},
+    hasAttribute(name){return attributes.has(name)},
+    removeAttribute(name){attributes.delete(name);if(name==='class')classNames.clear()},
     addEventListener(event,listener){(this.listeners[event]||=[]).push(listener)},
-    appendChild(item){this.children.push(item)},click(){for(const callback of this.listeners.click||[])callback({target:this})},
+    appendChild(child){this.children.push(child)},
+    click(){for(const callback of this.listeners.click||[])callback({target:this,currentTarget:this,preventDefault(){}})},
+    focus(){if(this.ownerDocument)this.ownerDocument.activeElement=this},
     reset(){this.resetCount=(this.resetCount||0)+1},querySelector(){return this.submitButton||={disabled:false}}
   };
+  Object.defineProperty(item,'className',{get:()=>[...classNames].join(' '),set:value=>{classNames.clear();for(const name of String(value).split(/\s+/).filter(Boolean))classNames.add(name)}});
+  return item;
 }
 function appHarness(route){
   const elements=Object.fromEntries([...index.matchAll(/\bid="([^"]+)"/g)].map(match=>[match[1],element(match[1])]));
   const nav=[...index.matchAll(/<button[^>]*data-screen="([^"]+)"/g)].map(match=>{const button=element('nav-'+match[1]);button.dataset.screen=match[1];return button});
+  const documentListeners={},windowListeners={};
+  const document={getElementById:id=>elements[id]||null,createElement:tag=>element(tag),body:element('body'),activeElement:null,
+    addEventListener(event,listener){(documentListeners[event]||=[]).push(listener)},
+    querySelectorAll:selector=>selector==='.nav button'?nav:selector==='.screen'?Object.values(elements).filter(item=>item.id.startsWith('screen-')):[],
+    querySelector:selector=>selector==='.brand-logo'?{src:pixel}:nav.find(item=>selector===`[data-screen="${item.dataset.screen}"]`)||null};
+  for(const item of [...Object.values(elements),...nav,document.body])item.ownerDocument=document;
+  for(const match of index.matchAll(/<[^>]+\bid="([^"]+)"[^>]*>/g)){
+    const item=elements[match[1]];
+    for(const attribute of match[0].matchAll(/([\w:-]+)="([^"]*)"/g))item.setAttribute(attribute[1],attribute[2]);
+  }
   const storage=()=>{const data=new Map();return {getItem:key=>data.get(key)||null,setItem:(key,value)=>data.set(key,String(value)),removeItem:key=>data.delete(key)}};
   const requests=[];
   const context=vm.createContext({console,Date,JSON,Promise,Number,String,Array,Object,Error,RegExp,Boolean,decodeURIComponent,escape,
-    atob:value=>Buffer.from(value,'base64').toString('binary'),localStorage:storage(),sessionStorage:storage(),alert:()=>{},setTimeout,
+    atob:value=>Buffer.from(value,'base64').toString('binary'),localStorage:storage(),sessionStorage:storage(),alert:()=>{},setTimeout,clearTimeout,AbortController,URL,
+    addEventListener(event,listener){(windowListeners[event]||=[]).push(listener)},
     FormData:class {constructor(form){this.form=form}entries(){return Object.entries(this.form.fields||{})}},
-    document:{getElementById:id=>elements[id]||null,createElement:tag=>element(tag),
-      querySelectorAll:selector=>selector==='.nav button'?nav:selector==='.screen'?Object.values(elements).filter(item=>item.id.startsWith('screen-')):[],
-      querySelector:selector=>selector==='.brand-logo'?{src:pixel}:nav.find(item=>selector===`[data-screen="${item.dataset.screen}"]`)||null},
-    fetch:async(url,options={})=>{requests.push({url,options});const answer=await route(url,options);return {status:answer.status||200,ok:(answer.status||200)<400,text:async()=>JSON.stringify(answer.body)}}
+    document,
+    fetch:async(url,options={})=>{requests.push({url,options});const answer=await route(url,options);return {status:answer.status||200,ok:(answer.status||200)<400,text:async()=>JSON.stringify(answer.body),json:async()=>answer.body}}
   });
   context.window=context;
-  context.JP_CONFIG={apiBaseUrl:'https://api.example.test',version:'12.7.1'};
+  context.JP_CONFIG={apiBaseUrl:'https://api.example.test',version:'12.7.2'};
   vm.runInContext(moduleSource,context);
   vm.runInContext(appSource,context);
-  return {context,elements,requests,run:code=>vm.runInContext(code,context)};
+  return {context,elements,requests,documentListeners,windowListeners,run:code=>vm.runInContext(code,context)};
 }
 const initialRoute=url=>({body:{ok:true,items:url.endsWith('/api/empresas')?[company]:url.endsWith('/api/trabalhadores')?[worker]:url.endsWith('/api/epis')?[epi]:url.endsWith('/api/fichas')?[ficha]:[]}});
 
@@ -306,4 +329,88 @@ test('CA ambíguo não preenche dados mesmo se vierem descrições na resposta',
   assert.equal(app.elements.caMessage.className,'message warn');
   assert.ok(!app.elements.caMessage.textContent.includes('não localizado'));
   assert.equal(app.elements.caMessage.innerHTML,'');
+});
+
+test('resumo da configuração usa versão, empresa e perfil da sessão carregada',async()=>{
+  const app=appHarness(initialRoute);
+  app.context.JP_CONFIG.ambiente='producao';
+  app.context.sessionStorage.setItem('jp-v12-auth',JSON.stringify({idToken:'TEST_ID_TOKEN',expiresAt:Date.now()+60000,payload:{'cognito:groups':['MASTER']}}));
+  await app.run('refreshAll()');
+  assert.equal(app.elements.configVersion.textContent,'12.7.2');
+  assert.equal(app.elements.configEnvironment.textContent,'Produção');
+  assert.equal(app.elements.configCompany.textContent,company.nome);
+  assert.equal(app.elements.configProfile.textContent,'Master');
+  app.context.sessionStorage.setItem('jp-v12-auth',JSON.stringify({idToken:'TEST_ID_TOKEN',expiresAt:Date.now()+60000,payload:{}}));
+  app.run('renderConfigSummary()');
+  assert.equal(app.elements.configProfile.textContent,'Perfil não configurado','autenticação sem grupo não ganha perfil de administrador');
+});
+
+test('diagnóstico da API só apresenta operação pronta quando a persistência está confirmada',async()=>{
+  let durable=false;
+  const app=appHarness(()=>({body:{ok:true,version:'12.7.2',storageReady:true,durable}}));
+  await app.run('testHealth()');
+  assert.equal(app.elements.apiStatusBadge.dataset.state,'warning');
+  assert.equal(app.elements.healthTestButton.disabled,false);
+  durable=true;
+  await app.run('testHealth()');
+  assert.equal(app.elements.apiStatusBadge.dataset.state,'success');
+});
+
+test('resumo técnico de CA identifica a cópia oficial e a necessidade de conferir atualizações',async()=>{
+  const app=appHarness(()=>({body:{ok:true,item:{found:true,officialSnapshot:true,live:false,downloadedAt:'2026-10-06T16:00:00Z',name:'EPI SINTÉTICO'}}}));
+  await app.run('testCA()');
+  assert.equal(app.elements.caStatusBadge.dataset.state,'success');
+  assert.match(app.elements.caStatusText.textContent,/cópia oficial obtida/i);
+  assert.match(app.elements.caStatusText.textContent,/atualizações.*portal do MTE/i);
+  assert.equal(app.elements.caTestButton.disabled,false);
+});
+
+test('HTTP 200 biométrico confirma somente acesso ao serviço local',async()=>{
+  const app=appHarness(()=>({body:{ok:true,service:'SERVICO-SINTETICO'}}));
+  await app.run('testBiometriaLocal()');
+  assert.equal(app.elements.bioStatusBadge.textContent,'Serviço acessível');
+  assert.equal(app.elements.bioStatusBadge.dataset.state,'success');
+  assert.match(app.elements.bioStatusText.textContent,/não confirma .*detecção do leitor.*captura.*verificação.*assinatura biométrica/i);
+  assert.equal(app.elements.bioTestButton.disabled,false);
+  assert.equal(app.requests.length,1);
+  assert.equal(app.requests[0].url,'http://127.0.0.1:8789/status');
+});
+
+test('erro HTTP do serviço biométrico não é apresentado como conexão confirmada',async()=>{
+  const app=appHarness(()=>({status:503,body:{error:'ERRO-SINTETICO'}}));
+  await app.run('testBiometriaLocal()');
+  assert.equal(app.elements.bioStatusBadge.dataset.state,'error');
+  assert.ok(!app.elements.bioStatusBadge.textContent.includes('acessível'));
+  assert.equal(app.elements.bioTestButton.disabled,false);
+});
+
+test('consulta biométrica iniciada antes do logout não preenche o diagnóstico da sessão seguinte',async()=>{
+  let finish;
+  const app=appHarness(()=>new Promise(resolve=>{finish=resolve}));
+  const pending=app.run('testBiometriaLocal()');
+  assert.equal(app.elements.bioTestButton.disabled,true);
+  app.elements.logoutButton.click();
+  finish({body:{ok:true,service:'SERVICO-SINTETICO'}});
+  await pending;
+  assert.equal(app.elements.bioStatusBadge.dataset.state,'idle');
+  assert.equal(app.elements.bioTestButton.disabled,false);
+  assert.equal(app.elements.bioCheckedAt.textContent,'Nenhuma verificação nesta sessão.');
+  assert.equal(app.elements.bioOutput.textContent,'Nenhuma verificação realizada nesta sessão.');
+});
+
+test('rejeição de rede após logout não restaura diagnósticos antigos de saúde ou CA',async()=>{
+  for(const scenario of [
+    {method:'testHealth',badge:'apiStatusBadge'},
+    {method:'testCA',badge:'caStatusBadge'}
+  ]){
+    let rejectRequest;
+    const app=appHarness(()=>new Promise((_resolve,reject)=>{rejectRequest=reject}));
+    const pending=app.run(`${scenario.method}()`);
+    assert.equal(app.elements[scenario.badge].dataset.state,'loading',scenario.method);
+    app.elements.logoutButton.click();
+    rejectRequest(new Error('FALHA-DE-REDE-SINTETICA'));
+    await pending;
+    assert.equal(app.elements[scenario.badge].dataset.state,'idle',scenario.method);
+    assert.equal(app.elements.apiOutput.textContent,'Nenhuma verificação realizada nesta sessão.',scenario.method);
+  }
 });
