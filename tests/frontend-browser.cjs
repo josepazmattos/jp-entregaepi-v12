@@ -16,6 +16,9 @@ const initialFicha={id:'FICHA-TESTE',numero:'EPI-TESTE-0001',empresaId:company.i
 const database={empresas:[company],trabalhadores:[worker],epis:[epi],fichas:[initialFicha]};
 const requests=[];
 const pageErrors=[];
+const printEvents=[];
+const printListeners=new Set();
+results.printEvents=printEvents;
 let apiFailure=0;
 let browser;
 let page;
@@ -35,13 +38,37 @@ const server=http.createServer((req,res)=>{
 function passed(name){results.checks.push({name,passed:true});console.log(`PASSOU: ${name}`);}
 function pdfPages(file){const matches=fs.readFileSync(file).toString('latin1').match(/\/Type\s*\/Page\b/g);return matches?.length||0;}
 
+function waitForPrintCall(afterIndex){
+  const recorded=printEvents.slice(afterIndex).find(event=>event.kind==='print_called');
+  if(recorded)return Promise.resolve(recorded);
+  return new Promise((resolve,reject)=>{
+    const listener=event=>{
+      if(event.kind!=='print_called')return;
+      clearTimeout(timer);printListeners.delete(listener);resolve(event);
+    };
+    const timer=setTimeout(()=>{printListeners.delete(listener);reject(new Error('A chamada automática a window.print não foi observada após document.close.'));},10000);
+    printListeners.add(listener);
+  });
+}
+
 async function printAndInspect(context,record,prefix,{expectedPages=1}={}){
+  const printStart=printEvents.length;
   const popupPromise=context.waitForEvent('page');
   await page.locator(`button[data-ficha-id="${record.id}"]`).click();
   const popup=await popupPromise;
   await popup.waitForSelector('.docx-epi-table');
   await popup.waitForFunction(()=>Array.from(document.images).every(img=>img.complete&&img.naturalWidth>0));
-  await popup.waitForFunction(()=>window.__jpPrintRequested===true);
+  try{
+    const invocation=await waitForPrintCall(printStart);
+    assert.equal(invocation.title,await popup.title(),'window.print pertence à ficha aberta');
+  }catch(error){
+    // Mesmo uma falha na instrumentação deixa evidência visual para diagnóstico.
+    results.printFailure=await popup.evaluate(()=>({readyState:document.readyState,fontStatus:document.fonts?.status,printFunction:String(window.print).slice(0,200)})).catch(()=>({}));
+    await popup.emulateMedia({media:'print'});
+    await popup.pdf({path:path.join(output,`${prefix}-falha.pdf`),format:'A4',preferCSSPageSize:true,printBackground:true,displayHeaderFooter:false}).catch(()=>{});
+    await popup.screenshot({path:path.join(output,`${prefix}-falha.png`),fullPage:true}).catch(()=>{});
+    throw error;
+  }
   const geometry=await popup.evaluate(()=>{
     const metadata=document.querySelector('.docx-meta').getBoundingClientRect();
     const term=document.querySelector('.docx-term-title').getBoundingClientRect();
@@ -82,10 +109,35 @@ async function main(){
   results.browser=await browser.version();
   const context=await browser.newContext({viewport:{width:1365,height:1000},locale:'pt-BR',timezoneId:'America/Campo_Grande'});
   context.on('page',newPage=>newPage.on('pageerror',error=>pageErrors.push(error.message)));
-  // O diálogo de impressão é substituído por um marcador; o PDF é produzido pelo Chromium.
+  await context.exposeBinding('__jpPrintObserved',(_source,event)=>{
+    printEvents.push(event);
+    for(const listener of printListeners)listener(event);
+  });
+  // document.open pode recriar o ambiente da janela. Instala o observador após
+  // document.close e registra a chamada fora do popup, mantendo window.print nativo.
   await context.addInitScript(()=>{
     const originalOpen=window.open.bind(window);
-    window.open=(...args)=>{const popup=originalOpen(...args);if(popup)popup.print=()=>{popup.__jpPrintRequested=true};return popup;};
+    window.open=(...args)=>{
+      const popup=originalOpen(...args);
+      if(!popup)return popup;
+      const report=kind=>window.__jpPrintObserved({kind,title:popup.document.title}).catch(()=>{});
+      report('popup_opened');
+      const originalDocumentOpen=popup.document.open.bind(popup.document);
+      popup.document.open=(...openArgs)=>{
+        const opened=originalDocumentOpen(...openArgs);
+        const originalDocumentClose=popup.document.close.bind(popup.document);
+        popup.document.close=(...closeArgs)=>{
+          const closed=originalDocumentClose(...closeArgs);
+          const nativePrint=popup.print.bind(popup);
+          popup.addEventListener('beforeprint',()=>report('beforeprint'));
+          popup.print=()=>{report('print_called');return nativePrint();};
+          report('print_hook_installed');
+          return closed;
+        };
+        return opened;
+      };
+      return popup;
+    };
   });
   await context.route('**/*',async route=>{
     const request=route.request(),url=new URL(request.url());
