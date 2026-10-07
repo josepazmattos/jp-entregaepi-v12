@@ -96,7 +96,7 @@ jobs:
         with:
           name: jp-biometria-windows-${{ github.sha }}
           path: |
-            native/biometria/dist/JP-Biometria-Setup-12.8.2.exe
+            native/biometria/dist/JP-Biometria-Setup-12.8.3.exe
             native/biometria/dist/biometria-release.json
           if-no-files-found: error
           retention-days: 14

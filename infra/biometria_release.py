@@ -9,8 +9,8 @@ import re
 import shutil
 import sys
 
-AGENT_VERSION = "12.8.2"
-EXECUTABLE = "JP-Biometria-Setup-12.8.2.exe"
+AGENT_VERSION = "12.8.3"
+EXECUTABLE = "JP-Biometria-Setup-12.8.3.exe"
 MANIFEST = "biometria-release.json"
 MAX_EXECUTABLE_BYTES = 20 * 1024 * 1024
 

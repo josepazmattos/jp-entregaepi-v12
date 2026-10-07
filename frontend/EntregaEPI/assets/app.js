@@ -1,13 +1,39 @@
-(function ensureConfig(){if(!window.JP_CONFIG||!window.JP_CONFIG.apiBaseUrl){window.JP_CONFIG={version:"12.8.2",appBasePath:"/EntregaEPI/",apiBaseUrl:"https://g4pdu3t1va.execute-api.sa-east-1.amazonaws.com",cognitoRegion:"sa-east-1",userPoolId:"sa-east-1_3FNCoTvr0",clientId:"2q2inha617oeer4vb0m0hjoja0",ambiente:"producao"}}})();
+(function ensureConfig(){if(!window.JP_CONFIG||!window.JP_CONFIG.apiBaseUrl){window.JP_CONFIG={version:"12.8.3",appBasePath:"/EntregaEPI/",apiBaseUrl:"https://g4pdu3t1va.execute-api.sa-east-1.amazonaws.com",cognitoRegion:"sa-east-1",userPoolId:"sa-east-1_3FNCoTvr0",clientId:"2q2inha617oeer4vb0m0hjoja0",ambiente:"producao"}}})();
 const $=id=>document.getElementById(id), tokenKey="jp-v12-auth", rememberedUserKey="jp-v12-remembered-user", activeCompanyKey="jp-v12-active-company";
 let sessionGeneration=0,companyGeneration=0,authAttempt=0,importAttempt=0,logoCreateGeneration=0,logoEditGeneration=0;let lastSessionUsername="";let cache={empresas:[],trabalhadores:[],epis:[],fichas:[]};let activeEmpresaId=sessionStorage.getItem(activeCompanyKey)||"";
 let firstAccessChallenge=null,empresaLogoDraft="",empresaLogoEdit=null,empresaRequestId="",importPreview=null,companyLoginAutomatic=true;
 let logoCreateLoading=false,companySaving=false;
 let biometricClient=null,biometricGeneration=0,biometricBusy=false,biometricCapture=null,biometricAbort=null,biometricStartAt=0;
+let startupCheckSession=-1,startupChecksPromise=null;
+const diagnosticRequests=new Set();
+const startupMirrors={apiStatusBadge:'startupApiBadge',caStatusBadge:'startupCaBadge',bioStatusBadge:'startupBioBadge',apiStatusText:'startupApiText',caStatusText:'startupCaText',bioStatusText:'startupBioText'};
 const screenLabels={dashboard:"Dashboard",empresas:"Empresas",trabalhadores:"Trabalhadores",epis:"EPIs e CA",entrega:"Entrega de EPI",fichas:"Fichas de EPI",biometria:"Biometria",config:"Configurações"};
 const navigationMedia=typeof window.matchMedia==="function"?window.matchMedia("(max-width: 1024px)"):null;
-function setText(id,value){const node=$(id);if(node)node.textContent=value;}
-function setStatusBadge(id,label,state){const node=$(id);if(node){node.textContent=label;node.dataset.state=state;}}
+function setText(id,value){const node=$(id);if(node)node.textContent=value;const mirror=$(startupMirrors[id]);if(mirror)mirror.textContent=value;}
+function setStatusBadge(id,label,state){const node=$(id);if(node){node.textContent=label;node.dataset.state=state;}const mirror=$(startupMirrors[id]);if(mirror){mirror.textContent=label;mirror.dataset.state=state;renderStartupProgress();}}
+function renderStartupProgress(){
+  const states=['apiStatusBadge','caStatusBadge','bioStatusBadge'].map(id=>$(id)?.dataset.state);
+  const done=states.filter(state=>['success','warning','error'].includes(state)).length;
+  setText('startupStatusText',states.includes('loading')?`Verificação automática: ${done} de 3 concluídas.`:done===3?(states.every(state=>state==='success')?'Verificações concluídas. Serviços disponíveis.':'Verificações concluídas. Confira os itens que precisam de atenção.'):`${done} de 3 verificações concluídas.`);
+}
+async function diagnosticApi(path){
+  const controller=new AbortController();diagnosticRequests.add(controller);
+  const timer=setTimeout(()=>controller.abort(),12000);
+  try{return await api(path,{signal:controller.signal});}
+  finally{clearTimeout(timer);diagnosticRequests.delete(controller);}
+}
+function runStartupChecks(manual=false){
+  if(!getAuth()||startupChecksPromise||(!manual&&startupCheckSession===sessionGeneration))return startupChecksPromise;
+  const generation=sessionGeneration;startupCheckSession=generation;
+  if($('startupRetryButton'))$('startupRetryButton').disabled=true;
+  setText('startupCheckedAt',manual?'Repetindo as verificações.':'Verificação iniciada ao entrar no aplicativo.');
+  startupChecksPromise=Promise.allSettled([testHealth(),testCA(),testBiometriaLocal({automatic:!manual})]).finally(()=>{
+    if(generation!==sessionGeneration)return;
+    startupChecksPromise=null;if($('startupRetryButton'))$('startupRetryButton').disabled=false;
+    setText('startupCheckedAt','Última rotina: '+new Date().toLocaleString('pt-BR'));renderStartupProgress();
+  });
+  return startupChecksPromise;
+}
 function currentGroups(){const raw=getAuth()?.payload?.["cognito:groups"];return Array.isArray(raw)?raw:typeof raw==="string"?raw.split(",").map(value=>value.trim()):[];}
 function isMaster(){return currentGroups().includes("MASTER");}
 function saveActiveCompany(id){activeEmpresaId=String(id||"");sessionStorage.setItem(activeCompanyKey,activeEmpresaId);localStorage.removeItem(activeCompanyKey);}
@@ -34,6 +60,10 @@ function renderConfigSummary(){
   setText("configOutput",JSON.stringify(cfg,null,2));
 }
 function resetDiagnostics(){
+  diagnosticRequests.forEach(controller=>controller.abort());diagnosticRequests.clear();
+  startupCheckSession=-1;startupChecksPromise=null;biometricStartAt=0;
+  if($('startupRetryButton'))$('startupRetryButton').disabled=false;
+  setText('startupCheckedAt','A verificação será iniciada após o login.');
   resetBiometricCapture(true);
   setStatusBadge("apiStatusBadge","Não verificado","idle");setText("apiStatusText","Verifique a conexão com o sistema quando precisar.");
   setStatusBadge("caStatusBadge","Não verificada","idle");setText("caStatusText","Consulte um CA para verificar a disponibilidade da base.");
@@ -56,7 +86,7 @@ function setSidebarOpen(open,returnFocus=false){
 }
 function activateScreen(screen,focusContent=true){
   if(!Object.prototype.hasOwnProperty.call(screenLabels,screen))return;
-  if(screen!=="biometria"&&(biometricCapture||biometricBusy))resetBiometricCapture();
+  if(screen!=="biometria"&&biometricCapture)resetBiometricCapture();
   document.querySelectorAll(".nav button").forEach(button=>{
     const active=button.dataset.screen===screen;button.classList.toggle("active",active);
     if(active)button.setAttribute("aria-current","page");else button.removeAttribute("aria-current");
@@ -156,7 +186,7 @@ async function testHealth(){
   if(button)button.disabled=true;
   setStatusBadge("apiStatusBadge","Verificando","loading");setText("apiStatusText","Conferindo a conexão e o armazenamento dos cadastros.");write("Verificando conexão...");
   try{
-    const result=ensureSuccess(await api("/health"),"O sistema não respondeu à verificação.");write(result);
+    const result=ensureSuccess(await diagnosticApi("/health"),"O sistema não respondeu à verificação.");write(result);
     const ready=result.body?.ok===true&&result.body?.durable===true&&result.body?.storageReady===true;
     setStatusBadge("apiStatusBadge",ready?"Operacional":"Requer atenção",ready?"success":"warning");
     setText("apiStatusText",ready?"Conexão disponível e armazenamento dos cadastros pronto para uso.":"O serviço respondeu, mas não confirmou que o armazenamento está pronto. Tente novamente ou contate o administrador.");
@@ -168,7 +198,7 @@ async function testCA(){
   if(button)button.disabled=true;
   setStatusBadge("caStatusBadge","Consultando","loading");setText("caStatusText","Verificando a consulta do CA 365.");write("Consultando CA 365...");
   try{
-    const result=ensureSuccess(await api("/api/caepi/365"),"A consulta de CA não respondeu.");write(result);
+    const result=ensureSuccess(await diagnosticApi("/api/caepi/365"),"A consulta de CA não respondeu.");write(result);
     const item=result.body?.item||{};
     if(item.ambiguous===true||item.autofillAllowed===false||item.found!==true){
       setStatusBadge("caStatusBadge","Conferência necessária","warning");
@@ -209,7 +239,7 @@ function renderDashboard(){const banner=$("actionBanner");if(!activeEmpresaId&&i
 async function refreshEmpresas(update=true){const r=await api("/api/empresas");ensureSuccess(r,"Não foi possível carregar as empresas.");cache.empresas=asArray(r);renderEmpresas();if(update)await refreshAllSafe();return r}
 function renderEmpresas(){
   const el=$("empresasList"),sel=$("empresaAtivaSelect");if(!el||!sel)return;sel.innerHTML='<option value="">Selecione uma empresa</option>';
-  if(!cache.empresas.some(e=>String(e.id)===String(activeEmpresaId))){companyGeneration++;resetBiometricCapture();clearImportPreview();saveActiveCompany(cache.empresas[0]?.id||"");}
+  if(!cache.empresas.some(e=>String(e.id)===String(activeEmpresaId))){companyGeneration++;if(biometricCapture)resetBiometricCapture();clearImportPreview();saveActiveCompany(cache.empresas[0]?.id||"");}
   renderRoleAccess();renderCompanyLogoEditor();
   if(!cache.empresas.length){el.textContent="Nenhuma empresa cadastrada.";return;}
   el.innerHTML=cache.empresas.map(e=>{
@@ -526,7 +556,7 @@ function getBiometricClient(){
 }
 function setBiometricControls(busy){
   biometricBusy=busy;
-  ['bioTestButton','bioOpenTestButton','bioStartButton'].forEach(id=>{if($(id))$(id).disabled=busy;});
+  ['bioTestButton','bioOpenTestButton','bioStartButton','startupBioButton','startupBioStartButton'].forEach(id=>{if($(id))$(id).disabled=busy;});
   if($('bioCaptureButton'))$('bioCaptureButton').disabled=busy||biometricCapture?.confirmationStarted===true;
   if($('bioRegisterButton'))$('bioRegisterButton').disabled=busy||!biometricCapture?.image||!biometricCapture?.fichaId;
   if($('bioFingerSelect'))$('bioFingerSelect').disabled=busy||biometricCapture?.confirmationStarted===true;
@@ -541,6 +571,7 @@ function clearBiometricImage(){
 }
 function resetBiometricCapture(resetConnection=false){
   biometricGeneration++;biometricAbort?.abort();biometricAbort=null;
+  if(biometricBusy&&!biometricCapture){setStatusBadge('bioStatusBadge','Verificação interrompida','idle');setText('bioStatusText','Verifique novamente para confirmar a conexão local.');}
   if(resetConnection)biometricClient?.clear();else biometricClient?.cancel();
   clearBiometricImage();biometricCapture=null;
   $('bioCapturePanel')?.classList.add('hidden');
@@ -557,6 +588,7 @@ function closeBiometricCapture(){
 }
 function biometricMessage(kind,message){const element=$('bioCaptureResult');if(element){element.className='message '+kind;element.textContent=message;}}
 function showBiometricStatus(status){
+  setText('startupBioButton','Verificar leitor');
   setStatusBadge('bioStatusBadge',status.ready?'Leitor conectado':status.upgradeRequired?'Atualizar componente local':'Requer atenção',status.ready?'success':'warning');
   setText('bioStatusTitle',status.ready?'O agente informou um leitor conectado':status.upgradeRequired?'O agente local precisa ser atualizado':status.runtimeTitle||'O agente local precisa de atenção');
   setText('bioStatusText',status.ready?'Faça uma captura para conferir o funcionamento. A detecção do leitor não confirma a identidade de um trabalhador.':status.upgradeRequired?window.JP_BIOMETRIA.failure('BIO_AGENT_UPDATE').message:status.runtimeMessage|| (status.busy?'O agente informou uma operação em andamento. Aguarde a conclusão antes de verificar ou capturar novamente.':status.checking?window.JP_BIOMETRIA.failure('BIO_CHECKING').message:status.sdkMissing?'O agente respondeu, mas informou que o SDK NITGEN não está disponível. Confira a instalação local.':status.captureAvailable===false?'O componente local está atualizado, mas a captura não está disponível. Confira a configuração de Java e do SDK NITGEN.':'O agente respondeu, mas não confirmou um leitor pronto. Feche o utilitário de diagnóstico NITGEN, confira o cabo USB e verifique novamente.'));
@@ -566,33 +598,68 @@ function showBiometricFailure(error,step='conexao'){
   const known=String(error.code||'').startsWith('BIO_'),code=known?error.code:'BIO_NETWORK';
   const message=known?error.message:window.JP_BIOMETRIA?.failure(code).message||'Não foi possível acessar o agente local.';
   if(step==='conexao'){
-    setStatusBadge('bioStatusBadge',code==='BIO_PERMISSION'?'Permissão bloqueada':'Sem conexão','error');
-    setText('bioStatusTitle',code==='BIO_PERMISSION'?'Permita o acesso local nas configurações do site':'Não foi possível confirmar a conexão');
+    setText('startupBioButton',code==='BIO_PERMISSION_REQUIRED'?'Permitir e verificar leitor':'Verificar leitor');
+    setStatusBadge('bioStatusBadge',code==='BIO_PERMISSION_REQUIRED'?'Permissão necessária':code==='BIO_PERMISSION'?'Permissão bloqueada':'Sem conexão',code==='BIO_PERMISSION_REQUIRED'?'warning':'error');
+    setText('bioStatusTitle',code==='BIO_PERMISSION_REQUIRED'?'Autorize a primeira conexão local':code==='BIO_PERMISSION'?'Permita o acesso local nas configurações do site':'Não foi possível confirmar a conexão');
     setText('bioStatusText',message);
   }
   setText('bioOutput',JSON.stringify({etapa:step,codigo:code,...(Number.isInteger(error.httpStatus)?{http:error.httpStatus}:{}),tentativas:biometricClient?.getDiagnostics()||[]},null,2));
   return message;
 }
-function startBiometriaLocal(){
-  if(biometricBusy||Date.now()-biometricStartAt<3000)return;
+function requestBiometricStart(){
+  if(Date.now()-biometricStartAt<3000)return false;
   biometricStartAt=Date.now();
   const frame=document.createElement('iframe');frame.hidden=true;frame.setAttribute('title','Abrir JP Biometria');frame.src='jpbiometria://start';document.body.appendChild(frame);
-  setTimeout(()=>frame.remove(),3000);
-  setText('bioStatusTitle','Solicitação de abertura enviada ao Windows');
-  setText('bioStatusText','Se o navegador perguntar, autorize abrir o JP Biometria. Depois, clique em Verificar leitor. A abertura será confirmada somente quando o agente responder.');
-  setStatusBadge('bioStatusBadge','Aguardando verificação','idle');
+  setTimeout(()=>frame.remove(),3000);return true;
 }
-async function testBiometriaLocal(){
+function waitBiometricStart(signal){
+  return new Promise((resolve,reject)=>{
+    const abort=()=>{clearTimeout(timer);signal.removeEventListener('abort',abort);reject(window.JP_BIOMETRIA.failure('BIO_CANCELLED'));};
+    const timer=setTimeout(()=>{signal.removeEventListener('abort',abort);resolve();},2000);
+    signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();
+  });
+}
+function startBiometriaLocal(){
+  if(biometricBusy)return;
+  requestBiometricStart();
+  return testBiometriaLocal({started:true});
+}
+async function testBiometriaLocal({automatic=false,started=false}={}){
   if(biometricBusy)return;
   const generation=biometricGeneration,session=sessionGeneration,controller=new AbortController();biometricAbort=controller;
   setBiometricControls(true);setStatusBadge('bioStatusBadge','Verificando','loading');
   setText('bioStatusTitle','Procurando o JP Biometria neste computador');
   setText('bioStatusText','Se o navegador solicitar acesso à rede local, permita para conectar o leitor.');setText('bioOutput','Procurando o agente local...');
+  const current=()=>generation===biometricGeneration&&session===sessionGeneration&&!controller.signal.aborted;
+  const discover=()=>getBiometricClient().discover({signal:controller.signal,automatic});
+  const afterStart=async()=>{
+    const deadline=Date.now()+12000;
+    await waitBiometricStart(controller.signal);
+    while(current()){
+      try{return await discover();}catch(error){if(error.code!=='BIO_NETWORK'||Date.now()>=deadline)throw error;}
+      await waitBiometricStart(controller.signal);
+    }
+    throw window.JP_BIOMETRIA.failure('BIO_CANCELLED');
+  };
+  const opening=()=>{
+    setText('bioStatusTitle','Aguardando o JP Biometria');
+    setText('bioStatusText','Autorize a abertura se o navegador solicitar. A conexão será verificada automaticamente.');
+  };
   try{
-    const status=await getBiometricClient().discover({signal:controller.signal});
-    if(generation!==biometricGeneration||session!==sessionGeneration)return;
+    let status;
+    if(started)opening();
+    try{status=started?await afterStart():await discover();}
+    catch(error){if(error.code!=='BIO_NETWORK')throw error;}
+    if(!current())return;
+    // One bounded start/recovery attempt. Never captures a fingerprint or bypasses permission.
+    const recover=!status||['SDK_NOT_FOUND','JAVA_NOT_FOUND','JAVA_ARCH_MISMATCH','SDK_INCOMPLETE'].includes(status.runtimeCode);
+    if(!started&&recover&&/Windows/i.test(window.navigator?.userAgent||'')&&requestBiometricStart()){
+      opening();status=await afterStart();
+    }
+    if(!current())return;
+    if(!status)throw window.JP_BIOMETRIA.failure('BIO_NETWORK');
     showBiometricStatus(status);
-  }catch(error){if(generation!==biometricGeneration||session!==sessionGeneration||error.code==='BIO_CANCELLED')return;showBiometricFailure(error);}
+  }catch(error){if(!current()||error.code==='BIO_CANCELLED')return;showBiometricFailure(error);}
   finally{if(generation===biometricGeneration&&session===sessionGeneration){biometricAbort=null;setBiometricControls(false);setText('bioCheckedAt','Última verificação: '+new Date().toLocaleString('pt-BR'));}}
 }
 function openBiometricCapture(fichaId=''){
@@ -697,11 +764,11 @@ function imprimirFicha(id){
   }catch(error){releaseDocument();handleAppError(error);}
 }
 function goScreen(screen){document.querySelector(`[data-screen="${screen}"]`)?.click()}
-function showApp(){const auth=getAuth();if(!auth)return;$("loginPage").classList.add("hidden");$("appShell").classList.remove("hidden");$("userBadge").textContent=auth.username||"Usuário autenticado";renderConfigSummary();renderRoleAccess();activateScreen("dashboard",false);refreshAll().catch(handleAppError)}
+function showApp(){const auth=getAuth();if(!auth)return;$("loginPage").classList.add("hidden");$("appShell").classList.remove("hidden");$("userBadge").textContent=auth.username||"Usuário autenticado";renderConfigSummary();renderRoleAccess();activateScreen("dashboard",false);refreshAll().catch(handleAppError);runStartupChecks()}
 function showLogin(clearDrafts=false){clearSessionData(clearDrafts);if(clearDrafts)$("password").value="";$("appShell").classList.add("hidden");$("loginPage").classList.remove("hidden")}
 $("empresaAtivaSelect").addEventListener("change",async e=>{
   if(!isMaster()){renderEmpresas();return;}
-  companyGeneration++;resetBiometricCapture();logoEditGeneration++;clearCredentials();clearImportPreview();resetCompanyLogoEditor();
+  companyGeneration++;if(biometricCapture)resetBiometricCapture();logoEditGeneration++;clearCredentials();clearImportPreview();resetCompanyLogoEditor();
   ["trabalhadorForm","entregaForm"].forEach(id=>{$(id).reset();const button=$(id).querySelector('button[type="submit"]');if(button)button.disabled=false;});if($("trabalhadorSearch"))$("trabalhadorSearch").value="";
   cache.trabalhadores=[];cache.fichas=[];$("trabalhadoresList").textContent="Carregando...";$("fichasList").textContent="Carregando...";$("dashboardFichas").textContent="";renderEntregaOptions();
   saveActiveCompany(e.target.value);await refreshAllSafe();

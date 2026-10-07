@@ -1,4 +1,4 @@
-# JP Biometria 12.8.2 — componente local
+# JP Biometria 12.8.3 — componente local
 
 Este componente conecta o aplicativo JP EntregaEPI ao SDK Java NITGEN no Windows. O instalador inclui somente o inicializador e o agente desenvolvidos para a JP. Não contém Java, driver, DLL, JAR do fabricante, template ou impressão digital real.
 
@@ -32,7 +32,7 @@ O instalador só informa que iniciou depois de verificar uma resposta autenticad
 
 ## HTTP e contrato com a interface
 
-O servidor escuta somente em `127.0.0.1`, na primeira porta livre entre **8789 e 8799**. O aplicativo deve procurar a versão 12.8.2, inclusive quando um agente antigo continua na porta 8789.
+O servidor escuta somente em `127.0.0.1`, na primeira porta livre entre **8789 e 8799**. O aplicativo deve procurar a versão 12.8.3, inclusive quando um agente antigo continua na porta 8789.
 
 As origens permitidas são exatamente:
 
@@ -103,7 +103,7 @@ O teste funciona antes do build em um checkout limpo. Ele compila as fontes e um
 
 O diretório de saída contém somente:
 
-- `JP-Biometria-Setup-12.8.2.exe`
+- `JP-Biometria-Setup-12.8.3.exe`
 - `biometria-release.json`, com `version`, `buildSha`, `filename`, `sha256`, `sizeBytes` e metadados públicos da plataforma.
 
 O JAR é reproduzível, com classes e timestamps fixados. Binários gerados não são versionados. O pipeline deve distribuir o mesmo par EXE/manifest que testou e verificar o SHA-256 e o commit antes da publicação.

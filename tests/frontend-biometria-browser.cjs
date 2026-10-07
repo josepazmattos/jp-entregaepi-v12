@@ -15,6 +15,7 @@ module.exports=async function runBiometricBrowser({browser,origin,output}){
   const token=`${encode({alg:'RS256'})}.${encode({sub:'BIO-USUARIO-SINTETICO','cognito:groups':['MASTER'],exp:4102444800})}.TOKEN-SINTETICO`;
   let statusMode='ready',captureMode='ready',releaseCapture=null,commitCount=0,loseFirstReply=true;
   const context=await browser.newContext({viewport:{width:1366,height:900},locale:'pt-BR'});
+  await context.addInitScript(()=>Object.defineProperty(navigator.permissions,'query',{value:async()=>({state:'prompt'})}));
   const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));
   const passed=message=>{checks.push(message);console.log('PASSOU: '+message);};
   async function noStoredBiometrics(){const stored=await page.evaluate(()=>[...Object.values(localStorage),...Object.values(sessionStorage)].join('\n'));assert.ok(!stored.includes('data:image/'));assert.ok(!stored.includes('TEMPLATE-SINTETICO-PRIVADO'));}
@@ -28,7 +29,7 @@ module.exports=async function runBiometricBrowser({browser,origin,output}){
         if(statusMode==='wrong')return json({ok:true,service:'SERVICO-SINTETICO-DIFERENTE',template:'TEMPLATE-SINTETICO-PRIVADO',image:pixel});
         if(statusMode==='alternative'&&url.port!=='8790')return route.abort();
         if(statusMode!=='alternative'&&url.port!=='8789')return route.abort();
-        return json({ok:statusMode!=='missing',service:'JP Biometria Local Java',version:'12.8.2',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture'},sdk:true,reader:statusMode!=='missing',deviceCount:statusMode==='missing'?0:1,deviceName:'NITGEN HFDU06',log:'NAO-EXIBIR-LOG'});
+        return json({ok:statusMode!=='missing',service:'JP Biometria Local Java',version:'12.8.3',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture'},sdk:true,reader:statusMode!=='missing',deviceCount:statusMode==='missing'?0:1,deviceName:'NITGEN HFDU06',log:'NAO-EXIBIR-LOG'});
       }
       if(url.pathname==='/api/capture'||url.pathname==='/capture'){
         assert.equal(request.method(),'POST');assert.match(request.headers()['content-type'],/^text\/plain/);const command=request.postDataJSON();assert.equal(command.requireTemplate,false);assert.equal(command.requireRealImage,true);assert.equal(command.workerId,undefined);
@@ -44,6 +45,8 @@ module.exports=async function runBiometricBrowser({browser,origin,output}){
     assert.equal(request.headers().authorization,'Bearer '+token);
     const company=request.headers()['x-empresa-id'];
     if(request.method()==='GET'){
+      if(url.pathname==='/health')return json({ok:true,durable:true,storageReady:true});
+      if(url.pathname==='/api/caepi/365')return json({ok:true,item:{found:true,officialSnapshot:true,downloadedAt:'2026-10-06T16:00:00Z'}});
       if(url.pathname==='/api/empresas')return json({ok:true,items:companies});
       if(url.pathname==='/api/trabalhadores')return json({ok:true,items:workers.filter(worker=>worker.empresaId===company)});
       if(url.pathname==='/api/epis')return json({ok:true,items:[equipment]});

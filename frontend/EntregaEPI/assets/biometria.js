@@ -21,6 +21,7 @@
     BIO_TIMEOUT:'O agente local não respondeu no prazo. A captura não foi repetida automaticamente. Confira o agente e tente novamente.',
     BIO_NETWORK:'O navegador não conseguiu acessar o JP Biometria neste computador. Confira se o agente está aberto e se o site tem permissão para acessar a rede local.',
     BIO_PERMISSION:'O navegador bloqueou o acesso ao leitor local. Nas permissões deste site, permita o acesso à rede local e verifique novamente.',
+    BIO_PERMISSION_REQUIRED:'Clique em Permitir e verificar leitor e autorize o acesso local, se o navegador solicitar. Com a permissão concedida, a verificação será automática nos próximos acessos.',
     BIO_PROTOCOL:'Um serviço respondeu, mas não confirmou o protocolo do JP Biometria. Confira se o agente correto está aberto.',
     BIO_NOT_READY:'O agente respondeu, mas não confirmou um leitor pronto. Feche o diagnóstico NITGEN se ele estiver usando o leitor e verifique novamente.',
     BIO_AGENT_UPDATE:'O componente local precisa ser atualizado. Use Instalar / reparar JP Biometria, execute o instalador e depois verifique o leitor novamente.',
@@ -83,7 +84,7 @@
     const statusTimeout=options.statusTimeout||800,primaryStatusTimeout=options.primaryStatusTimeout||8000,captureTimeout=options.captureTimeout||35000;
     const checkingTimeout=options.checkingTimeout||8000,discoveryTimeout=options.discoveryTimeout||20000,pollInterval=options.pollInterval||250;
     let selected=null,operation=null,lastDiagnostics=[];
-    async function locked(callback,externalSignal){
+    async function locked(callback,externalSignal,automatic=false){
       if(operation)throw failure('BIO_BUSY');
       const controller=new AbortController();operation=controller;
       const abort=()=>controller.abort();externalSignal?.addEventListener('abort',abort,{once:true});if(externalSignal?.aborted)controller.abort();
@@ -93,6 +94,7 @@
         try{permission=await queryPermission();}catch(error){/* Older browsers do not expose this permission name. */}
         if(controller.signal.aborted)throw failure('BIO_CANCELLED');
         if(permission?.state==='denied')throw failure('BIO_PERMISSION');
+        if(automatic&&permission?.state!=='granted')throw failure('BIO_PERMISSION_REQUIRED');
         return await callback(controller.signal);
       }
       finally{externalSignal?.removeEventListener('abort',abort);if(operation===controller)operation=null;}
@@ -117,7 +119,7 @@
         throw failure('BIO_NETWORK');
       }finally{clearTimeout(timer);signal.removeEventListener('abort',abort);}
     }
-    async function discover({signal}={}){
+    async function discover({signal,automatic=false}={}){
       return locked(async operationSignal=>{
         const ports=selected?[selected.port,...PORTS.filter(port=>port!==selected.port)]:PORTS;
         const diagnostics=[],deadline=Date.now()+discoveryTimeout;let recognized=null;selected=null;
@@ -132,7 +134,7 @@
             let status=normalizeStatus(await fetchStatus(),port);
             const checkingDeadline=Math.min(deadline,Date.now()+checkingTimeout);
             // A fresh native agent probes the SDK asynchronously. This bounded,
-            // read-only wait belongs to the user's explicit verification action.
+            // read-only wait is also used by the authorized login verification.
             while(status.compatible&&status.checking&&!status.busy&&Date.now()+pollInterval<checkingDeadline){await pause();status=normalizeStatus(await fetchStatus(),port);}
             diagnostics.push({port,code:status.code});if(status.ready){selected=status;lastDiagnostics=diagnostics;return status;}if(!recognized||(!recognized.compatible&&status.compatible))recognized=status;
           }catch(error){
@@ -146,7 +148,7 @@
         if(diagnostics.some(item=>item.code==='BIO_PROTOCOL'))throw failure('BIO_PROTOCOL');
         if(diagnostics.some(item=>item.code==='BIO_HTTP'))throw failure('BIO_HTTP');
         throw failure('BIO_NETWORK');
-      },signal);
+      },signal,automatic);
     }
     async function capture({fingerCode,purpose='test',signal}={}){
       const finger=FINGERS.find(item=>item[0]===fingerCode);if(!finger)throw failure('BIO_FINGER');

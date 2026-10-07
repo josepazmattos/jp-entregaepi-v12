@@ -54,7 +54,10 @@ module.exports=async function runTenantBrowser({browser,origin,output}){
         }
         authorized=true;return json(200,{AuthenticationResult:{IdToken:token,AccessToken:'ACCESS-SINTETICO-'+session,ExpiresIn:3600}});
       }
+      if(url.hostname==='127.0.0.1'&&url.pathname==='/status')return route.abort();
       if(!url.hostname.endsWith('.execute-api.sa-east-1.amazonaws.com')){result.unexpectedExternal=true;return route.abort();}
+      if(url.pathname==='/health')return json(200,{ok:true,durable:true,storageReady:true});
+      if(url.pathname==='/api/caepi/365')return json(200,{ok:true,item:{found:true,officialSnapshot:true,downloadedAt:'2026-10-06T16:00:00Z'}});
       const selected=request.headers()['x-empresa-id'];
       result.requests.push({kind:'api',path:url.pathname,method:request.method(),session,selected});
       if(!authorized||request.headers().authorization!==`Bearer ${token}`)return json(401,{ok:false,error:'Sessão sintética não autenticada.'});

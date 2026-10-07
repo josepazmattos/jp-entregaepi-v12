@@ -8,7 +8,7 @@ const {chromium} = require('playwright');
 const frontend = path.resolve(__dirname, '../frontend/EntregaEPI');
 const output = path.join(__dirname, 'output');
 fs.mkdirSync(output,{recursive:true});
-const results={suite:'Interface e impressão V12.8.2',syntheticData:true,realApiUsed:false,checks:[],pdfs:{},layouts:{}};
+const results={suite:'Interface e impressão V12.8.3',syntheticData:true,realApiUsed:false,checks:[],pdfs:{},layouts:{}};
 const company={id:'EMPRESA-TESTE',nome:'EMPRESA EXEMPLO',cnpj:'00.000.000/0000-00',localidade:'Cidade de Teste',uf:'MS'};
 const worker={id:'TRABALHADOR-TESTE',empresaId:company.id,nomeCompleto:'TRABALHADOR DE TESTE',cpf:'000.000.000-00',funcao:'FUNÇÃO DE TESTE',matriculaESocial:'00042',status:'Ativo'};
 const epi={id:'EPI-TESTE',empresaId:company.id,descricao:'EQUIPAMENTO DE TESTE',ca:'00000',fabricante:'FABRICANTE DE TESTE'};
@@ -176,6 +176,7 @@ async function main(){
   browser=await chromium.launch({headless:true,args:['--no-sandbox']});
   results.browser=await browser.version();
   const context=await browser.newContext({viewport:{width:1366,height:900},locale:'pt-BR',timezoneId:'America/Campo_Grande'});
+  await context.addInitScript(()=>Object.defineProperty(navigator.permissions,'query',{value:async()=>({state:'prompt'})}));
   context.on('page',newPage=>newPage.on('pageerror',error=>pageErrors.push(error.message)));
   context.on('console',message=>{if(['error','warning'].includes(message.type()))consoleMessages.push({type:message.type(),text:message.text(),location:message.location()})});
   context.on('request',request=>{
@@ -212,7 +213,7 @@ async function main(){
     }
     if(url.origin==='http://127.0.0.1:8789'&&url.pathname==='/status'){
       biometricRequests++;
-      await json(200,{ok:true,service:'JP Biometria Local Java',version:'12.8.2',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture'},sdk:true,reader:true,deviceCount:1,deviceName:'NITGEN HFDU06'});return;
+      await json(200,{ok:true,service:'JP Biometria Local Java',version:'12.8.3',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture'},sdk:true,reader:true,deviceCount:1,deviceName:'NITGEN HFDU06'});return;
     }
     if(!url.hostname.endsWith('.execute-api.sa-east-1.amazonaws.com')){
       results.unexpectedExternalRequest=true;
@@ -221,7 +222,7 @@ async function main(){
     requests.push({path:url.pathname,method:request.method(),authorizationPresent:request.headers().authorization===`Bearer ${idToken}`,empresaId:request.headers()['x-empresa-id']});
     if(apiFailure){await json(apiFailure,{ok:false,error:apiFailure===403?'Perfil não configurado. Solicite ao administrador.':'Sessão expirada.'});return;}
     if(url.pathname==='/health'){
-      await json(200,{ok:true,version:'12.8.2',mode:'dynamodb',durable:true,storageReady:true,buildSha:'BUILD-SINTETICO',caepi:{sourceKind:'official-snapshot',officialSnapshot:true,live:false,downloadedAt:'2026-10-06T16:00:00Z'}});return;
+      await json(200,{ok:true,version:'12.8.3',mode:'dynamodb',durable:true,storageReady:true,buildSha:'BUILD-SINTETICO',caepi:{sourceKind:'official-snapshot',officialSnapshot:true,live:false,downloadedAt:'2026-10-06T16:00:00Z'}});return;
     }
     if(url.pathname.startsWith('/api/caepi/')){
       if(url.pathname.endsWith('/654321')){
@@ -253,9 +254,10 @@ async function main(){
   await page.locator('#loginButton').click();
   await page.waitForFunction(()=>document.getElementById('metricFichas').textContent==='1');
   for(const id of ['metricEmpresas','metricTrabalhadores','metricEpis','metricFichas'])assert.equal(await page.locator('#'+id).innerText(),'1');
-  assert.equal(requests.length,4,'dashboard consulta os quatro cadastros, sem diagnóstico CA automático');
+  await page.waitForFunction(()=>!document.getElementById('startupRetryButton').disabled);
+  assert.equal(requests.length,6,'dashboard consulta quatro cadastros e inicia os diagnósticos de serviço e CA');
   assert.ok(requests.every(request=>request.authorizationPresent));
-  assert.ok(requests.filter(request=>request.path!=='/api/empresas').every(request=>request.empresaId===company.id));
+  assert.ok(requests.filter(request=>['/api/trabalhadores','/api/fichas','/api/epis'].includes(request.path)).every(request=>request.empresaId===company.id));
   assert.equal(await page.locator('#appMessage').isVisible(),false);
   await page.screenshot({path:path.join(output,'dashboard.png'),fullPage:true});
   passed('login Cognito simulado e dashboard operacional sem erro');
@@ -317,7 +319,7 @@ async function main(){
 
   await page.locator('.nav [data-screen="config"]').click();
   await assertDiagnosticsClosed('config');
-  assert.ok((await page.locator('#configVersion').innerText()).includes('12.8.2'));
+  assert.ok((await page.locator('#configVersion').innerText()).includes('12.8.3'));
   assert.ok((await page.locator('#configCompany').innerText()).includes(company.nome));
   await inspectLayout('desktop-config');
   await page.locator('#healthTestButton').click();
@@ -334,7 +336,7 @@ async function main(){
 
   await page.locator('.nav [data-screen="biometria"]').click();
   await assertDiagnosticsClosed('biometria');
-  assert.equal(biometricRequests,0,'o serviço local só é consultado por ação do usuário');
+  assert.equal(biometricRequests,0,'sem permissão prévia, a primeira consulta local aguarda ação do usuário');
   await page.locator('#bioTestButton').click();
   await page.waitForFunction(()=>document.getElementById('bioStatusBadge').dataset.state==='success');
   assert.equal(await page.locator('#bioStatusBadge').innerText(),'Leitor conectado');

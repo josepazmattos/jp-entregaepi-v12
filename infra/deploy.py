@@ -27,7 +27,7 @@ import zipfile
 from fetch_ca_snapshot import read_source, verify_installed
 from biometria_release import verify_release, ReleaseError, EXECUTABLE, MANIFEST
 
-VERSION = "12.8.2"
+VERSION = "12.8.3"
 REPOSITORY = "josepazmattos/jp-entregaepi-v12"
 ACCOUNT = "003020057405"
 REGION = "sa-east-1"

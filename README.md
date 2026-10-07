@@ -1,4 +1,4 @@
-# JP EntregaEPI 12.8.2
+# JP EntregaEPI 12.8.3
 
 Aplicação de entrega de equipamentos para empresas clientes. O administrador
 **Master** cadastra as empresas e disponibiliza seus acessos. Cada empresa
@@ -9,6 +9,7 @@ Autenticação em Cognito, API em Lambda e persistência em DynamoDB.
 - Versão e commit publicados: https://www.jptreinamentos.com.br/EntregaEPI/version.json
 - [Guia das empresas, importação e equipamentos](docs/V12_8_EMPRESAS_E_IMPORTACAO.md)
 - [Leitor NITGEN: reparo, conexão e captura na ficha](docs/V12_8_1_BIOMETRIA.md)
+- [Automação 12.8.3: verificações após o login](docs/V12_8_3_AUTOMACAO_LOGIN.md)
 - [Correção 12.8.2: busca do SDK recuperada da V11.9](docs/V12_8_2_SDK_DISCOVERY.md)
 - [Guia de implantação](docs/DEPLOY_V12_7_1.md)
 
