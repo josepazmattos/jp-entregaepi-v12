@@ -28,7 +28,7 @@ module.exports=async function runBiometricBrowser({browser,origin,output}){
         if(statusMode==='wrong')return json({ok:true,service:'SERVICO-SINTETICO-DIFERENTE',template:'TEMPLATE-SINTETICO-PRIVADO',image:pixel});
         if(statusMode==='alternative'&&url.port!=='8790')return route.abort();
         if(statusMode!=='alternative'&&url.port!=='8789')return route.abort();
-        return json({ok:statusMode!=='missing',service:'JP Biometria Local Java',version:'12.8.1',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture'},sdk:true,reader:statusMode!=='missing',deviceCount:statusMode==='missing'?0:1,deviceName:'NITGEN HFDU06',log:'NAO-EXIBIR-LOG'});
+        return json({ok:statusMode!=='missing',service:'JP Biometria Local Java',version:'12.8.2',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture'},sdk:true,reader:statusMode!=='missing',deviceCount:statusMode==='missing'?0:1,deviceName:'NITGEN HFDU06',log:'NAO-EXIBIR-LOG'});
       }
       if(url.pathname==='/api/capture'||url.pathname==='/capture'){
         assert.equal(request.method(),'POST');assert.match(request.headers()['content-type'],/^text\/plain/);const command=request.postDataJSON();assert.equal(command.requireTemplate,false);assert.equal(command.requireRealImage,true);assert.equal(command.workerId,undefined);

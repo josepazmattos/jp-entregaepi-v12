@@ -379,6 +379,42 @@ class WindowsSmoke:
         self.passed("startReusedAuthenticatedInstance")
         self.passed("oneInstanceAfterStart")
         self.status_without_sdk(reused)
+        # Reproduce SDK installation after agent startup, at a nonstandard path.
+        # Only a synthetic PE header is used: no vendor SDK or biometric capture.
+        previous_environment = self.environment.copy()
+        program_files = self.root / "Program Files fixture"
+        sdk = program_files / "Vendor Tools" / "NITGEN" / "eNBSP Custom Version" / "SDK"
+        (sdk / "Lib").mkdir(parents=True)
+        (sdk / "Lib" / "NBioBSPJNI.jar").write_bytes(b"synthetic jar; cannot capture")
+        (sdk / "Bin" / "x64").mkdir(parents=True)
+        pe = bytearray(512)
+        pe[:2] = b"MZ"
+        pe[0x3c:0x40] = (0x80).to_bytes(4, "little")
+        pe[0x80:0x84] = b"PE\0\0"
+        pe[0x84:0x86] = (0x8664).to_bytes(2, "little")
+        for filename in ("NBioBSP.dll", "NBioBSPJNI.dll"):
+            (sdk / "Bin" / "x64" / filename).write_bytes(pe)
+        overrides = {"programfiles", "programfiles(x86)", "programw6432", "jp_biometria_sdk"}
+        self.environment = {key: value for key, value in self.environment.items() if key.casefold() not in overrides}
+        for key in ("ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"):
+            self.environment[key] = str(program_files)
+        self.launch(self.executable, ["--start", "jpbiometria://start"], quiet=False)
+        refreshed = self.one_instance(first["port"])
+        require(refreshed["instanceId"] != first["instanceId"], "SDK_REFRESH_DID_NOT_RESTART",
+                "O protocolo não refez a descoberta após a instalação do SDK.")
+        deadline = time.monotonic() + 12
+        while True:
+            code, result = self.control.json(refreshed["port"], "/status")
+            if result.get("errorCode") != "SDK_CHECKING":
+                break
+            require(time.monotonic() < deadline, "SDK_REFRESH_TIMEOUT", "A nova verificação não concluiu.")
+            time.sleep(0.1)
+        require(code == 200 and result.get("errorCode") == "SDK_LOAD_FAILED" and result.get("reader") is False,
+                "NONSTANDARD_SDK_NOT_FOUND", "O SDK sintético fora da pasta padrão não chegou à validação nativa.")
+        self.passed("nonstandardSDKFoundAfterStartup")
+        self.passed("protocolRefreshesChangedRuntime")
+        self.passed("syntheticDLLNeverReportsPhysicalReader")
+        self.environment = previous_environment
         # Do not repair over a concurrent registry change or a replaced release/key.
         self.assert_registry()
         self.adopt_key()

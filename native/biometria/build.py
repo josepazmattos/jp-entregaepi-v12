@@ -14,7 +14,7 @@ import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parent
-VERSION = "12.8.1"
+VERSION = "12.8.2"
 FILENAME = f"JP-Biometria-Setup-{VERSION}.exe"
 JAVA_SOURCES = ["Json.java", "BioReader.java", "NitgenReader.java", "JPBiometriaAgent.java"]
 

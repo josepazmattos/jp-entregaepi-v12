@@ -26,7 +26,7 @@ import (
 	"time"
 )
 
-const version = "12.8.1"
+const version = "12.8.2"
 const firstPort, lastPort = 8789, 8799
 const installedName, jarName = "JPBiometria.exe", "JPBiometriaAgent.jar"
 
@@ -94,7 +94,7 @@ func main() {
 			_, err = startAgent(dir, key)
 		}
 		if err != nil {
-			failMain("Não foi possível iniciar a ponte JP Biometria. Execute o reparador 12.8.1.\n\n"+err.Error(), quiet)
+			failMain("Não foi possível iniciar a ponte JP Biometria. Execute o reparador 12.8.2.\n\n"+err.Error(), quiet)
 		}
 		return
 	}
@@ -353,11 +353,19 @@ func startAgent(dir, key string) (launchResult, error) {
 		if owned.Version == version && owned.BuildSHA == buildSHA {
 			status, err := readStatus(owned.Port)
 			if err == nil {
+				if runtimeNeedsRefresh(status) && status["errorCode"] != discoverRuntime().Problem {
+					// A SDK installed after startup must be rediscovered. Only stop the
+					// authenticated JP instance; busy captures remain protected.
+					if err := stopOwned(owned.Port, key); err != nil {
+						return launchResult{}, err
+					}
+					continue
+				}
 				return launchResult{owned.Port, status}, nil
 			}
 		}
 	}
-	if len(ownedList) > 0 {
+	if len(ownedAgents(key)) > 0 {
 		return launchResult{}, errors.New("Existe outra versão do agente JP em execução. Execute o reparador para atualizá-la com uma parada segura.")
 	}
 	if _, err := os.Stat(filepath.Join(dir, jarName)); err != nil {
@@ -603,7 +611,7 @@ func selectRuntime(sdk []sdkLocation, sdkProblem string, runtimes []javaRuntime)
 	return runtimeSelection{Java: runtimes[0], Problem: sdkProblem}
 }
 func discoverRuntime() runtimeSelection {
-	sdk, problem := discoverSDK(sdkRoots())
+	sdk, problem := discoverInstalledSDK()
 	var runtimes []javaRuntime
 	for _, candidate := range javaCandidates() {
 		if java, err := inspectJava(candidate); err == nil {
