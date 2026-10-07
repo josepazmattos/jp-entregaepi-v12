@@ -113,6 +113,8 @@ async function consultarCA(){
 }
 async function testBiometriaLocal(){const out=$("bioOutput");out.textContent="Consultando JP Biometria local...";try{const r=await fetch("http://127.0.0.1:8789/status");const text=await r.text();let body=text;try{body=JSON.parse(text)}catch(e){}out.textContent=JSON.stringify({status:r.status,body},null,2)}catch(e){out.textContent="JP Biometria local não respondeu: "+e.message}}
 function imprimirFicha(id){
+  let documentUrl="";
+  const releaseDocument=()=>{if(documentUrl){URL.revokeObjectURL(documentUrl);documentUrl="";}};
   try{
     const ficha=cache.fichas.find(item=>item.id===id);
     if(!ficha)throw new Error("Ficha não encontrada. Atualize a lista e tente novamente.");
@@ -120,16 +122,29 @@ function imprimirFicha(id){
     const empresa=cache.empresas.find(item=>item.id===(ficha.empresaId||activeEmpresaId))||{};
     const trabalhador=cache.trabalhadores.find(item=>item.id===ficha.trabalhadorId)||{};
     const html=window.JP_FICHA.buildDocument(ficha,empresa,trabalhador,cache.epis,{defaultLogo:document.querySelector(".brand-logo")?.src});
-    const preview=window.open("","_blank","width=900,height=1120");
+    documentUrl=URL.createObjectURL(new Blob([html],{type:"text/html;charset=utf-8"}));
+    // Navegar o documento permite ao navegador carregar imagens normalmente.
+    const preview=window.open(documentUrl,"_blank","width=900,height=1120");
     if(!preview)throw new Error("Permita a abertura de novas janelas para visualizar e imprimir a ficha.");
     preview.opener=null;
-    preview.document.open();preview.document.write(html);preview.document.close();
-    // Espera o logo e a imagem da captura antes de abrir a impressão/PDF.
-    Promise.all(Array.from(preview.document.images).map(img=>img.decode().catch(()=>{})))
-      .then(()=>preview.document.fonts?.ready)
-      .then(()=>{if(!preview.closed){preview.focus();preview.print();}})
-      .catch(error=>handleAppError(error));
-  }catch(error){handleAppError(error);}
+    let finished=false;
+    const finish=()=>{finished=true;clearTimeout(loadTimeout);releaseDocument();};
+    const loadTimeout=setTimeout(()=>{
+      if(finished)return;
+      finish();
+      if(!preview.closed)handleAppError(new Error("Não foi possível carregar a ficha para impressão. Confira a conexão e tente novamente."));
+    },30000);
+    preview.addEventListener("load",async()=>{
+      if(finished||preview.closed){finish();return;}
+      try{
+        await Promise.all(Array.from(preview.document.images).map(img=>img.decode()));
+        if(preview.document.fonts)await preview.document.fonts.ready;
+        if(!finished&&!preview.closed){preview.focus();preview.print();}
+      }catch(error){
+        if(!finished)handleAppError(new Error("Não foi possível carregar o logotipo ou a imagem registrada na ficha. Confira o cadastro e tente novamente."));
+      }finally{finish();}
+    },{once:true});
+  }catch(error){releaseDocument();handleAppError(error);}
 }
 function goScreen(screen){document.querySelector(`[data-screen="${screen}"]`)?.click()}
 function showApp(){const auth=getAuth();if(!auth)return;$("loginPage").classList.add("hidden");$("appShell").classList.remove("hidden");$("userBadge").textContent=auth.username||"Usuário autenticado";$("configOutput").textContent=JSON.stringify(window.JP_CONFIG,null,2);refreshAll().catch(handleAppError)}

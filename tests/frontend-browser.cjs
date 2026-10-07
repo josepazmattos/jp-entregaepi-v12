@@ -52,7 +52,7 @@ function waitForPrintCall(afterIndex){
       if(event.kind!=='print_called')return;
       clearTimeout(timer);printListeners.delete(listener);resolve(event);
     };
-    const timer=setTimeout(()=>{printListeners.delete(listener);reject(new Error('A chamada automática a window.print não foi observada após document.close.'));},10000);
+    const timer=setTimeout(()=>{printListeners.delete(listener);reject(new Error('A chamada automática a window.print não foi observada após carregar a ficha.'));},10000);
     printListeners.add(listener);
   });
 }
@@ -144,31 +144,15 @@ async function main(){
     printEvents.push(event);
     for(const listener of printListeners)listener(event);
   });
-  // document.open pode recriar o ambiente da janela. Instala o observador após
-  // document.close e registra a chamada fora do popup, mantendo window.print nativo.
+  // Executa em cada documento navegado, inclusive a ficha Blob, e observa a
+  // chamada original a print sem substituir sua execução por um marcador local.
   await context.addInitScript(()=>{
-    const originalOpen=window.open.bind(window);
-    window.open=(...args)=>{
-      const popup=originalOpen(...args);
-      if(!popup)return popup;
-      const report=kind=>window.__jpPrintObserved({kind,title:popup.document.title}).catch(()=>{});
-      report('popup_opened');
-      const originalDocumentOpen=popup.document.open.bind(popup.document);
-      popup.document.open=(...openArgs)=>{
-        const opened=originalDocumentOpen(...openArgs);
-        const originalDocumentClose=popup.document.close.bind(popup.document);
-        popup.document.close=(...closeArgs)=>{
-          const closed=originalDocumentClose(...closeArgs);
-          const nativePrint=popup.print.bind(popup);
-          popup.addEventListener('beforeprint',()=>report('beforeprint'));
-          popup.print=()=>{report('print_called');return nativePrint();};
-          report('print_hook_installed');
-          return closed;
-        };
-        return opened;
-      };
-      return popup;
+    const nativePrint=window.print.bind(window);
+    const report=kind=>{
+      if(typeof window.__jpPrintObserved==="function")window.__jpPrintObserved({kind,title:document.title}).catch(()=>{});
     };
+    window.addEventListener('beforeprint',()=>report('beforeprint'));
+    window.print=()=>{report('print_called');return nativePrint();};
   });
   // Recursos locais são servidos por HTTP, sem interceptação; todas as externas continuam simuladas ou bloqueadas.
   results.localAssetsIntercepted=false;
