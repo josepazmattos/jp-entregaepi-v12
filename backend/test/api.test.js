@@ -156,21 +156,14 @@ test('API Lambda: autorização, empresa, emissão e captura em isolamento local
     const foreignClaims = { ...basicClaims, 'cognito:groups': '[EMPRESA]', 'custom:empresa_id': companyB };
     assert.equal((await request('POST', `/api/fichas/${ficha.id}/assinar`, { claims: foreignClaims, body: {} })).status, 403);
     assert.equal((await request('DELETE', `/api/fichas/${ficha.id}`, { claims: foreignClaims })).status, 403);
-    assert.equal((await request('POST', `/api/fichas/${ficha.id}/assinar`, { company: companyA, body: { realFingerImage: 'invented', dedo: 'teste' } })).status, 400);
-    const image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
-    const capture = await request('POST', `/api/fichas/${ficha.id}/assinar`, { company: companyA, body: { realFingerImage: true, fingerImageDataUrl: image, fingerCode: 'sintetico', verificada: true, matchScore: 100, signedAt: 'falsified' } });
-    assert.equal(capture.status, 200);
-    assert.equal(capture.body.item.status, 'assinada');
-    assert.equal(capture.body.item.assinaturaBiometrica.verificada, false);
-    assert.equal(capture.body.item.assinaturaBiometrica.realFingerImage, image);
-    assert.equal(capture.body.item.assinaturaBiometrica.metodo, 'captura_de_imagem');
-    assert.equal(capture.body.item.assinaturaBiometrica.capturadoPor, basicClaims.sub);
-    assert.equal(capture.body.item.assinaturaBiometrica.matchScore, undefined);
-    assert.notEqual(capture.body.item.assinaturaBiometrica.signedAt, 'falsified');
+    assert.equal((await request('POST', `/api/fichas/${ficha.id}/assinar`, { company: companyA, body: {realFingerImage:'invented',verificada:true} })).status,403);
+    assert.equal((await storage.get('ficha',ficha.id)).status,'pendente');
+    // Historical image-only signatures remain cancellable and are never upgraded by assertion.
+    await storage.update('ficha',ficha.id,{status:'assinada',assinaturaBiometrica:{verificada:false,metodo:'captura_de_imagem'}});
     const cancelled = await request('DELETE', `/api/fichas/${ficha.id}`, { company: companyA, body: { motivo: 'Cancelamento de teste local' } });
     assert.equal(cancelled.status, 200);
     assert.equal(cancelled.body.item.status, 'cancelada');
     assert.equal(cancelled.body.item.statusAnterior, 'assinada');
-    assert.equal((await request('POST', `/api/fichas/${ficha.id}/assinar`, { company: companyA, body: { realFingerImage: image, dedo: 'sintetico' } })).status, 409);
+    assert.equal((await request('POST', `/api/fichas/${ficha.id}/assinar`, { company: companyA, body: { realFingerImage: 'invented', dedo: 'sintetico' } })).status, 403);
   });
 });

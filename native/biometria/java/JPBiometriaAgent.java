@@ -14,11 +14,12 @@ import javax.crypto.spec.SecretKeySpec;
 
 /** Loopback-only bridge. A local private control key is never exposed to browser responses. */
 public final class JPBiometriaAgent implements AutoCloseable {
-    static final String VERSION = "12.8.3", SERVICE = "JP Biometria Local Java";
+    static final String VERSION = "12.9.0", SERVICE = "JP Biometria Local Java";
     static final int FIRST_PORT = 8789, LAST_PORT = 8799, MAX_BODY = 16384;
     static final Set<String> WEB_ORIGINS = new HashSet<>(Arrays.asList("https://www.jptreinamentos.com.br", "https://jptreinamentos.com.br"));
     private final HttpServer server;
     private final BioReader reader;
+    private BioProof biometricProof;
     private final String controlKey, instance = UUID.randomUUID().toString();
     private final String buildSha;
     private final ExecutorService requests = Executors.newFixedThreadPool(6, daemon("jp-http"));
@@ -37,6 +38,7 @@ public final class JPBiometriaAgent implements AutoCloseable {
     JPBiometriaAgent(int port, String key, String sha, BioReader reader) throws IOException {
         if (port < FIRST_PORT || port > LAST_PORT) throw new IllegalArgumentException("PORT_NOT_ALLOWED");
         if (key == null || !key.matches("[A-Za-z0-9_-]{43}")) throw new IllegalArgumentException("CONTROL_KEY_INVALID");
+        try { this.biometricProof = new BioProof(null); } catch(Exception e) {throw new IOException("BIOMETRIC_KEY_FAILED",e);}
         this.reader = reader; this.controlKey = key; this.buildSha = sha;
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 16);
         server.createContext("/", this::handle); server.setExecutor(requests);
@@ -59,7 +61,7 @@ public final class JPBiometriaAgent implements AutoCloseable {
         Map<String, Object> out = new LinkedHashMap<>(deviceStatus);
         out.putAll(map("version", VERSION, "service", SERVICE, "agent", "JPBiometria", "buildSha", buildSha,
             "instanceId", instance, "port", port(), "busy", capturing, "checking", probeQueued.get(),
-            "capabilities", map("capture", true, "captureMethod", "POST", "capturePath", "/api/capture", "templates", false, "verify", false)));
+            "capabilities", map("capture", true, "captureMethod", "POST", "capturePath", "/api/capture", "templates", true, "verify", true)));
         if (capturing) { out.put("message", "Captura em andamento. Aguarde a conclusão."); }
         return out;
     }
@@ -74,7 +76,7 @@ public final class JPBiometriaAgent implements AutoCloseable {
             boolean statusPath = path.equals("/status") || path.equals("/debug/status");
             boolean debugPath = path.equals("/debug/capture") || path.equals("/");
             boolean capturePath = path.equals("/api/capture") || path.equals("/capture");
-            boolean verifyPath = path.equals("/api/signature") || path.equals("/verify");
+            boolean verifyPath = path.equals("/api/signature") || path.equals("/verify") || path.equals("/api/enroll");
             if (!statusPath && !debugPath && !capturePath && !verifyPath) { error(exchange, 404, "NOT_FOUND", "Rota não disponível."); return; }
             if (method.equals("OPTIONS")) {
                 if (origin == null) { error(exchange, 403, "ORIGIN_REQUIRED", "Origem necessária."); return; }
@@ -100,7 +102,7 @@ public final class JPBiometriaAgent implements AutoCloseable {
             // Side effects require an explicitly allowed Origin and POST. No image-tag/navigation capture.
             if (!method.equals("POST")) { error(exchange, 405, "METHOD_NOT_ALLOWED", "Use POST para a captura."); return; }
             if (origin == null) { error(exchange, 403, "ORIGIN_REQUIRED", "Abra o teste no aplicativo JP ou no diagnóstico local."); return; }
-            if (verifyPath) { error(exchange, 501, "BIOMETRIC_MATCH_NOT_SUPPORTED", "Esta ponte captura a imagem. A comparação de identidade biométrica não está habilitada."); return; }
+            if (verifyPath) { biometric(exchange, path.equals("/api/enroll")?"enroll":"verify"); return; }
             capture(exchange);
         } catch (IllegalArgumentException e) { error(exchange, 400, "INVALID_REQUEST", "Os parâmetros da solicitação são inválidos."); }
         catch (BioFailure e) { error(exchange, e.httpStatus, e.code, e.getMessage()); }
@@ -133,6 +135,29 @@ public final class JPBiometriaAgent implements AutoCloseable {
             result.put("biometricVerified", false); result.put("version", VERSION); result.put("service", SERVICE); result.put("buildSha", buildSha);
             json(exchange, 200, result);
         } finally { capturing = false; deviceLock.unlock(); checkedAt = 0; }
+    }
+    private void biometric(HttpExchange exchange,String kind) throws IOException,BioFailure {
+        String type=exchange.getRequestHeaders().getFirst("Content-Type");
+        if(type==null||!Arrays.asList("text/plain","application/json").contains(type.split(";",2)[0].trim().toLowerCase(Locale.ROOT)))throw new BioFailure("CONTENT_TYPE_REQUIRED","Envie JSON.",415);
+        Map<String,Object> body=Json.object(readBody(exchange));
+        Set<String> keys=new HashSet<>(Arrays.asList("kind","challengeId","workerId","fichaId","fingerCode","template","publicKey"));
+        for(String key:body.keySet())if(!keys.contains(key))throw new IllegalArgumentException();
+        if(!kind.equals(body.get("kind")))throw new IllegalArgumentException();
+        for(String key:Arrays.asList("challengeId","workerId"))if(!(body.get(key) instanceof String)||!((String)body.get(key)).matches("[A-Za-z0-9_-]{1,128}"))throw new IllegalArgumentException();
+        String finger=text(body,"fingerCode","");if(!finger.matches("(R|L)_(THUMB|INDEX|MIDDLE|RING|LITTLE)"))throw new IllegalArgumentException();
+        String ficha=text(body,"fichaId","");if(!ficha.matches("[A-Za-z0-9_-]{0,128}")||kind.equals("verify")&&ficha.isEmpty())throw new IllegalArgumentException();
+        String template=text(body,"template","");
+        if(kind.equals("verify")) {
+            if(template.length()<40||template.length()>120000||template.matches("(?s).*[\\x00-\\x1f].*"))throw new IllegalArgumentException();
+            if(!biometricProof.publicKey().equals(body.get("publicKey")))throw new BioFailure("BIOMETRIC_DEVICE_DIFFERENT","Esta digital foi cadastrada em outro componente local. Cadastre-a neste computador antes de assinar.",409);
+        }
+        if(!deviceLock.tryLock())throw new BioFailure("READER_BUSY","O leitor está em uso. Aguarde.",409);
+        capturing=true;
+        try {
+            if(shuttingDown)throw new BioFailure("AGENT_STOPPING","O agente está reiniciando.",503);
+            Map<String,Object> result=kind.equals("enroll")?reader.enroll(finger):reader.verify(finger,template);
+            json(exchange,200,biometricProof.attest(body,result));
+        } finally {capturing=false;deviceLock.unlock();checkedAt=0;}
     }
     private void control(HttpExchange exchange, String origin) throws IOException, BioFailure {
         if (!exchange.getRequestMethod().equals("POST") || origin != null) { error(exchange, 403, "CONTROL_DENIED", "Controle local não autorizado."); return; }
@@ -168,10 +193,11 @@ public final class JPBiometriaAgent implements AutoCloseable {
         catch (Exception e) { throw new IllegalStateException("CONTROL_CRYPTO_UNAVAILABLE"); }
     }
     private String readBody(HttpExchange exchange) throws IOException, BioFailure {
+        int bodyLimit=exchange.getRequestURI().getPath().matches("/api/(enroll|signature)|/verify")?150000:MAX_BODY;
         String length = exchange.getRequestHeaders().getFirst("Content-Length");
-        if (length != null && Long.parseLong(length) > MAX_BODY) throw new BioFailure("REQUEST_TOO_LARGE", "Solicitação excedeu o tamanho permitido.", 413);
+        if (length != null && Long.parseLong(length) > bodyLimit) throw new BioFailure("REQUEST_TOO_LARGE", "Solicitação excedeu o tamanho permitido.", 413);
         ByteArrayOutputStream body = new ByteArrayOutputStream(); byte[] buffer = new byte[2048]; int n;
-        while ((n = exchange.getRequestBody().read(buffer)) != -1) { if (body.size() + n > MAX_BODY) throw new BioFailure("REQUEST_TOO_LARGE", "Solicitação excedeu o tamanho permitido.", 413); body.write(buffer, 0, n); }
+        while ((n = exchange.getRequestBody().read(buffer)) != -1) { if (body.size() + n > bodyLimit) throw new BioFailure("REQUEST_TOO_LARGE", "Solicitação excedeu o tamanho permitido.", 413); body.write(buffer, 0, n); }
         return new String(body.toByteArray(), StandardCharsets.UTF_8);
     }
     private static String text(Map<String, Object> body, String name, String defaultValue) { Object value = body.get(name); if (value == null) return defaultValue; if (!(value instanceof String)) throw new IllegalArgumentException("STRING_REQUIRED"); return (String)value; }
@@ -192,7 +218,7 @@ public final class JPBiometriaAgent implements AutoCloseable {
         exchange.getResponseHeaders().set("Content-Security-Policy", "default-src 'none'; script-src 'nonce-" + nonce + "'; style-src 'unsafe-inline'; connect-src 'self'; img-src data:; frame-ancestors 'none'; base-uri 'none'");
         String html = "<!doctype html><html lang='pt-BR'><meta charset='utf-8'><meta name='viewport' content='width=device-width'><title>JP Biometria</title>"
             + "<style>body{font:16px system-ui;max-width:760px;margin:40px auto;padding:20px;color:#15382c}button{padding:12px;margin:5px}pre{white-space:pre-wrap}img{max-width:250px}</style>"
-            + "<h1>JP Biometria 12.8.3</h1><p>Teste local de conexão e captura. A imagem aparece apenas nesta janela e não é salva.</p>"
+            + "<h1>JP Biometria 12.9.0</h1><p>Teste local de conexão e captura. A imagem aparece apenas nesta janela e não é salva.</p>"
             + "<button id='status'>Verificar leitor</button><button id='capture'>Testar captura</button><pre id='result'>Clique em Verificar leitor.</pre><img id='image' alt='Captura do leitor' hidden>"
             + "<script nonce='" + nonce + "'>const out=document.getElementById('result'),img=document.getElementById('image');"
             + "document.getElementById('status').onclick=async()=>{try{const r=await fetch('/status',{cache:'no-store'}),j=await r.json();out.textContent=j.message+'\\nVersão: '+j.version+'\\nSDK: '+j.sdk+' | Leitor: '+j.reader;}catch(e){out.textContent='Não foi possível consultar o serviço.'}};"
@@ -209,6 +235,7 @@ public final class JPBiometriaAgent implements AutoCloseable {
         BioReader reader = new NitgenReader(root, bin, System.getProperty("jp.runtime.problem", ""));
         int port = Integer.parseInt(System.getProperty("jp.port", "8789"));
         JPBiometriaAgent agent = new JPBiometriaAgent(port, key, System.getProperty("jp.build.sha", "development"), reader);
+        agent.biometricProof = new BioProof(Paths.get(keyFile).resolveSibling("biometric-key.txt"));
         Runtime.getRuntime().addShutdownHook(new Thread(agent::close));
         agent.start(); agent.stopped.await(); System.exit(0);
     }

@@ -60,6 +60,12 @@ public final class JPBiometriaAgentTest {
 
     static final class FakeReader implements BioReader {
         final AtomicInteger probes=new AtomicInteger(), captures=new AtomicInteger();
+        volatile boolean match=true;
+        public Map<String,Object> enroll(String finger){return JPBiometriaAgent.map("ok",true,"template","SYNTHETIC_TEMPLATE_NOT_REAL_BIOMETRIC_DATA_0123456789");}
+        public Map<String,Object> verify(String finger,String template)throws BioFailure{
+            try{return JPBiometriaAgent.map("ok",true,"matched",match,"fingerImageDataUrl",syntheticImage());}
+            catch(Exception e){throw new BioFailure("TEST_IMAGE_FAILED","test",500);}
+        }
         volatile CountDownLatch entered, release;
         public Map<String,Object> probe() { probes.incrementAndGet(); return JPBiometriaAgent.map("ok",true,"sdk",true,"reader",true,"deviceCount",1,"message","Synthetic test reader"); }
         public Map<String,Object> capture(String finger,String purpose) throws BioFailure {
@@ -96,7 +102,7 @@ public final class JPBiometriaAgentTest {
             check(request(port,"GET","/shutdown",ORIGIN,null,null).code==404, "no public shutdown route");
             check(request(port,"GET","/api/capture",ORIGIN,null,null).code==405, "GET cannot capture");
             check(request(port,"POST","/api/capture",null,"{}",null).code==403, "no-Origin POST cannot capture");
-            check(request(port,"POST","/api/signature",ORIGIN,"{}",null).code==501, "matching explicitly unsupported");
+            check(request(port,"POST","/api/signature",ORIGIN,"{}",null).code==400, "matching requires a scoped challenge");
             check(request(port,"POST","/api/capture",ORIGIN,"{\"requireTemplate\":true}",null).code==501, "template enrollment explicitly unsupported");
             check(request(port,"POST","/api/capture",ORIGIN,"{\"requireTemplate\":\"false\"}",null).code==400, "template flag strict boolean");
             check(request(port,"POST","/api/capture",ORIGIN,"{\"purpose\":\"test\",\"purpose\":\"signature\"}",null).code==400, "duplicate fields rejected");
@@ -117,6 +123,26 @@ public final class JPBiometriaAgentTest {
             check(result.body.contains("\"biometricVerified\":false") && !result.body.contains("DO_NOT_RETURN") && !result.body.contains("\"matched\"") && !result.body.contains("matchScore"), "capture never claims a biometric match or returns templates");
             check(reader.captures.get()==1, "invalid routes never invoke SDK capture");
             Response fallback=request(port,"POST","/capture",ORIGIN,capture,null); check(fallback.code==200, "POST legacy alias supports same safe contract");
+            Map<String,Object> enrollment=JPBiometriaAgent.map("kind","enroll","challengeId","test-challenge","workerId","worker-test","fichaId","","fingerCode","R_INDEX");
+            Response enrolled=request(port,"POST","/api/enroll",ORIGIN,Json.encode(enrollment),null);
+            check(enrolled.code==200,"enrollment produces signed template evidence");
+            Map<String,Object> enrolledBody=Json.object(enrolled.body);
+            check(enrolledBody.containsKey("template")&&enrolledBody.containsKey("proofSignature"),"enrollment returns template and proof");
+            Map<String,Object> verification=JPBiometriaAgent.map("kind","verify","challengeId","verify-challenge","workerId","worker-test","fichaId","ficha-test","fingerCode","R_INDEX","template",enrolledBody.get("template"),"publicKey",enrolledBody.get("publicKey"));
+            reader.match=false;
+            Response mismatch=request(port,"POST","/api/signature",ORIGIN,Json.encode(verification),null);
+            check(mismatch.code==422&&!mismatch.body.contains("proofSignature"),"mismatch cannot produce signature evidence");
+            reader.match=true;
+            Response matched=request(port,"POST","/api/signature",ORIGIN,Json.encode(verification),null);
+            check(matched.code==200&&matched.body.contains("proofSignature"),"positive SDK result creates signed verification evidence");
+            Map<String,Object> signed=Json.object(matched.body);
+            java.security.PublicKey pub=java.security.KeyFactory.getInstance("EC").generatePublic(new java.security.spec.X509EncodedKeySpec(Base64.getDecoder().decode((String)signed.get("publicKey"))));
+            java.security.Signature checkSignature=java.security.Signature.getInstance("SHA256withECDSA");checkSignature.initVerify(pub);checkSignature.update(((String)signed.get("proof")).getBytes(StandardCharsets.UTF_8));
+            check(checkSignature.verify(Base64.getDecoder().decode((String)signed.get("proofSignature"))),"proof verifies with public key");
+            verification.put("publicKey","different-device");check(request(port,"POST","/api/signature",ORIGIN,Json.encode(verification),null).code==409,"unrecognized workstation cannot verify");
+            check(request(port,"POST","/api/enroll","https://foreign.example",Json.encode(enrollment),null).code==403,"foreign origin cannot enroll");
+            java.nio.file.Path keyPath=java.nio.file.Files.createTempDirectory("jp-proof-test").resolve("key.txt");
+            BioProof persisted=new BioProof(keyPath);check(persisted.publicKey().equals(new BioProof(keyPath).publicKey()),"workstation key survives restart");java.nio.file.Files.delete(keyPath);java.nio.file.Files.delete(keyPath.getParent());
             Response ping=control(port,"ping",KEY,null,null); check(ping.code==200 && ping.body.contains("\"owned\":true"), "private control authenticated");
             check(!ping.body.contains(KEY) && ping.body.contains("\"proof\":"), "control response proves ownership without key");
             byte[] wrongKey=new byte[32]; Arrays.fill(wrongKey,(byte)1);

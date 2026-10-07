@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { create, list, get, remove, update } from '../db/store.js';
 import { ok, fail, empresaIdFrom, objectBody, assertRecordAccess, textField } from './_helpers.js';
-import { buildFicha, isImageCaptureReplay, normalizeImageCapture } from '../services/ficha.service.js';
+import * as storage from '../db/store.js';
+import { httpError } from '../middleware/auth.js';
+import { createBiometricsService } from '../services/biometria.service.js';
+import { buildFicha } from '../services/ficha.service.js';
 
 const router = Router();
 
@@ -32,31 +35,23 @@ router.post('/', async (req, res) => {
   ok(res, { item });
 });
 
-router.post('/:id/assinar', async (req, res) => {
-  const ficha = await get('ficha', req.params.id);
-  if (!ficha) return fail(res, 404, 'Ficha não encontrada');
-  assertRecordAccess(req, ficha);
-  // Preserve the legacy response for an already signed/cancelled document.
-  if (ficha.status !== 'pendente' && req.body?.captureRequestId == null) return fail(res, 409, 'A ficha não está pendente de assinatura');
-  const assinatura = normalizeImageCapture(objectBody(req), req.auth.sub);
-  const completed = (item, replayed) => ok(res, { item, replayed, warning: 'Assinatura registrada com a imagem fornecida. Verificação biométrica não disponível.' });
-  if (isImageCaptureReplay(ficha, assinatura)) return completed(ficha, true);
-  if (ficha.status !== 'pendente') return fail(res, 409, 'A ficha já possui outro registro de assinatura ou foi cancelada. Atualize a lista antes de continuar.', { code: 'CAPTURA_CONFLITANTE' });
-  try {
-    const item = await update('ficha', ficha.id, { status: 'assinada', assinaturaBiometrica: assinatura, assinaturaStatus: 'registrada_sem_verificacao_biometrica', dataAssinatura: assinatura.signedAt }, { expectedVersion: ficha._version, expectedUpdatedAt: ficha.updatedAt });
-    return completed(item, false);
-  } catch (error) {
-    if (assinatura.captureRequestId && error.code === 'REGISTRO_ALTERADO') {
-      // A concurrent retry may have committed the same request. Re-read only
-      // this document and recheck authorization without weakening the lock.
-      const current = await get('ficha', ficha.id);
-      if (current) {
-        assertRecordAccess(req, current);
-        if (isImageCaptureReplay(current, assinatura)) return completed(current, true);
-      }
-    }
-    throw error;
-  }
+const biometrics = createBiometricsService(storage);
+async function signingContext(req) {
+  const ficha=await get('ficha',req.params.id);
+  if(!ficha) throw httpError(404,'Ficha não encontrada.');
+  assertRecordAccess(req,ficha);
+  const worker=await get('trabalhador',ficha.trabalhadorId);
+  if(!worker || worker.empresaId!==ficha.empresaId) throw httpError(409,'Cadastro do trabalhador indisponível.');
+  if(ficha.trabalhadorSnapshot?.cpf && String(ficha.trabalhadorSnapshot.cpf).replace(/\D/g,'')!==String(worker.cpf).replace(/\D/g,'')) throw httpError(409,'O CPF atual diverge do registrado na ficha. Confira a identidade do trabalhador.');
+  return {ficha,worker,actor:req.auth.sub,kind:'verify'};
+}
+router.post('/:id/biometria/desafio',async(req,res)=>{
+  const context=await signingContext(req);
+  ok(res,{challenge:await biometrics.challenge({...context,fingerCode:objectBody(req).fingerCode})});
+});
+router.post('/:id/assinar',async(req,res)=>{
+  const context=await signingContext(req);
+  ok(res,await biometrics.complete({...context,body:objectBody(req)}));
 });
 
 router.delete('/:id', async (req, res) => {

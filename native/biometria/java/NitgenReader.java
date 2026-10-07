@@ -37,7 +37,12 @@ final class NitgenReader implements BioReader {
     }
 
     public Map<String, Object> capture(String finger, String purpose) throws BioFailure {
-        Object bsp = null, devices = null, fir = null, audit = null, input = null, exporter = null;
+        return perform(finger,purpose,null);
+    }
+    public Map<String,Object> enroll(String finger) throws BioFailure { return perform(finger,"enroll",null); }
+    public Map<String,Object> verify(String finger,String template) throws BioFailure { return perform(finger,"verify",template); }
+    private Map<String,Object> perform(String finger,String purpose,String storedTemplate) throws BioFailure {
+        Object bsp = null, devices = null, fir = null, audit = null, input = null, exporter = null, textFir = null, stored = null, captured = null, payload = null;
         boolean opened = false;
         try {
             load(); bsp = sdkClass.getConstructor().newInstance(); checkError(bsp, "Initialize");
@@ -52,15 +57,32 @@ final class NitgenReader implements BioReader {
             input = inner(bsp, BSP + "$INPUT_FIR"); invoke(input, "SetFIRHandle", audit);
             exporter = inner(bsp, BSP + "$Export"); checkError(bsp, "InitializeExport"); Object data = inner(exporter, BSP + "$Export$AUDIT");
             invoke(exporter, "ExportAudit", input, data); checkError(bsp, "ExportAudit");
+            if (purpose.equals("enroll")) {
+                textFir=inner(bsp,BSP+"$FIR_TEXTENCODE");invoke(bsp,"GetTextFIRFromHandle",fir,textFir);checkError(bsp,"GetTextFIRFromHandle");
+                String template=(String)field(textFir,"TextFIR");
+                if(template==null||template.length()<40||template.length()>120000)throw new BioFailure("TEMPLATE_INVALID","O SDK não retornou o template biométrico.",422);
+                return JPBiometriaAgent.map("ok",true,"template",template);
+            }
+            if (purpose.equals("verify")) {
+                textFir=inner(bsp,BSP+"$FIR_TEXTENCODE");textFir.getClass().getField("TextFIR").set(textFir,storedTemplate);
+                stored=inner(bsp,BSP+"$INPUT_FIR");invoke(stored,"SetTextFIR",textFir);
+                captured=inner(bsp,BSP+"$INPUT_FIR");invoke(captured,"SetFIRHandle",fir);
+                payload=inner(bsp,BSP+"$FIR_PAYLOAD");
+                // The vendor JNI fills this dedicated Boolean, as in its official Java sample.
+                Boolean matched=new Boolean(false);
+                invoke(bsp,"VerifyMatch",captured,stored,matched,payload);checkError(bsp,"VerifyMatch");
+                if(!matched.booleanValue())throw new BioFailure("BIOMETRIA_DIVERGENTE","A digital não corresponde ao dedo cadastrado. A ficha continua sem assinatura.",422);
+            }
             ImageResult image = imageFromExport(data);
             Object quality = quality(bsp, fir);
             return JPBiometriaAgent.map("ok", true, "sdk", true, "reader", true, "realFingerImage", true,
-                "biometricVerified", false, "fingerCode", finger, "fingerSelectionVerified", false,
+                "matched", purpose.equals("verify"), "biometricVerified", purpose.equals("verify"), "fingerCode", finger, "fingerSelectionVerified", false,
                 "imageSource", "NITGEN_EXPORT_AUDIT", "imageWidth", image.width, "imageHeight", image.height,
                 "fingerImageDataUrl", image.dataUrl, "quality", quality, "auditId", "CAP-" + UUID.randomUUID(),
                 "capturedAt", Instant.now().toString(), "message", "Imagem capturada pelo NITGEN. Esta operação não compara identidade biométrica.");
         } catch (Throwable e) { throw failure(e); }
         finally {
+            dispose(payload);dispose(captured);dispose(stored);dispose(textFir);
             dispose(input); dispose(exporter); dispose(audit); dispose(fir); dispose(devices);
             if (opened) try { invoke(bsp, "CloseDevice"); } catch (Throwable ignored) { }
             dispose(bsp);

@@ -8,7 +8,7 @@ const {chromium} = require('playwright');
 const frontend = path.resolve(__dirname, '../frontend/EntregaEPI');
 const output = path.join(__dirname, 'output');
 fs.mkdirSync(output,{recursive:true});
-const results={suite:'Interface e impressão V12.8.3',syntheticData:true,realApiUsed:false,checks:[],pdfs:{},layouts:{}};
+const results={suite:'Interface e impressão V12.9.0',syntheticData:true,realApiUsed:false,checks:[],pdfs:{},layouts:{}};
 const company={id:'EMPRESA-TESTE',nome:'EMPRESA EXEMPLO',cnpj:'00.000.000/0000-00',localidade:'Cidade de Teste',uf:'MS'};
 const worker={id:'TRABALHADOR-TESTE',empresaId:company.id,nomeCompleto:'TRABALHADOR DE TESTE',cpf:'000.000.000-00',funcao:'FUNÇÃO DE TESTE',matriculaESocial:'00042',status:'Ativo'};
 const epi={id:'EPI-TESTE',empresaId:company.id,descricao:'EQUIPAMENTO DE TESTE',ca:'00000',fabricante:'FABRICANTE DE TESTE'};
@@ -110,6 +110,7 @@ async function printAndInspect(context,record,prefix,{expectedPages=1}={}){
   try{
     await popup.waitForSelector('.docx-epi-table');
     await popup.waitForFunction(()=>Array.from(document.images).every(img=>img.complete&&img.naturalWidth>0),null,{timeout:10000});
+    await popup.locator('#printDocument').click();
     const invocation=await waitForPrintCall(printStart);
     assert.equal(invocation.title,await popup.title(),'window.print pertence à ficha aberta');
   const geometry=await popup.evaluate(()=>{
@@ -136,6 +137,7 @@ async function printAndInspect(context,record,prefix,{expectedPages=1}={}){
   const pdf=path.join(output,`${prefix}.pdf`);
   await popup.pdf({path:pdf,format:'A4',preferCSSPageSize:true,printBackground:true,displayHeaderFooter:false});
   const pages=pdfPages(pdf);
+
   results.pdfs[prefix]={pages,rows:geometry.rows,font:geometry.font};
   if(expectedPages!==null)assert.equal(pages,expectedPages,`${prefix}: quantidade de páginas`);
   else assert.ok(pages>1,'ficha longa deve paginar sem perder os itens');
@@ -213,7 +215,7 @@ async function main(){
     }
     if(url.origin==='http://127.0.0.1:8789'&&url.pathname==='/status'){
       biometricRequests++;
-      await json(200,{ok:true,service:'JP Biometria Local Java',version:'12.8.3',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture'},sdk:true,reader:true,deviceCount:1,deviceName:'NITGEN HFDU06'});return;
+      await json(200,{ok:true,service:'JP Biometria Local Java',version:'12.9.0',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture',verify:true,templates:true},sdk:true,reader:true,deviceCount:1,deviceName:'NITGEN HFDU06'});return;
     }
     if(!url.hostname.endsWith('.execute-api.sa-east-1.amazonaws.com')){
       results.unexpectedExternalRequest=true;
@@ -222,7 +224,7 @@ async function main(){
     requests.push({path:url.pathname,method:request.method(),authorizationPresent:request.headers().authorization===`Bearer ${idToken}`,empresaId:request.headers()['x-empresa-id']});
     if(apiFailure){await json(apiFailure,{ok:false,error:apiFailure===403?'Perfil não configurado. Solicite ao administrador.':'Sessão expirada.'});return;}
     if(url.pathname==='/health'){
-      await json(200,{ok:true,version:'12.8.3',mode:'dynamodb',durable:true,storageReady:true,buildSha:'BUILD-SINTETICO',caepi:{sourceKind:'official-snapshot',officialSnapshot:true,live:false,downloadedAt:'2026-10-06T16:00:00Z'}});return;
+      await json(200,{ok:true,version:'12.9.0',mode:'dynamodb',durable:true,storageReady:true,buildSha:'BUILD-SINTETICO',caepi:{sourceKind:'official-snapshot',officialSnapshot:true,live:false,downloadedAt:'2026-10-06T16:00:00Z'}});return;
     }
     if(url.pathname.startsWith('/api/caepi/')){
       if(url.pathname.endsWith('/654321')){
@@ -319,7 +321,7 @@ async function main(){
 
   await page.locator('.nav [data-screen="config"]').click();
   await assertDiagnosticsClosed('config');
-  assert.ok((await page.locator('#configVersion').innerText()).includes('12.8.3'));
+  assert.ok((await page.locator('#configVersion').innerText()).includes('12.9.0'));
   assert.ok((await page.locator('#configCompany').innerText()).includes(company.nome));
   await inspectLayout('desktop-config');
   await page.locator('#healthTestButton').click();

@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#146544" />
   <title>JP EntregaEPI V12</title>
-  <script src="/__APP_PREFIX__/config.js?v=1283"></script>
-  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=1283" />
+  <script src="/__APP_PREFIX__/config.js?v=1290"></script>
+  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=1290" />
 </head>
 <body>
   <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
@@ -75,7 +75,7 @@
           <button id="newPasswordCancel" type="button" class="text-button">Voltar ao acesso</button>
         </form>
         <div class="login-help"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-lock"></use></svg><p>Use o acesso fornecido pelo administrador da sua empresa.</p></div>
-        <div class="login-footer"><span>Versão <b>12.8.3</b></span><span class="environment-label"><i aria-hidden="true"></i> Produção</span></div>
+        <div class="login-footer"><span>Versão <b>12.9.0</b></span><span class="environment-label"><i aria-hidden="true"></i> Produção</span></div>
       </section>
     </section>
   </main>
@@ -102,7 +102,7 @@
         </div>
       </nav>
       <div class="sidebar-support"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg><div><strong>Gestão com responsabilidade</strong><p>Organize os EPIs e acompanhe cada movimentação.</p></div></div>
-      <div class="sidebar-footer"><div class="sidebar-environment"><span class="environment-label"><i aria-hidden="true"></i> Produção</span><small>v12.8.3</small></div><button id="logoutButton" class="btn btn-logout" type="button"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-logout"></use></svg>Sair da conta</button></div>
+      <div class="sidebar-footer"><div class="sidebar-environment"><span class="environment-label"><i aria-hidden="true"></i> Produção</span><small>v12.9.0</small></div><button id="logoutButton" class="btn btn-logout" type="button"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-logout"></use></svg>Sair da conta</button></div>
     </aside>
     <button id="sidebarBackdrop" class="sidebar-backdrop" type="button" aria-label="Fechar menu" tabindex="-1"></button>
 
@@ -117,16 +117,7 @@
       <main id="mainContent" class="main" tabindex="-1">
         <div id="appMessage" class="message hidden" role="alert" aria-live="polite"></div>
         <section id="screen-dashboard" class="screen active" aria-labelledby="title-dashboard">
-          <div class="topbar"><div><span class="kicker">Painel de gestão</span><h1 id="title-dashboard">Dashboard</h1><p>Acompanhe os cadastros e as movimentações da sua operação.</p></div><button id="refreshButton" class="btn btn-secondary" type="button"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Atualizar</button></div>
-          <section class="card startup-checks" aria-labelledby="startupTitle">
-            <div class="section-heading"><div><h2 id="startupTitle">Verificação ao entrar</h2><p id="startupStatusText" role="status" aria-live="polite">Preparando as verificações automáticas.</p></div><button id="startupRetryButton" class="btn btn-secondary" type="button" onclick="runStartupChecks(true)">Verificar novamente</button></div>
-            <div class="startup-grid">
-              <article><h3>Serviço e armazenamento</h3><span id="startupApiBadge" class="status-badge" data-state="idle">Não verificado</span><p id="startupApiText">Conferindo o acesso aos cadastros.</p></article>
-              <article><h3>Base de CA</h3><span id="startupCaBadge" class="status-badge" data-state="idle">Não verificada</span><p id="startupCaText">Consulta automática do CA 365.</p></article>
-              <article><h3>Leitor biométrico local</h3><span id="startupBioBadge" class="status-badge" data-state="idle">Não verificado</span><p id="startupBioText">Procurando o componente instalado neste computador.</p><div class="startup-actions"><button id="startupBioButton" class="text-button" type="button" onclick="testBiometriaLocal()">Permitir e verificar leitor</button><button id="startupBioStartButton" class="text-button" type="button" onclick="startBiometriaLocal()">Iniciar JP Biometria</button><button class="text-button" type="button" onclick="goScreen('biometria')">Detalhes e teste de captura</button></div></article>
-            </div>
-            <p id="startupCheckedAt" class="check-time">A rotina começa automaticamente após o login de Master ou cliente.</p>
-          </section>
+          <div class="topbar"><div><span class="kicker">Painel de gestão</span><h1 id="title-dashboard">Dashboard</h1><p>Acompanhe os cadastros e as movimentações da sua operação.</p></div><div class="dashboard-tools"><div class="health-indicators" aria-label="Estado dos serviços"><button type="button" id="healthSystem" class="health-chip" data-state="idle" onclick="goScreen('config')">Sistema <span>Verificando</span></button><button type="button" id="healthCA" class="health-chip" data-state="idle" onclick="goScreen('config')">CA <span>Verificando</span></button><button type="button" id="healthBio" class="health-chip" data-state="idle" onclick="goScreen('config')">Biometria <span>Verificando</span></button></div><button id="refreshButton" class="btn btn-secondary" type="button"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Atualizar</button></div></div>
           <div id="actionBanner" class="action-banner hidden"><div><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-info"></use></svg><p><strong>Comece pela empresa.</strong><span>Cadastre ou selecione uma empresa para organizar os trabalhadores, EPIs e fichas.</span></p></div><button class="btn btn-secondary" type="button" onclick="goScreen('empresas')"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-plus"></use></svg>Cadastrar empresa</button></div>
           <div class="metrics">
             <article class="metric-card"><div class="metric-top"><span>Empresas</span><span class="metric-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg></span></div><strong id="metricEmpresas">0</strong><p>Empresas cadastradas</p></article>
@@ -201,7 +192,7 @@
           </div>
           <div class="two-col wide">
             <form id="trabalhadorForm" class="card form-card">
-              <div class="form-heading"><span class="heading-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-users"></use></svg></span><div><h2>Novo trabalhador</h2><p>Os campos com * são obrigatórios.</p></div></div>
+              <div class="form-heading"><span class="heading-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-users"></use></svg></span><div><h2 id="workerFormTitle">Novo trabalhador</h2><p>Os campos com * são obrigatórios.</p></div></div>
               <div class="grid-form">
                 <div class="field span-two"><label for="trabalhadorNome">Nome completo <span class="required-mark" aria-hidden="true">*</span></label><input name="nomeCompleto" id="trabalhadorNome" required placeholder="Nome completo do trabalhador"></div>
                 <div class="field"><label for="trabalhadorCpf">CPF <span class="required-mark" aria-hidden="true">*</span></label><input name="cpf" id="trabalhadorCpf" required placeholder="000.000.000-00" inputmode="numeric"></div>
@@ -216,7 +207,7 @@
                 <div class="field"><label for="trabalhadorTelefone">Telefone</label><input name="telefone" id="trabalhadorTelefone" placeholder="(00) 00000-0000" inputmode="tel"></div>
                 <div class="field span-two"><label for="trabalhadorObservacoes">Observações</label><input name="observacoes" id="trabalhadorObservacoes" placeholder="Informações complementares"></div>
               </div>
-              <div class="form-actions"><button class="btn btn-primary" type="submit"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>Salvar trabalhador</button></div>
+              <div class="form-actions"><button class="btn btn-primary" type="submit"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>Salvar trabalhador</button><button id="workerEditCancel" class="btn btn-secondary hidden" type="button" onclick="cancelWorkerEdit()">Cancelar edição</button></div>
             </form>
             <div class="card list-card"><div class="section-heading"><div><h2>Trabalhadores cadastrados</h2><p>Equipe da empresa em ordem alfabética.</p></div></div><div class="field list-search"><label for="trabalhadorSearch">Buscar trabalhador</label><input id="trabalhadorSearch" type="search" placeholder="Nome, CPF ou matrícula eSocial"></div><div id="trabalhadoresList" class="list">Carregando...</div></div>
           </div>
@@ -230,7 +221,7 @@
               <fieldset class="equipment-kind"><legend>Tipo de cadastro</legend><div><label><input type="radio" id="epiComCa" name="tipoCadastro" value="com_ca" checked><span>Com CA</span></label><label><input type="radio" id="epiSemCa" name="tipoCadastro" value="sem_ca"><span>Sem CA</span></label></div></fieldset>
               <div id="epiCaFields" class="lookup-panel"><div class="inline"><div class="field grow"><label for="caInput">Certificado de Aprovação (CA)</label><input name="ca" id="caInput" required placeholder="Informe o número do CA" inputmode="numeric"></div><button id="consultarCaButton" class="btn btn-secondary" type="button" onclick="consultarCA()">Consultar CA</button></div><div id="caMessage" class="message hidden" role="status"></div><a class="link external-link" href="https://caepi.trabalho.gov.br/internet/ConsultaCAInternet.aspx" target="_blank" rel="noopener noreferrer">Consulta oficial no MTE <svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-external"></use></svg></a></div>
               <p id="epiSemCaHelp" class="form-note hidden">Use para equipamentos, uniformes ou acessórios sem CA. O cadastro não representa certificação como EPI.</p>
-              <div class="field"><label for="epiDescricao">Descrição do equipamento <span class="required-mark" aria-hidden="true">*</span></label><input name="descricao" id="epiDescricao" required placeholder="Nome e descrição do equipamento"></div>
+              <div class="field"><label for="epiNome">Nome do equipamento na ficha <span class="required-mark" aria-hidden="true">*</span></label><input name="nomeCurto" id="epiNome" required maxlength="160" placeholder="Ex.: Capacete de segurança"></div><details class="field"><summary>Descrição técnica do CA</summary><label for="epiDescricao">Descrição do equipamento <span class="required-mark" aria-hidden="true">*</span></label><input name="descricao" id="epiDescricao" placeholder="Descrição técnica preservada no catálogo"></details>
               <div class="field"><label for="epiFabricante">Fabricante</label><input name="fabricante" id="epiFabricante" placeholder="Nome do fabricante"></div>
               <div class="grid-form two"><div class="field"><label for="epiModelo">Modelo <small>(opcional)</small></label><input name="modelo" id="epiModelo" placeholder="Modelo ou referência"></div><div class="field"><label for="epiTamanho">Tamanho <small>(opcional)</small></label><input name="tamanho" id="epiTamanho" placeholder="Ex.: M, G ou 42"></div></div>
               <div id="epiCaDetails" class="grid-form two"><div class="field"><label for="epiValidade">Validade do CA</label><input name="validade" id="epiValidade" placeholder="dd/mm/aaaa"></div><div class="field"><label for="epiSituacao">Situação do CA</label><input name="situacao" id="epiSituacao" placeholder="Situação informada na consulta"></div></div>
@@ -259,7 +250,7 @@
 
         <section id="screen-fichas" class="screen" aria-labelledby="title-fichas">
           <div class="topbar"><div><span class="kicker">Documentos</span><h1 id="title-fichas">Fichas de EPI</h1><p>Consulte as movimentações e visualize as fichas para impressão.</p></div><button class="btn btn-secondary" type="button" onclick="refreshFichas().catch(handleAppError)"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Atualizar fichas</button></div>
-          <div class="card list-card"><div class="section-heading"><div><h2>Fichas cadastradas</h2><p>Documentos da empresa selecionada.</p></div><button class="text-button" type="button" onclick="goScreen('entrega')"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-plus"></use></svg>Nova ficha</button></div><div id="fichasList" class="list document-list">Carregando...</div></div>
+          <div class="card list-card"><div class="section-heading"><div><h2>Fichas cadastradas</h2><p>Documentos da empresa selecionada.</p></div><button class="text-button" type="button" onclick="goScreen('entrega')"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-plus"></use></svg>Nova ficha</button></div><label class="field-help"><input id="showDeletedFichas" type="checkbox" onchange="renderFichas()"> Mostrar fichas canceladas</label><div id="fichasList" class="list document-list">Carregando...</div></div>
         </section>
 
         <section id="screen-biometria" class="screen" aria-labelledby="title-biometria">
@@ -269,7 +260,7 @@
               <div class="connection-heading"><span class="device-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-fingerprint"></use></svg></span><span id="bioStatusBadge" class="status-badge" data-state="idle">Não verificado</span></div>
               <h2 id="bioStatusTitle">Verifique a conexão local</h2><p id="bioStatusText" class="status-description" role="status" aria-live="polite">Conecte o equipamento e verifique se o serviço JP Biometria está disponível neste computador.</p>
               <div class="bio-connection-actions"><button id="bioTestButton" class="btn btn-primary" type="button" onclick="testBiometriaLocal()"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-connection"></use></svg>Verificar leitor</button><button id="bioOpenTestButton" class="btn btn-secondary" type="button" onclick="openBiometricCapture()">Testar captura</button><button id="bioStartButton" class="text-button" type="button" onclick="startBiometriaLocal()">Iniciar JP Biometria</button></div><p id="bioCheckedAt" class="check-time">Aguardando a primeira verificação.</p>
-              <p class="bio-permission-help">Primeiro uso ou componente local desatualizado? <a id="bioRepairLink" class="link" href="/__APP_PREFIX__/assets/JP-Biometria-Setup-12.8.3.exe" download>Instalar / reparar JP Biometria</a>. Execute o instalador neste computador e depois verifique o leitor.</p>
+              <p class="bio-permission-help">Primeiro uso ou componente local desatualizado? <a id="bioRepairLink" class="link" href="/__APP_PREFIX__/assets/JP-Biometria-Setup-12.9.0.exe" download>Instalar / reparar JP Biometria</a>. Execute o instalador neste computador e depois verifique o leitor.</p>
               <details class="technical-details"><summary>Detalhes da conexão</summary><pre id="bioOutput">Aguardando teste...</pre></details>
             </div>
             <aside class="card instructions-card"><div class="section-heading"><div><h2>Prepare o leitor</h2><p>O driver e o agente local trabalham juntos.</p></div></div><ol class="setup-steps"><li><span>1</span><div><h3>Conecte e libere o leitor</h3><p>Conecte o USB e feche o utilitário de diagnóstico NITGEN, que pode estar usando o equipamento.</p></div></li><li><span>2</span><div><h3>Abra o JP Biometria</h3><p>Clique em Iniciar JP Biometria. Se o navegador perguntar, autorize abrir o aplicativo instalado.</p></div></li><li><span>3</span><div><h3>Permita a conexão local</h3><p>Clique em Verificar leitor. Se houver uma solicitação do navegador, permita o acesso à rede local para este site.</p></div></li><li><span>4</span><div><h3>Faça uma captura</h3><p>Use Testar captura ou, em Fichas de EPI, escolha Capturar digital na ficha pendente.</p></div></li></ol><p class="bio-permission-help">Se o acesso foi bloqueado, abra as permissões deste site pelo ícone ao lado do endereço e revise a permissão de rede local.</p></aside>
@@ -285,7 +276,16 @@
 
         <section id="screen-config" class="screen" aria-labelledby="title-config">
           <div class="topbar"><div><span class="kicker">Sistema</span><h1 id="title-config">Configurações</h1><p>Informações do ambiente e verificação dos serviços do sistema.</p></div></div>
-          <div class="card installation-card"><div class="section-heading"><div class="section-title-with-icon"><span class="heading-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-settings"></use></svg></span><div><h2>Seu ambiente de trabalho</h2><p>Configuração atual do JP EntregaEPI.</p></div></div><span class="product-tag">JP EntregaEPI</span></div><dl class="settings-summary"><div><dt>Ambiente</dt><dd id="configEnvironment">Produção</dd></div><div><dt>Versão</dt><dd id="configVersion">12.8.3</dd></div><div><dt>Perfil de acesso</dt><dd id="configProfile">Usuário autenticado</dd></div><div><dt>Empresa em uso</dt><dd id="configCompany">Selecione uma empresa</dd></div></dl></div>
+          <section class="card startup-checks" aria-labelledby="startupTitle">
+            <div class="section-heading"><div><h2 id="startupTitle">Verificação ao entrar</h2><p id="startupStatusText" role="status" aria-live="polite">Preparando as verificações automáticas.</p></div><button id="startupRetryButton" class="btn btn-secondary" type="button" onclick="runStartupChecks(true)">Verificar novamente</button></div>
+            <div class="startup-grid">
+              <article><h3>Serviço e armazenamento</h3><span id="startupApiBadge" class="status-badge" data-state="idle">Não verificado</span><p id="startupApiText">Conferindo o acesso aos cadastros.</p></article>
+              <article><h3>Base de CA</h3><span id="startupCaBadge" class="status-badge" data-state="idle">Não verificada</span><p id="startupCaText">Consulta automática do CA 365.</p></article>
+              <article><h3>Leitor biométrico local</h3><span id="startupBioBadge" class="status-badge" data-state="idle">Não verificado</span><p id="startupBioText">Procurando o componente instalado neste computador.</p><div class="startup-actions"><button id="startupBioButton" class="text-button" type="button" onclick="testBiometriaLocal()">Permitir e verificar leitor</button><button id="startupBioStartButton" class="text-button" type="button" onclick="startBiometriaLocal()">Iniciar JP Biometria</button><button class="text-button" type="button" onclick="goScreen('biometria')">Detalhes e teste de captura</button></div></article>
+            </div>
+            <p id="startupCheckedAt" class="check-time">A rotina começa automaticamente após o login de Master ou cliente.</p>
+          </section>
+          <div class="card installation-card"><div class="section-heading"><div class="section-title-with-icon"><span class="heading-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-settings"></use></svg></span><div><h2>Seu ambiente de trabalho</h2><p>Configuração atual do JP EntregaEPI.</p></div></div><span class="product-tag">JP EntregaEPI</span></div><dl class="settings-summary"><div><dt>Ambiente</dt><dd id="configEnvironment">Produção</dd></div><div><dt>Versão</dt><dd id="configVersion">12.9.0</dd></div><div><dt>Perfil de acesso</dt><dd id="configProfile">Usuário autenticado</dd></div><div><dt>Empresa em uso</dt><dd id="configCompany">Selecione uma empresa</dd></div></dl></div>
           <div class="section-heading"><div><h2>Conexões e serviços</h2><p>Consulte a disponibilidade quando precisar.</p></div></div>
           <div class="service-grid">
             <div class="card service-card"><div class="service-top"><span class="service-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-server"></use></svg></span><span id="apiStatusBadge" class="status-badge" data-state="idle">Não verificado</span></div><h3>Serviço do sistema</h3><p id="apiStatusText" class="status-description" role="status" aria-live="polite">Confira o acesso aos cadastros e às fichas do sistema.</p><button id="healthTestButton" class="btn btn-secondary" type="button" onclick="testHealth()"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Verificar conexão</button></div>
@@ -297,8 +297,9 @@
       </main>
     </div>
   </section>
-  <script src="/__APP_PREFIX__/assets/ficha.js?v=1283"></script>
-  <script src="/__APP_PREFIX__/assets/biometria.js?v=1283"></script>
-  <script src="/__APP_PREFIX__/assets/app.js?v=1283"></script>
+  <script src="/__APP_PREFIX__/assets/ficha.js?v=1290"></script>
+  <script src="/__APP_PREFIX__/assets/biometria.js?v=1290"></script>
+  <script src="/__APP_PREFIX__/assets/app.js?v=1290"></script>
+  <script src="/__APP_PREFIX__/assets/operations.js?v=1290"></script>
 </body>
 </html>

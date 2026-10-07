@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { httpError } from '../middleware/auth.js';
-import { buildWorkerImport, publicImport, findWorkerIdentity, requireValidWorker } from './trabalhadores.service.js';
+import { buildWorkerImport, publicImport, findWorkerIdentity, requireValidWorker, normalizeCPF, foldIdentity, WORKER_COLUMNS } from './trabalhadores.service.js';
 import { decodeXlsx, readWorkerXlsx } from './trabalhadores-xlsx.service.js';
 
 export const WORKER_BATCH_LIMIT = 80;
@@ -168,5 +168,16 @@ export function createWorkerImportService(store, { clock = () => new Date() } = 
       } catch (error) { if (!conflicts.has(error.code) || attempt === 3) throw error; }
     }
   }
-  return { preview, getProgress, confirm, createWorker };
+  async function editWorker({body,worker,actor}) {
+    if (!Number.isSafeInteger(body._version) || body._version !== (worker._version || 1)) throw httpError(409,'O cadastro foi alterado. Atualize e tente novamente.','REGISTRO_ALTERADO');
+    const data=requireValidWorker({...worker,...body},{strictCPF:false});
+    for(const column of WORKER_COLUMNS)if(!column.required && body[column.key] === '')data[column.key]='';
+    if (body.empresaId && body.empresaId !== worker.empresaId) throw httpError(403,'O vínculo da empresa não pode ser alterado.','EMPRESA_DIVERGENTE');
+    if (normalizeCPF(data.cpf) !== normalizeCPF(worker.cpf) && Object.keys(worker.biometrias||{}).length) throw httpError(409,'O CPF identifica um trabalhador com biometria cadastrada. Cadastre outra pessoa separadamente.','IDENTIDADE_BIOMETRICA_VINCULADA');
+    const scope=workerScope(worker.empresaId), snapshot=await store.listWithRevision('trabalhador',worker.empresaId,scope);
+    if(snapshot.items.some(item=>item.id!==worker.id && (normalizeCPF(item.cpf)===normalizeCPF(data.cpf)||foldIdentity(item.matriculaESocial)===foldIdentity(data.matriculaESocial)))) throw httpError(409,'CPF ou matrícula já utilizado nesta empresa.','TRABALHADOR_IDENTIDADE_CONFLITO');
+    await store.transact({scope,expectedRevision:snapshot.revision,mutationId:`edicao:${randomUUID()}`,operations:[{type:'update',entity:'trabalhador',id:worker.id,expectedVersion:body._version,data:{...data,atualizadoPor:actor}}]});
+    return {item:await store.get('trabalhador',worker.id)};
+  }
+  return { preview, getProgress, confirm, createWorker, editWorker };
 }

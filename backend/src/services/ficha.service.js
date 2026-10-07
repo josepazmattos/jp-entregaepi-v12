@@ -1,3 +1,4 @@
+import { equipmentName } from './equipment-name.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { httpError } from '../middleware/auth.js';
 import { textField } from '../routes/_helpers.js';
@@ -47,7 +48,8 @@ export function buildFicha({ empresaId, empresa, trabalhador, items, body, actor
     if (!Number.isSafeInteger(quantidade) || quantidade < 1 || quantidade > 100000) throw httpError(400, 'A quantidade deve ser um número inteiro maior que zero.', 'QUANTIDADE_INVALIDA');
     return {
       epiId: epi.id,
-      epiDescricao: textField(epi.descricao || epi.description || epi.name, { max: 2000 }),
+      epiNome: equipmentName(epi),
+      epiDescricao: equipmentName(epi),
       ca: textField(epi.ca),
       semCA: epi.semCA === true || epi.tipo === 'sem_ca',
       fabricante: textField(epi.fabricante || epi.manufacturer),

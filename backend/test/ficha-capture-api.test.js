@@ -1,157 +1,34 @@
-import test, { mock } from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
-import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { generateKeyPairSync, sign, randomUUID } from 'node:crypto';
 
-// An isolated conditional-write double exercises the actual Lambda routes and
-// DynamoDB optimistic-lock adapter. No AWS request or real biometric data is used.
-const records = new Map();
-let successfulSignWrites = 0, simultaneousWrite = null;
-mock.method(DynamoDBDocumentClient.prototype, 'send', async function (command) {
-  const input = command.input;
-  const key = (input.Key || input.Item)?.pk;
-  if (command.constructor.name === 'GetCommand') return { Item: structuredClone(records.get(key)) };
-  if (command.constructor.name !== 'PutCommand') throw new Error(`Unexpected AWS operation in synthetic test: ${command.constructor.name}`);
-  if (simultaneousWrite?.key === key && input.Item.status === 'assinada') {
-    const gate = simultaneousWrite;
-    gate.arrived += 1;
-    if (gate.arrived === 2) gate.release();
-    await gate.ready;
-  }
-  const previous = records.get(key), condition = input.ConditionExpression || '';
-  const conflict = condition.includes('attribute_not_exists(#pk)') ? Boolean(previous)
-    : condition.includes('attribute_exists(#pk)') && (!previous
-      || condition.includes('#version = :version') && previous._version !== input.ExpressionAttributeValues[':version']
-      || condition.includes('#updatedAt = :updatedAt') && previous.updatedAt !== input.ExpressionAttributeValues[':updatedAt']);
-  if (conflict) throw Object.assign(new Error('Synthetic conditional conflict'), { name: 'ConditionalCheckFailedException' });
-  records.set(key, structuredClone(input.Item));
-  if (input.Item.status === 'assinada') successfulSignWrites += 1;
-  return {};
-});
 
-process.env.TABLE_NAME = 'synthetic-capture-only';
-process.env.AWS_REGION = 'sa-east-1';
-process.env.NODE_ENV = 'test';
-process.env.COGNITO_ISSUER = 'https://cognito-idp.sa-east-1.amazonaws.com/synthetic-pool';
-process.env.COGNITO_CLIENT_ID = 'synthetic-client';
-process.env.AUTH_COMPANY_CLAIM = 'custom:empresa_id';
-const { handler } = await import('../src/lambda.js');
-const store = await import('../src/db/store.js');
-const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
-const SECOND_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAASCAIAAAC1qksFAAAAIUlEQVR4nGMUDTdnoCVgoqnpoxaMWjBqwagFoxaMWgAFANggAMdjh1zKAAAAAElFTkSuQmCC';
-const company = 'synthetic-company-A';
-const claims = {
-  sub: 'synthetic-operator-A', iss: process.env.COGNITO_ISSUER, aud: process.env.COGNITO_CLIENT_ID,
-  exp: String(Math.floor(Date.now() / 1000) + 3600), token_use: 'id',
-  'cognito:groups': '[EMPRESA]', 'custom:empresa_id': company
-};
-const payload = () => ({ imageDataUrl: PNG, dedo: 'R_INDEX', captureRequestId: randomUUID() });
+delete process.env.TABLE_NAME;delete process.env.AWS_LAMBDA_FUNCTION_NAME;
+process.env.NODE_ENV='test';process.env.DATA_MODE='memory';
+process.env.COGNITO_ISSUER='https://cognito-idp.sa-east-1.amazonaws.com/test-pool';process.env.COGNITO_CLIENT_ID='synthetic-client';process.env.AUTH_COMPANY_CLAIM='custom:empresa_id';
+const { hash }=await import('../src/services/biometria.service.js');
+const {handler}=await import('../src/lambda.js');const store=await import('../src/db/store.js');
+const PNG='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+const pair=generateKeyPairSync('ec',{namedCurve:'prime256v1'}),publicKey=pair.publicKey.export({type:'spki',format:'der'}).toString('base64');
+const template='SYNTHETIC_TEMPLATE_FOR_PROTOCOL_TEST_ONLY_'.repeat(3);
+const claims={sub:'synthetic-operator',iss:process.env.COGNITO_ISSUER,aud:process.env.COGNITO_CLIENT_ID,exp:String(Math.floor(Date.now()/1000)+3600),token_use:'id','cognito:groups':'[MASTER]'};
+async function request(method,path,body,company,auth=claims){const r=await handler({version:'2.0',routeKey:'ANY /{proxy+}',rawPath:path,rawQueryString:'',headers:{host:'synthetic.invalid','content-type':'application/json',...(company?{'x-empresa-id':company}:{})},requestContext:{requestId:randomUUID(),stage:'$default',http:{method,path,protocol:'HTTP/1.1',sourceIp:'127.0.0.1'},...(auth?{authorizer:{jwt:{claims:auth}}}:{})},isBase64Encoded:false,...(body?{body:JSON.stringify(body)}:{})},{});return {status:r.statusCode,body:JSON.parse(r.body)};}
+function attestation(challenge,changes={}){const proof=JSON.stringify({v:1,kind:challenge.kind,challengeId:challenge.challengeId,workerId:challenge.workerId,fichaId:challenge.fichaId,fingerCode:challenge.fingerCode,templateHash:hash(template),...(challenge.kind==='enroll'?{enrolled:true}:{matched:true,imageHash:hash(Buffer.from(PNG.split(',')[1],'base64'))}),...changes});return {challengeId:challenge.challengeId,template,publicKey,fingerImageDataUrl:PNG,proof,proofSignature:sign('sha256',Buffer.from(proof),pair.privateKey).toString('base64')};}
+async function fixture(){const company=await store.create('empresa',{nome:'EMPRESA SINTÉTICA'});const worker=await store.create('trabalhador',{empresaId:company.id,nomeCompleto:'TRABALHADOR SINTÉTICO',cpf:'00000000000',matriculaESocial:'00A',funcao:'TESTE',localidade:'TESTE',status:'Ativo'});const ficha=await store.create('ficha',{empresaId:company.id,trabalhadorId:worker.id,status:'pendente',itens:[{quantidade:1,epiNome:'CAPACETE'}]});return {company,worker,ficha};}
+async function enroll(f){const r=await request('POST',`/api/trabalhadores/${f.worker.id}/biometria/desafio`,{fingerCode:'R_INDEX'},f.company.id);assert.equal(r.status,200);const body=attestation(r.body.challenge);const saved=await request('POST',`/api/trabalhadores/${f.worker.id}/biometria`,body,f.company.id);assert.equal(saved.status,200);return body;}
+async function verification(f){const r=await request('POST',`/api/fichas/${f.ficha.id}/biometria/desafio`,{fingerCode:'R_INDEX'},f.company.id);assert.equal(r.status,200);return attestation(r.body.challenge);}
+const finish=(f,body,auth=claims,company=f.company.id)=>request('POST',`/api/fichas/${f.ficha.id}/assinar`,body,company,auth);
 
-async function request(id, body, auth = claims, selected = company) {
-  const path = `/api/fichas/${id}/assinar`;
-  const event = {
-    version: '2.0', routeKey: 'ANY /{proxy+}', rawPath: path, rawQueryString: '',
-    headers: { host: 'synthetic.invalid', 'content-type': 'application/json', ...(selected ? { 'x-empresa-id': selected } : {}) },
-    requestContext: {
-      requestId: randomUUID(), stage: '$default', http: { method: 'POST', path, protocol: 'HTTP/1.1', sourceIp: '127.0.0.1' },
-      ...(auth ? { authorizer: { jwt: { claims: auth } } } : {})
-    }, isBase64Encoded: false, body: JSON.stringify(body)
-  };
-  const result = await handler(event, {});
-  return { status: result.statusCode, body: JSON.parse(result.body) };
-}
+test('imagem sem comparação, booleanos forjados e dedo não cadastrado não assinam',async()=>{const f=await fixture();assert.equal((await finish(f,{fingerImageDataUrl:PNG,verificada:true,matched:true})).status,403);assert.equal((await request('POST',`/api/fichas/${f.ficha.id}/biometria/desafio`,{fingerCode:'R_INDEX'},f.company.id)).status,409);assert.equal((await store.get('ficha',f.ficha.id)).status,'pendente');});
+test('cadastro separado da listagem; template não aparece no cadastro de trabalhadores',async()=>{const f=await fixture();const body=await enroll(f);assert.equal((await request('POST',`/api/trabalhadores/${f.worker.id}/biometria`,body,f.company.id)).body.replayed,true);const list=await request('GET','/api/trabalhadores',null,f.company.id);assert.equal(list.body.items[0].biometrias.R_INDEX.id.length,64);assert.equal(JSON.stringify(list.body).includes(template),false);});
+test('conferência positiva assina, preserva prova e permite reenvio idempotente',async()=>{const f=await fixture();await enroll(f);const body=await verification(f);const first=await finish(f,body),again=await finish(f,body);assert.equal(first.status,200);assert.equal(first.body.item.assinaturaBiometrica.verificada,true);assert.equal(first.body.item.assinaturaBiometrica.metodo,'NITGEN_VERIFY_MATCH');assert.equal(again.body.replayed,true);assert.equal(first.body.item._version,again.body.item._version);});
+test('digital divergente permanece pendente, sem imagem salva',async()=>{const f=await fixture();await enroll(f);const body=await verification(f);const p=JSON.parse(body.proof);const r=await finish(f,attestation({...p,challengeId:p.challengeId},{matched:false}));assert.equal(r.status,422);const item=await store.get('ficha',f.ficha.id);assert.equal(item.status,'pendente');assert.equal(item.assinaturaBiometrica,undefined);});
+test('prova forjada, imagem adulterada e template trocado são rejeitados',async()=>{const f=await fixture();await enroll(f);const body=await verification(f);assert.equal((await finish(f,{...body,proof:body.proof.replace('R_INDEX','R_THUMB')})).status,400);assert.equal((await finish(f,{...body,fingerImageDataUrl:PNG.replace('A5','B5')+'A'})).status,400);const p=JSON.parse(body.proof);assert.equal((await finish(f,attestation({...p,challengeId:p.challengeId},{templateHash:'0'.repeat(64)}))).status,400);assert.equal((await store.get('ficha',f.ficha.id)).status,'pendente');});
+test('empresa, ator, trabalhador e ficha precisam corresponder ao desafio',async()=>{const f=await fixture(),g=await fixture();await enroll(f);const body=await verification(f);assert.equal((await finish(f,body,null)).status,401);assert.equal((await finish(f,body,claims,g.company.id)).status,403);assert.equal((await finish(f,body,{...claims,sub:'outro'})).status,403);assert.equal((await finish(g,body)).status,403);});
+test('tentativa expirada e recadastro concorrente bloqueiam a assinatura antiga',async()=>{const f=await fixture();await enroll(f);const body=await verification(f);await store.update('biometria_desafio',body.challengeId,{expiresAtEpoch:1});assert.equal((await finish(f,body)).status,410);const next=await verification(f);await enroll(f);assert.equal((await finish(f,next)).status,409);});
+test('alteração do trabalhador durante captura exige nova conferência',async()=>{const f=await fixture();await enroll(f);const body=await verification(f);await store.update('trabalhador',f.worker.id,{funcao:'ATUALIZADA'});assert.equal((await finish(f,body)).status,409);});
+test('confirmações concorrentes preservam uma única assinatura',async()=>{const f=await fixture();await enroll(f);const first=await verification(f),second=await verification(f);const answers=await Promise.all([finish(f,first),finish(f,second)]);assert.deepEqual(answers.map(x=>x.status).sort(),[200,409]);assert.equal((await store.get('ficha',f.ficha.id))._version,2);});
+test('exclusão de pendente remove; assinatura verificada exige motivo e mantém histórico cancelado',async()=>{const pending=await fixture();assert.equal((await request('DELETE',`/api/fichas/${pending.ficha.id}`,{},pending.company.id)).body.deleted,true);const f=await fixture();await enroll(f);await finish(f,await verification(f));assert.equal((await request('DELETE',`/api/fichas/${f.ficha.id}`,{},f.company.id)).status,400);const r=await request('DELETE',`/api/fichas/${f.ficha.id}`,{motivo:'TESTE'},f.company.id);assert.equal(r.body.item.status,'cancelada');assert.equal(r.body.item.assinaturaBiometrica.verificada,true);});
+test('edição de trabalhador preserva empresa, rejeita versão obsoleta e duplicidade',async()=>{const f=await fixture();const path=`/api/trabalhadores/${f.worker.id}`;const r=await request('PATCH',path,{_version:1,nomeCompleto:'NOME EDITADO',matriculaESocial:'00Ab001'},f.company.id);assert.equal(r.status,200);assert.equal(r.body.item.matriculaESocial,'00Ab001');assert.equal((await request('PATCH',path,{_version:1,nomeCompleto:'OBSOLETO'},f.company.id)).status,409);assert.equal((await request('PATCH',path,{_version:2,empresaId:'outra'},f.company.id)).status,400);const other=await store.create('trabalhador',{...f.worker,cpf:'11111111111',matriculaESocial:'DUPLICADA'});assert.equal((await request('PATCH',path,{_version:2,matriculaESocial:other.matriculaESocial},f.company.id)).status,409);});
 
-async function pending() {
-  return store.create('ficha', { empresaId: company, trabalhadorId: 'synthetic-worker', status: 'pendente', itens: [{ epiId: 'synthetic-epi', quantidade: 1 }] });
-}
-
-function collide(ficha) {
-  let release;
-  const ready = new Promise(resolve => { release = resolve; });
-  simultaneousWrite = { key: ficha.pk, ready, release, arrived: 0 };
-}
-
-test('reenvio idêntico retorna o mesmo registro sem nova gravação e sem confiar nas alegações do cliente', async () => {
-  const ficha = await pending(), body = payload(), before = successfulSignWrites;
-  const first = await request(ficha.id, { ...body, verificada: true, matchScore: 100, signedAt: 'forjada', capturadoPor: 'outro', captureRequestHash: 'forjado' });
-  const replay = await request(ficha.id, body);
-  assert.equal(first.status, 200); assert.equal(first.body.replayed, false);
-  assert.equal(replay.status, 200); assert.equal(replay.body.replayed, true);
-  assert.deepEqual(replay.body.item, first.body.item);
-  assert.equal(successfulSignWrites - before, 1);
-  const capture = first.body.item.assinaturaBiometrica;
-  assert.equal(capture.verificada, false); assert.equal(capture.matchScore, undefined);
-  assert.equal(capture.capturadoPor, claims.sub); assert.notEqual(capture.signedAt, 'forjada');
-  assert.notEqual(capture.captureRequestHash, 'forjado');
-});
-
-test('mesmo UUID com outra imagem, dedo ou ator é conflito; novo UUID não substitui assinatura', async () => {
-  const ficha = await pending(), body = payload();
-  const saved = await request(ficha.id, body);
-  for (const [changed, actor] of [
-    [{ ...body, imageDataUrl: SECOND_PNG }, claims],
-    [{ ...body, dedo: 'L_INDEX' }, claims],
-    [body, { ...claims, sub: 'synthetic-operator-B' }],
-    [{ ...body, captureRequestId: randomUUID() }, claims]
-  ]) assert.equal((await request(ficha.id, changed, actor)).status, 409);
-  assert.deepEqual(await store.get('ficha', ficha.id), saved.body.item);
-});
-
-test('replay confere autenticação, empresa e ficha antes de devolver a captura', async () => {
-  const ficha = await pending(), body = payload();
-  await request(ficha.id, body);
-  assert.equal((await request(ficha.id, body, null)).status, 401);
-  assert.equal((await request(ficha.id, body, { ...claims, 'custom:empresa_id': 'synthetic-company-B' }, 'synthetic-company-B')).status, 403);
-  assert.equal((await request(ficha.id, body, claims, 'synthetic-company-B')).status, 403);
-  assert.equal((await request('missing-ficha', body)).status, 404);
-  const another = await pending();
-  const savedOther = await request(another.id, { ...body, captureRequestId: randomUUID() });
-  assert.equal((await request(another.id, body)).status, 409);
-  assert.deepEqual(await store.get('ficha', another.id), savedOther.body.item);
-});
-
-test('duas confirmações iguais simultâneas gravam uma vez e recuperam o mesmo registro após conflito', { timeout: 5000 }, async () => {
-  const ficha = await pending(), body = payload(), before = successfulSignWrites;
-  collide(ficha);
-  try {
-    const results = await Promise.all([request(ficha.id, body), request(ficha.id, body)]);
-    assert.deepEqual(results.map(result => result.status), [200, 200]);
-    assert.deepEqual(results.map(result => result.body.replayed).sort(), [false, true]);
-    assert.deepEqual(results[0].body.item, results[1].body.item);
-    assert.equal(successfulSignWrites - before, 1);
-    assert.equal((await store.get('ficha', ficha.id))._version, 2);
-  } finally { simultaneousWrite = null; }
-});
-
-test('capturas diferentes simultâneas preservam a primeira e recusam a segunda pelo bloqueio otimista', { timeout: 5000 }, async () => {
-  const ficha = await pending(), body = payload(), other = { ...body, imageDataUrl: SECOND_PNG }, before = successfulSignWrites;
-  collide(ficha);
-  try {
-    const results = await Promise.all([request(ficha.id, body), request(ficha.id, other)]);
-    assert.deepEqual(results.map(result => result.status).sort(), [200, 409]);
-    const accepted = results.find(result => result.status === 200);
-    assert.deepEqual(await store.get('ficha', ficha.id), accepted.body.item);
-    assert.equal(successfulSignWrites - before, 1);
-  } finally { simultaneousWrite = null; }
-});
-
-test('contrato legado sem UUID continua permitido e não ganha replay; cancelamento não é revertido', async () => {
-  const ficha = await pending(), body = { image: PNG, dedo: 'R_INDEX' };
-  const result = await request(ficha.id, body);
-  assert.equal(result.status, 200); assert.equal(result.body.item.assinaturaBiometrica.captureRequestId, undefined);
-  assert.equal((await request(ficha.id, body)).status, 409);
-  assert.equal((await request(ficha.id, {})).status, 409);
-  const tracked = await pending(), trackedBody = payload();
-  const signed = (await request(tracked.id, trackedBody)).body.item;
-  const cancelled = await store.update('ficha', tracked.id, { status: 'cancelada', statusAnterior: 'assinada' }, { expectedVersion: signed._version });
-  assert.equal((await request(tracked.id, trackedBody)).status, 409);
-  assert.deepEqual(await store.get('ficha', tracked.id), cancelled);
-});
-
-test('imagem ou identificador inválido deixam a ficha pendente e sem gravação parcial', async () => {
-  const ficha = await pending(), before = successfulSignWrites;
-  assert.equal((await request(ficha.id, { ...payload(), imageDataUrl: 'data:image/png;base64,aGVsbG8=' })).status, 400);
-  assert.equal((await request(ficha.id, { ...payload(), captureRequestId: 'invalido' })).status, 400);
-  assert.deepEqual(await store.get('ficha', ficha.id), ficha);
-  assert.equal(successfulSignWrites, before);
-});
+test('registro antigo sem conferência pode ser validado preservando a assinatura anterior',async()=>{const f=await fixture();await store.update('ficha',f.ficha.id,{status:'assinada',assinaturaBiometrica:{verificada:false,dedo:'R_INDEX',realFingerImage:PNG}});await enroll(f);const r=await finish(f,await verification(f));assert.equal(r.status,200);assert.equal(r.body.item.assinaturaBiometrica.verificada,true);assert.equal((await store.list('assinatura_anterior',f.company.id)).length,1);});

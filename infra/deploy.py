@@ -27,7 +27,7 @@ import zipfile
 from fetch_ca_snapshot import read_source, verify_installed
 from biometria_release import verify_release, ReleaseError, EXECUTABLE, MANIFEST
 
-VERSION = "12.8.3"
+VERSION = "12.9.0"
 REPOSITORY = "josepazmattos/jp-entregaepi-v12"
 ACCOUNT = "003020057405"
 REGION = "sa-east-1"
@@ -313,7 +313,7 @@ def prepare_frontend(root: Path, stage: Path, commit: str, run_id: str) -> list[
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(path.read_bytes())
         files.append(PublicFile(f"{PREFIX}/{relative.as_posix()}", target, content_type(path)))
-    required = {f"{PREFIX}/assets/{name}" for name in ("app.js", "ficha.js", "biometria.js", "styles.css", EXECUTABLE, MANIFEST)}
+    required = {f"{PREFIX}/assets/{name}" for name in ("app.js", "operations.js", "ficha.js", "biometria.js", "styles.css", EXECUTABLE, MANIFEST)}
     if not required.issubset({item.key for item in files}):
         raise DeployError("Arquivos obrigatórios do frontend estão ausentes.")
     cfg = {"version": VERSION, "buildSha": commit, "appBasePath": f"/{PREFIX}/", "apiBaseUrl": API_URL,

@@ -39,10 +39,10 @@ async function scenario(options={}){
     if(url.hostname==='127.0.0.1'){
       assert.equal(url.pathname,'/status','automatic routine must not capture');assert.equal(request.method(),'GET');
       assert.equal(request.headers().authorization,undefined);assert.equal(request.headers()['x-empresa-id'],undefined);
-      if(state.holdBio){state.holdBio=false;await new Promise(resolve=>state.releaseBio=resolve);return json({ok:true,service:'JP Biometria',version:'12.8.2',reader:true,sdk:true,deviceCount:1,capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture'}});}
+      if(state.holdBio){state.holdBio=false;await new Promise(resolve=>state.releaseBio=resolve);return json({ok:true,service:'JP Biometria',version:'12.8.2',reader:true,sdk:true,deviceCount:1,capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture',verify:true,templates:true}});}
       if(url.port!=='8789'||['offline','recover'].includes(state.bio))return route.abort();
       const sdk=state.bio!=='sdk';
-      return json({ok:sdk,service:'JP Biometria',version:'12.8.2',reader:sdk,sdk,deviceCount:sdk?1:0,errorCode:sdk?'':'SDK_NOT_FOUND',capabilities:{capture:sdk,captureMethod:'POST',capturePath:'/api/capture'}});
+      return json({ok:sdk,service:'JP Biometria',version:'12.8.2',reader:sdk,sdk,deviceCount:sdk?1:0,errorCode:sdk?'':'SDK_NOT_FOUND',capabilities:{capture:sdk,captureMethod:'POST',capturePath:'/api/capture',verify:true,templates:true}});
     }
     assert.ok(url.hostname.endsWith('.execute-api.sa-east-1.amazonaws.com'));
     assert.equal(request.method(),'GET','login verification does not mutate records');
@@ -58,6 +58,7 @@ async function scenario(options={}){
   const login=async(user='MASTER-TESTE')=>{await page.locator('#username').fill(user);await page.locator('#password').fill('SENHA-SINTETICA');await page.locator('#loginButton').click();};
   const done=()=>page.waitForFunction(()=>!document.getElementById('startupRetryButton').disabled&&document.getElementById('startupCheckedAt').textContent.startsWith('Última rotina:'));
   const snapshot=async name=>{
+    await page.evaluate(()=>goScreen('config'));
     await page.evaluate(()=>{document.getElementById('syntheticDemoLabel')?.remove();const label=document.createElement('p');label.id='syntheticDemoLabel';label.textContent='DEMONSTRAÇÃO COM SERVIÇOS SIMULADOS • sem leitor USB físico';label.style.cssText='padding:12px;background:#fff3c4;color:#362500;font-weight:bold';document.getElementById('startupTitle').closest('section').prepend(label);});
     const bounds=await page.locator('.startup-checks').boundingBox();
     if(bounds.height+250>page.viewportSize().height)await page.setViewportSize({width:page.viewportSize().width,height:Math.ceil(bounds.height+250)});
@@ -89,7 +90,7 @@ async function main(){
   }
   for(const permission of ['prompt','denied','unsupported']){
     const s=await scenario({permission});await s.login();await s.done();assert.equal(s.state.requests.filter(r=>r.path==='/status').length,0);assert.equal(s.state.starts,0);
-    if(permission==='prompt'){await s.page.evaluate(()=>window.__permission='granted');await s.page.locator('#startupBioButton').click();await s.page.waitForFunction(()=>document.getElementById('startupBioBadge').dataset.state==='success');}
+    if(permission==='prompt'){await s.page.evaluate(()=>window.__permission='granted');await s.page.evaluate(()=>goScreen('config'));await s.page.locator('#startupBioButton').click();await s.page.waitForFunction(()=>document.getElementById('startupBioBadge').dataset.state==='success');}
     pass('permissão '+permission+': diagnóstico claro e nenhuma consulta local sem autorização; botão permite continuar');await s.close();
   }
   {

@@ -1,4 +1,4 @@
-# JP Biometria 12.8.3 — componente local
+# JP Biometria 12.9.0 — componente local
 
 Este componente conecta o aplicativo JP EntregaEPI ao SDK Java NITGEN no Windows. O instalador inclui somente o inicializador e o agente desenvolvidos para a JP. Não contém Java, driver, DLL, JAR do fabricante, template ou impressão digital real.
 
@@ -32,7 +32,7 @@ O instalador só informa que iniciou depois de verificar uma resposta autenticad
 
 ## HTTP e contrato com a interface
 
-O servidor escuta somente em `127.0.0.1`, na primeira porta livre entre **8789 e 8799**. O aplicativo deve procurar a versão 12.8.3, inclusive quando um agente antigo continua na porta 8789.
+O servidor escuta somente em `127.0.0.1`, na primeira porta livre entre **8789 e 8799**. O aplicativo deve procurar a versão 12.9.0, inclusive quando um agente antigo continua na porta 8789.
 
 As origens permitidas são exatamente:
 
@@ -82,7 +82,7 @@ A integração usa os métodos e campos demonstrados no [exemplo Java do distrib
 3. `Export.ExportAudit(input, audit)`.
 4. `audit.ImageWidth`, `audit.ImageHeight` e `audit.FingerData[0].Template[0].Data`.
 
-O nome `Template` acima é o nome de um campo do formato de exportação de imagem do SDK. O agente **não exporta o FIR textual nem devolve um template biométrico ao aplicativo**. Handles e objetos exportadores são liberados ao encerrar a operação.
+O nome `Template` acima é o nome de um campo do formato de exportação de imagem do SDK. Na rota de diagnóstico `/api/capture`, o agente **não exporta o FIR textual nem devolve um template biométrico ao aplicativo**. As rotas específicas abaixo permitem o cadastro e a comparação. Handles e objetos exportadores são liberados ao encerrar a operação.
 
 Somente esse caminho oficial é aceito. A imagem raw deve ter exatamente `largura × altura` bytes em escala de cinza, com dimensões entre 32 e 2048 pixels. Uma imagem já codificada em PNG/JPEG precisa ser realmente decodificável e ter dimensões internas iguais às dimensões do audit. As dimensões são lidas antes de decodificar a imagem, evitando alocação excessiva. Não há procura genérica por `byte[]` nem dimensão presumida de 248 × 292.
 
@@ -99,11 +99,11 @@ python3 native/biometria/test_native.py
 python3 native/biometria/build.py --output native/biometria/dist --build-sha COMMIT_SHA_COMPLETO
 ```
 
-O teste funciona antes do build em um checkout limpo. Ele compila as fontes e um leitor sintético de teste, executa verificações HTTP/SDK-image no Java e testes do inicializador e do diagnóstico no Go. Gera um payload de produção separado e verifica a ausência de classes de teste e do fabricante. A lista das quatro fontes de produção está explícita em `build.py`.
+O teste funciona antes do build em um checkout limpo. Ele compila as fontes e um leitor sintético de teste, executa verificações HTTP/SDK-image no Java e testes do inicializador e do diagnóstico no Go. Gera um payload de produção separado e verifica a ausência de classes de teste e do fabricante. A lista das cinco fontes de produção está explícita em `build.py`.
 
 O diretório de saída contém somente:
 
-- `JP-Biometria-Setup-12.8.3.exe`
+- `JP-Biometria-Setup-12.9.0.exe`
 - `biometria-release.json`, com `version`, `buildSha`, `filename`, `sha256`, `sizeBytes` e metadados públicos da plataforma.
 
 O JAR é reproduzível, com classes e timestamps fixados. Binários gerados não são versionados. O pipeline deve distribuir o mesmo par EXE/manifest que testou e verificar o SHA-256 e o commit antes da publicação.

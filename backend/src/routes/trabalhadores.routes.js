@@ -1,6 +1,9 @@
 import { Router } from 'express';
+import * as storage from '../db/store.js';
 import { list, get, create, update, listWithRevision, transact } from '../db/store.js';
-import { ok, fail, empresaIdFrom, objectBody } from './_helpers.js';
+import { ok, fail, empresaIdFrom, objectBody, assertRecordAccess } from './_helpers.js';
+import { httpError } from '../middleware/auth.js';
+import { createBiometricsService } from '../services/biometria.service.js';
 import { sortWorkers } from '../services/trabalhadores.service.js';
 import { createWorkerImportService } from '../services/trabalhadores-import.service.js';
 
@@ -48,4 +51,22 @@ router.post('/importacao/:id/confirmar', async (req, res) => {
   }
 });
 
+const biometrics = createBiometricsService(storage);
+async function selectedWorker(req) {
+  const worker = await get('trabalhador', req.params.id);
+  if (!worker) throw httpError(404, 'Trabalhador não encontrado.');
+  assertRecordAccess(req, worker); return worker;
+}
+router.patch('/:id', async (req,res) => {
+  const worker=await selectedWorker(req);
+  ok(res, await importer.editWorker({body:objectBody(req),worker,actor:req.auth.sub}));
+});
+router.post('/:id/biometria/desafio', async (req,res) => {
+  const worker=await selectedWorker(req), body=objectBody(req);
+  ok(res,{challenge:await biometrics.challenge({worker,fingerCode:body.fingerCode,actor:req.auth.sub,kind:'enroll'})});
+});
+router.post('/:id/biometria', async (req,res) => {
+  const worker=await selectedWorker(req);
+  ok(res,await biometrics.complete({body:objectBody(req),worker,actor:req.auth.sub,kind:'enroll'}));
+});
 export default router;

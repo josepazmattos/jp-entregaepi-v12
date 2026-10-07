@@ -6,11 +6,18 @@
   const CSS_APROVADO = "body{font-family:\"Times New Roman\",Times,serif;margin:0;color:#111;background:#fff}.sheet.docx-template-a4{border:0;width:195mm;max-width:195mm;min-height:281.5mm;padding:0;margin:0 auto;font-family:\"Times New Roman\",Times,serif;color:#111}.docx-top{display:grid;grid-template-columns:29mm 1fr;gap:4mm;align-items:start;margin-bottom:3.5mm}.docx-logo{height:24mm;border:1px solid #d0d8df;display:flex;align-items:center;justify-content:center;overflow:hidden}.docx-logo img{max-width:100%;max-height:23mm;object-fit:contain}.docx-title{text-align:center;font-weight:900;text-decoration:underline;font-size:15pt;line-height:1.08;margin-top:4mm;text-transform:uppercase}.docx-meta{width:100%;border-collapse:collapse;margin:0 0 3.4mm 0}.docx-meta td{border:1px solid #4d5964;padding:2mm 2.3mm;font-size:11.3pt;line-height:1.05}.docx-meta td:nth-child(1){width:62%}.docx-meta td:nth-child(2){width:38%}.docx-term-title{text-align:center;text-decoration:underline;font-size:15.5pt;font-weight:900;margin:3mm 0 3mm}.docx-term p{font-size:11.7pt;line-height:1.48;text-align:justify;margin:0 0 2.9mm}.docx-local{font-size:11.7pt!important;font-weight:900!important;text-align:left!important;margin:6mm 0!important}.docx-date-spacer{display:inline-block;width:14mm}.docx-sign-area{text-align:center;margin:0 0 8mm}.docx-fingerprint{width:22mm;height:27mm;border:1px solid #b7c1c9;background:#fff;margin:0 auto 4mm;display:flex;align-items:center;justify-content:center;overflow:hidden}.docx-fingerprint img{max-width:100%;max-height:100%;object-fit:contain;filter:grayscale(1)}.docx-fingerprint.missing{font-family:Arial,Helvetica,sans-serif;font-size:6.5pt;color:#555;text-align:center;padding:3mm 1mm}.docx-sign-line{width:104mm;border-top:1px solid #222;margin:0 auto 1.2mm}.docx-worker-name{font-size:12pt;font-weight:900;text-align:center}.docx-epi-table{width:100%;border-collapse:collapse;margin-top:0}.docx-epi-table th,.docx-epi-table td{border:1px solid #4d5964;padding:1.9mm 1.8mm;font-size:10.8pt;line-height:1.05;color:#111}.docx-epi-table th{background:#fff;text-align:center;font-weight:900;text-transform:uppercase}.docx-epi-table td:nth-child(1),.docx-epi-table td:nth-child(3),.docx-epi-table td:nth-child(4),.docx-epi-table td:nth-child(5),.docx-epi-table td:nth-child(6),.docx-epi-table td:nth-child(7){text-align:center}.docx-epi-table td:nth-child(2){text-align:left}.docx-sign-cell{font-weight:900;text-align:center}.docx-validation-footer{font-family:Arial,Helvetica,sans-serif;font-size:6.5pt;color:#555;margin-top:3mm;border-top:1px solid #cfd7de;padding-top:1.5mm;text-align:left}@page{size:A4 portrait;margin:7.5mm 7.5mm 5mm 7.5mm}";
   const CSS_IMPRESSAO = `
     *{box-sizing:border-box}
+    .sheet.docx-template-a4{width:194.5mm;max-width:194.5mm}
+    .docx-term p{line-height:1.4}
     .docx-meta{table-layout:fixed}.docx-meta td{overflow-wrap:anywhere}
     .docx-top,.docx-meta,.docx-sign-area{break-inside:avoid;page-break-inside:avoid}
     .docx-term-title{break-after:avoid;page-break-after:avoid}
     .docx-term p{orphans:3;widows:3}
     .docx-epi-table{table-layout:fixed}
+    .docx-epi-table th,.docx-epi-table td{font-size:10pt;padding:1.6mm 1.2mm;line-height:1.1}
+    .docx-epi-table td:nth-child(3),.docx-epi-table td:nth-child(5){white-space:nowrap}
+    .docx-sign-area{margin-bottom:6mm}
+    .docx-validation-footer{margin-top:1.5mm;padding-top:1mm}
+    .docx-local{margin:4mm 0!important}
     .docx-epi-table th,.docx-epi-table td{overflow-wrap:anywhere}
     .docx-epi-table thead{display:table-header-group}
     .docx-epi-table tr{break-inside:avoid;page-break-inside:avoid}
@@ -88,6 +95,17 @@
     return {image, verified, signed, rowText, note, details};
   }
 
+// Used only as a fallback for old records that predate a separate display name.
+function equipmentName(item = {}) {
+  const explicit=String(item.epiNome || item.nomeCurto || item.nome || '').trim();
+  if(explicit && explicit.length<=160)return explicit;
+  const raw=String(item.epiDescricao || item.descricao || item.description || item.name || 'Equipamento').trim();
+  if(raw.length<=160)return raw;
+  const generic=raw.match(/^(capacete de seguran[çc]a|[óo]culos de seguran[çc]a|luva[s]? de seguran[çc]a|cal[çc]ado de seguran[çc]a|cintur[ãa]o de seguran[çc]a|protetor auditivo|respirador|talabarte|trava.quedas)\b/i);
+  if(generic)return generic[1];
+  return raw.split(/[.;\n]/)[0].slice(0,157).replace(/\s+\S*$/, '')+'…';
+}
+
   function buildDocument(ficha, empresa = {}, trabalhador = {}, epis = [], options = {}) {
     if (!ficha || !ficha.id) throw new Error("Ficha não encontrada. Atualize a lista e tente novamente.");
     // Emissões novas preservam o cadastro existente na data da movimentação.
@@ -118,12 +136,13 @@
     if (!items.length) throw new Error("Esta ficha não possui EPIs para impressão.");
     const rows = items.map(item => {
       const epi = epis.find(entry => entry.id === item.epiId) || {};
-      const itemType = first(item.tipo, item.type, type);
+      const requestedType=first(item.tipo,item.type);
+      const itemType=['Entrega','Troca','Devolução'].includes(requestedType)?requestedType:type;
       const itemDate = formatDate(first(item.data, item.date, date));
       const returnDate = formatDate(first(item.dataDevolucao, item.returnDate, itemType === "Devolução" ? itemDate : ""));
       const signText = item.signed === false && signature.verified ? "Pendente" : signature.rowText;
       const caLabel = item.semCA === true ? "Sem CA" : first(item.ca, epi.ca);
-      return `<tr><td>${esc(first(item.quantidade, item.qty, 1))}</td><td>${esc(first(item.epiDescricao, item.descricao, item.name, epi.descricao, epi.name, "EPI"))}</td><td>${esc(caLabel)}</td><td>${esc(itemType)}</td><td>${esc(itemDate)}</td><td class="docx-sign-cell">${esc(signText)}</td><td>${esc(returnDate)}</td></tr>`;
+      return `<tr><td>${esc(first(item.quantidade, item.qty, 1))}</td><td>${esc(equipmentName({...epi,...item}))}</td><td>${esc(caLabel)}</td><td>${esc(itemType)}</td><td>${esc(itemDate)}</td><td class="docx-sign-cell">${esc(signText)}</td><td>${esc(returnDate)}</td></tr>`;
     }).join("");
     const fingerprint = signature.image ? `<div class="docx-fingerprint"><img src="${esc(signature.image)}" alt="Imagem da captura biométrica registrada"></div>` : '<div class="docx-sign-space"></div>';
     const signatureNote = signature.note ? `<p class="docx-sign-note">${esc(signature.note)}</p>` : "";
@@ -141,10 +160,10 @@
         <p class="docx-local"><strong>Localidade da Empresa:</strong> ${esc(localityWithUf)} <span class="docx-date-spacer"></span> <strong>Data da Entrega:</strong> ${esc(date)}.</p>
         <div class="docx-sign-area">${fingerprint}${signatureNote}<div class="docx-sign-line"></div><div class="docx-worker-name">${esc(workerName)}</div></div>
       </section>
-      <table class="docx-epi-table" aria-label="Relação dos EPIs"><colgroup><col style="width:7%"><col style="width:23%"><col style="width:8%"><col style="width:10.5%"><col style="width:12.5%"><col style="width:18.5%"><col style="width:20.5%"></colgroup><thead><tr><th>QTD</th><th>EPI</th><th>CA</th><th>STATUS</th><th>DATA</th><th>ASSINATURA</th><th>DATA DEVOLUÇÃO</th></tr></thead><tbody>${rows}</tbody></table>${footer}
+      <table class="docx-epi-table" aria-label="Relação dos EPIs"><colgroup><col style="width:6%"><col style="width:26%"><col style="width:9%"><col style="width:10.5%"><col style="width:13.5%"><col style="width:20%"><col style="width:15%"></colgroup><thead><tr><th>QTD</th><th>EPI</th><th>CA</th><th>STATUS</th><th>DATA</th><th>ASSINATURA</th><th>DATA DEVOLUÇÃO</th></tr></thead><tbody>${rows}</tbody></table>${footer}
     </main>`;
     return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${CSS_APROVADO}${CSS_IMPRESSAO}</style></head><body>${content}</body></html>`;
   }
 
-  root.JP_FICHA = Object.freeze({createSnapshot, buildDocument, formatDate});
+  root.JP_FICHA = Object.freeze({createSnapshot, buildDocument, formatDate,equipmentName});
 })(typeof window !== "undefined" ? window : globalThis);

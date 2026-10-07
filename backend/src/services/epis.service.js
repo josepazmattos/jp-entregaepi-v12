@@ -1,3 +1,4 @@
+import { equipmentName } from './equipment-name.js';
 import { createHash } from 'node:crypto';
 import { httpError } from '../middleware/auth.js';
 import { textField } from '../routes/_helpers.js';
@@ -14,13 +15,14 @@ export function normalizeEquipment(body = {}) {
   const ca = normalizarCA(body.ca);
   if (tipo === 'epi_ca' && !ca) throw httpError(400, 'Informe um número de CA válido ou escolha Equipamento sem CA.', 'CA_INVALIDO');
   if (tipo === 'sem_ca' && body.ca != null && String(body.ca).trim()) throw httpError(400, 'Equipamento sem CA deve ficar com o campo CA vazio.', 'CA_INCOMPATIVEL');
-  const descricao = textField(body.descricao || body.description || body.name, { required: true, field: 'Descrição do equipamento', max: 2000 });
+  const descricao = textField(body.descricao || body.nomeCurto || body.description || body.name, { required: true, field: 'Descrição do equipamento', max: 2000 });
   return {
     tipo,
     semCA: tipo === 'sem_ca',
     catalogoCompartilhado: true,
     ca: tipo === 'sem_ca' ? '' : ca,
     descricao,
+    nomeCurto: textField(body.nomeCurto || equipmentName(body), {field:'Nome do equipamento',max:160}),
     name: descricao,
     fabricante: textField(body.fabricante || body.manufacturer, { field: 'Fabricante', max: 500 }),
     modelo: textField(body.modelo, { field: 'Modelo', max: 300 }),
@@ -52,6 +54,7 @@ export function publicEquipment(item) {
     catalogoCompartilhado: true,
     ca: tipo === 'sem_ca' ? '' : ca,
     descricao,
+    nomeCurto: equipmentName(item),
     name: descricao,
     fabricante: textField(item.fabricante || item.manufacturer, { max: 1000 }),
     modelo: textField(item.modelo, { max: 1000 }),

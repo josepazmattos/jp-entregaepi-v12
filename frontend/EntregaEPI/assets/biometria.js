@@ -63,7 +63,7 @@
     const busy=body.busy===true,checking=body.checking===true;
     const ready=body.ok===true&&captureAvailable&&detected&&!busy&&!checking&&!runtimeIssue;
     return Object.freeze({port,service:'JP Biometria',version:validVersion?version:'Não informada',recognized:true,
-      ready,compatible,captureAvailable,upgradeRequired:!compatible,busy,checking,readerDetected:detected,sdkMissing,
+      ready,compatible,captureAvailable,verificationAvailable:compatible&&body.capabilities?.verify===true&&body.capabilities?.templates===true,upgradeRequired:!compatible,busy,checking,readerDetected:detected,sdkMissing,
       runtimeCode,runtimeTitle:runtimeIssue?.title||'',runtimeMessage:runtimeIssue?.message||'',
       deviceName:nitgen&&device.length<=80&&/^[\w .()\/-]+$/.test(device)?device:'Leitor NITGEN',
       code:ready?'LEITOR_DETECTADO':!compatible?'AGENTE_REQUER_ATUALIZACAO':runtimeCode|| (busy?'LEITOR_OCUPADO':checking?'VERIFICANDO_LEITOR':sdkMissing?'SDK_INDISPONIVEL':!captureAvailable?'CAPTURA_INDISPONIVEL':body.ok!==true?'AGENTE_REQUER_ATENCAO':'LEITOR_NAO_DETECTADO')});
@@ -107,7 +107,13 @@
       try{
         const response=await fetcher(`http://127.0.0.1:${port}${path}`,{method:'GET',...requestOptions,mode:'cors',credentials:'omit',cache:'no-store',redirect:'error',targetAddressSpace:'loopback',signal:controller.signal});
         if(signal.aborted)throw failure('BIO_CANCELLED');
-        if(!response.ok)throw failure('BIO_HTTP',{httpStatus:response.status});
+        if(!response.ok){
+          const body=await readJson(response,16000,controller.signal).catch(()=>null);
+          const error=failure('BIO_HTTP',{httpStatus:response.status});
+          if(body?.code==='BIOMETRIA_DIVERGENTE')error.message='A digital não corresponde ao cadastro. A ficha continua sem assinatura.';
+          if(body?.code==='BIOMETRIC_DEVICE_DIFFERENT')error.message='Esta digital foi cadastrada em outro computador. Cadastre-a neste computador antes de assinar.';
+          throw error;
+        }
         const body=await readJson(response,maxBytes,controller.signal);
         if(signal.aborted)throw failure('BIO_CANCELLED');
         return body;
@@ -168,7 +174,16 @@
           imageBase64:response.imageBase64,image:response.image};
       },signal);
     }
-    return Object.freeze({discover,capture,cancel(){operation?.abort();},clear(){operation?.abort();selected=null;lastDiagnostics=[];},getStatus:()=>selected,getDiagnostics:()=>lastDiagnostics.map(item=>({...item}))});
+    async function biometric(challenge,{signal}={}){
+      if(!selected?.ready)throw unavailableError(selected);
+      if(!selected.verificationAvailable)throw new Error('Atualize o JP Biometria para cadastrar e comparar digitais.');
+      return locked(async operationSignal=>{
+        const body=await request(selected.port,challenge.kind==='enroll'?'/api/enroll':'/api/signature',operationSignal,captureTimeout,2*1024*1024,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify(challenge)});
+        if(!body?.ok||!body.proof||!body.proofSignature)throw failure('BIO_PROTOCOL');
+        return body;
+      },signal);
+    }
+    return Object.freeze({discover,capture,biometric,cancel(){operation?.abort();},clear(){operation?.abort();selected=null;lastDiagnostics=[];},getStatus:()=>selected,getDiagnostics:()=>lastDiagnostics.map(item=>({...item}))});
   }
   function extractImage(body){
     if(!body||body.realFingerImage!==true)throw failure('BIO_IMAGE_MISSING');

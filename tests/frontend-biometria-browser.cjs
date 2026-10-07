@@ -29,7 +29,7 @@ module.exports=async function runBiometricBrowser({browser,origin,output}){
         if(statusMode==='wrong')return json({ok:true,service:'SERVICO-SINTETICO-DIFERENTE',template:'TEMPLATE-SINTETICO-PRIVADO',image:pixel});
         if(statusMode==='alternative'&&url.port!=='8790')return route.abort();
         if(statusMode!=='alternative'&&url.port!=='8789')return route.abort();
-        return json({ok:statusMode!=='missing',service:'JP Biometria Local Java',version:'12.8.3',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture'},sdk:true,reader:statusMode!=='missing',deviceCount:statusMode==='missing'?0:1,deviceName:'NITGEN HFDU06',log:'NAO-EXIBIR-LOG'});
+        return json({ok:statusMode!=='missing',service:'JP Biometria Local Java',version:'12.9.0',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture'},sdk:true,reader:statusMode!=='missing',deviceCount:statusMode==='missing'?0:1,deviceName:'NITGEN HFDU06',log:'NAO-EXIBIR-LOG'});
       }
       if(url.pathname==='/api/capture'||url.pathname==='/capture'){
         assert.equal(request.method(),'POST');assert.match(request.headers()['content-type'],/^text\/plain/);const command=request.postDataJSON();assert.equal(command.requireTemplate,false);assert.equal(command.requireRealImage,true);assert.equal(command.workerId,undefined);
@@ -66,7 +66,7 @@ module.exports=async function runBiometricBrowser({browser,origin,output}){
   async function navigate(screen){if(await page.locator('#menuToggle').isVisible())await page.locator('#menuToggle').click();await page.locator(`.nav [data-screen="${screen}"]`).click();}
   async function captured(){await page.locator('#bioCaptureImage').waitFor({state:'visible'});assert.equal(await page.locator('#bioCaptureImage').evaluate(image=>image.complete&&image.naturalWidth>0),true);}
   async function discarded(){await page.locator('#bioCapturePanel').waitFor({state:'hidden'});assert.equal(await page.locator('#bioCaptureImage').getAttribute('src'),null);await noStoredBiometrics();}
-  async function startHeld(fichaId){captureMode='hold';releaseCapture=null;await navigate('fichas');await page.locator(`[data-capture-ficha-id="${fichaId}"]`).click();await page.locator('#bioCaptureButton').click();for(let attempt=0;!releaseCapture&&attempt<100;attempt++)await new Promise(resolve=>setTimeout(resolve,20));assert.ok(releaseCapture,'o pedido de captura chegou ao agente sintético');}
+  async function startHeld(fichaId){captureMode='hold';releaseCapture=null;await navigate('biometria');await page.locator('#bioOpenTestButton').click();await page.locator('#bioCaptureButton').click();for(let attempt=0;!releaseCapture&&attempt<100;attempt++)await new Promise(resolve=>setTimeout(resolve,20));assert.ok(releaseCapture,'o pedido de captura chegou ao agente sintético');}
   try{
     await page.goto(origin+'/EntregaEPI/');await login();await navigate('biometria');assert.equal(requests.length,0);
     await page.locator('#bioOpenTestButton').click();assert.equal(requests.length,0);assert.equal(await page.locator('#bioCaptureWorker').innerText(),'Nenhum trabalhador vinculado');
@@ -89,24 +89,22 @@ module.exports=async function runBiometricBrowser({browser,origin,output}){
     statusMode='ready';captureMode='invalid';await page.locator('#bioOpenTestButton').click();await page.locator('#bioCaptureButton').click();await page.waitForFunction(()=>document.getElementById('bioCaptureResult').classList.contains('error'));assert.equal(await page.locator('#bioCaptureImage').isVisible(),false);assert.equal(registrations.length,0);await page.locator('#bioCancelButton').click();
     passed('bytes com cabeçalho PNG e conteúdo inválido são rejeitados pela decodificação do navegador');
 
-    captureMode='ready';await navigate('fichas');await page.locator('[data-capture-ficha-id="BIO-FICHA-0"]').click();assert.match(await page.locator('#bioCaptureCompany').innerText(),/ALFA/);assert.match(await page.locator('#bioCaptureWorker').innerText(),/ALFA/);assert.equal(await page.locator('#bioCaptureFicha').innerText(),'EPI-BIO-SINTÉTICA-0');
-    await page.locator('#bioFingerSelect').selectOption('L_INDEX');await page.locator('#bioCaptureButton').click();await captured();
-    await page.locator('#bioRegisterButton').click();await page.waitForFunction(()=>document.getElementById('bioRegisterButton').textContent==='Tentar registrar novamente');assert.equal(commitCount,1);assert.equal(await page.locator('#bioCaptureButton').isDisabled(),true);
-    await page.locator('#bioRegisterButton').click();await page.waitForFunction(()=>document.getElementById('appMessage').classList.contains('success'));await discarded();assert.equal(registrations.length,2);assert.deepEqual(registrations[0],registrations[1]);assert.equal(commitCount,1);assert.equal(registrations[0].fingerCode,'L_INDEX');assert.equal(await page.locator('[data-capture-ficha-id="BIO-FICHA-0"]').count(),0);
-    passed('registro associa empresa/trabalhador/ficha e repete o mesmo UUID após perda de resposta sem duplicar');
-
+    captureMode='ready';await navigate('fichas');assert.equal(await page.locator('[data-capture-ficha-id]').count(),0);
+    assert.equal(await page.locator('[data-ficha-id="BIO-FICHA-0"]').innerText(),'Imprimir');
+    passed('assinatura foi movida para a aba de impressão; tela de sistema continua exclusiva para diagnóstico');
+    fichas[0]={...fichas[0],status:'assinada',assinaturaBiometrica:{verificada:false,realFingerImage:pixel,dedo:'L_INDEX'}};
     const html=await page.evaluate(({ficha,company,worker,equipment})=>window.JP_FICHA.buildDocument(ficha,company,worker,[equipment]),{ficha:fichas[0],company:companies[0],worker:workers[0],equipment});assert.ok(html.includes('Assinatura registrada'));assert.ok(!html.includes('Assinado Biometricamente'));assert.equal((html.match(/Imagem da captura biométrica registrada/g)||[]).length,1);
     const printPage=await context.newPage();await printPage.setContent(html);await printPage.evaluate(async()=>{await Promise.all([...document.images].map(image=>image.decode()));});const pdf=path.join(output,'biometria-ficha-captura-sintetica.pdf');await printPage.pdf({path:pdf,preferCSSPageSize:true,printBackground:true});await printPage.close();
     const printed=execFileSync('pdftotext',[pdf,'-'],{encoding:'utf8'});assert.ok(printed.includes('TERMO DE RESPONSABILIDADE'));assert.ok(printed.includes('000ABC123'));assert.match(printed,/Assinatura\s+registrada/);assert.ok(!printed.includes('Assinado Biometricamente'));
     passed('ficha impressa mantém termo, matrícula e imagem única sem alegar identidade verificada');
 
-    await startHeld('BIO-FICHA-1');await page.locator('#bioCancelButton').click();await discarded();releaseCapture();await page.waitForTimeout(50);assert.equal(await page.locator('#bioCaptureImage').getAttribute('src'),null);assert.equal(registrations.length,2);
+    await startHeld('BIO-FICHA-1');await page.locator('#bioCancelButton').click();await discarded();releaseCapture();await page.waitForTimeout(50);assert.equal(await page.locator('#bioCaptureImage').getAttribute('src'),null);assert.equal(registrations.length,0);
     passed('cancelamento durante captura descarta a resposta tardia e não registra a ficha');
 
-    await startHeld('BIO-FICHA-1');await page.locator('#empresaAtivaSelect').selectOption('BIO-EMPRESA-B');await page.waitForFunction(()=>document.getElementById('metricFichas').textContent==='1');await discarded();releaseCapture();await page.waitForTimeout(50);assert.equal(await page.locator('#bioCaptureImage').getAttribute('src'),null);assert.equal(registrations.length,2);
+    await startHeld('BIO-FICHA-1');await page.locator('#empresaAtivaSelect').selectOption('BIO-EMPRESA-B');await page.waitForFunction(()=>document.getElementById('metricFichas').textContent==='1');await discarded();releaseCapture();await page.waitForTimeout(50);assert.equal(await page.locator('#bioCaptureImage').getAttribute('src'),null);assert.equal(registrations.length,0);
     passed('troca de empresa cancela a captura e impede associar a imagem ao novo contexto');
 
-    await startHeld('BIO-FICHA-2');await page.locator('#logoutButton').click();await page.locator('#loginPage').waitFor({state:'visible'});await discarded();releaseCapture();await page.waitForTimeout(50);assert.equal(registrations.length,2);
+    await startHeld('BIO-FICHA-2');await page.locator('#logoutButton').click();await page.locator('#loginPage').waitFor({state:'visible'});await discarded();releaseCapture();await page.waitForTimeout(50);assert.equal(registrations.length,0);
     passed('logout cancela captura e remove imagem, seleção e estado da confirmação');
 
     captureMode='ready';await page.setViewportSize({width:390,height:844});await login();await navigate('biometria');await page.locator('#bioOpenTestButton').click();await page.locator('#bioCaptureButton').click();await captured();

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cat <<'INSTRUCOES'
-JP EntregaEPI 12.8.3
+JP EntregaEPI 12.9.0
 
 A instalação é feita pelo workflow "Testar e publicar JP EntregaEPI" no GitHub.
 
