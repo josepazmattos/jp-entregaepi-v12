@@ -84,6 +84,11 @@ jobs:
         run: npm ci --prefix tests --no-audit --no-fund
       - name: Preparar Chromium
         run: npm --prefix tests run install-browser
+      - name: Preparar leitura dos PDFs gerados nos testes
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y poppler-utils
+          pdftotext -v
       - name: Testar dashboard, login e ficha no navegador
         run: npm --prefix tests test
       - name: Guardar o componente Windows aprovado por estes testes
