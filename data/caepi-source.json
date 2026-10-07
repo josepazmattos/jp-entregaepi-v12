@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "url": "https://www.jptreinamentos.com.br/EntregaEPI/caepi-snapshots/caepi-oficial-20261006-b5d0f1559303.zip",
+  "sha256": "b5d0f1559303fb1795ac2268c28ad442ca8b65980e23b93c938d85229aa10518",
+  "sizeBytes": 4950229,
+  "manifestSha256": "c56d042bff9698fb269fa4bc428f9fbfcd50352206417e5b7d1687c4e4abf538",
+  "records": 42453,
+  "ambiguousRecords": 24,
+  "downloadedAt": "2026-10-06T23:53:54.497212+00:00",
+  "sourceUrl": "https://caepi.trabalho.gov.br/internet/ConsultaCAInternet.aspx",
+  "sourceArchiveUrl": "https://www.jptreinamentos.com.br/EntregaEPI/caepi-snapshots/source-31e6e6778ee16-RelatorioCA_20261006_205359.csv.gz",
+  "sourceArchiveSha256": "31e6e6778ee16576410a555b867eb5770e8d6b0e32df19f0eff4dbe4e9949c3d",
+  "sourceFilename": "RelatorioCA_20261006_205359.csv.gz"
+}

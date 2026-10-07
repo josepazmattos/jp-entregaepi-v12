@@ -1,0 +1,17 @@
+{
+  "source": "Base local complementar não verificada",
+  "sourceKind": "local-complementar",
+  "sourceUpdatedAt": null,
+  "total": 1,
+  "items": {
+    "365": {
+      "ca": "365",
+      "name": "CAPACETE CLASSE E",
+      "description": "CAPACETE CLASSE E",
+      "status": "Válido",
+      "validity": "09/01/2028",
+      "manufacturer": "MSA DO BRASIL EQUIP E INSTRUMENTOS DE SEGURANCA LTDA",
+      "obs": "Registro local inicial; confirmar na base CAEPI/MTE."
+    }
+  }
+}

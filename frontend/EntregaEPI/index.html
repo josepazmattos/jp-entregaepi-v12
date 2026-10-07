@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JP EntregaEPI V12</title>
+  <script src="/__APP_PREFIX__/config.js?v=1271"></script>
+  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=1271" />
+</head>
+<body>
+  <main id="loginPage" class="login-page">
+    <section class="login-layout">
+      <aside class="brand-panel">
+        <div class="brand-content">
+          <img class="brand-logo" src="/__APP_PREFIX__/assets/logo-jp.png" alt="JP Segurança do Trabalho" />
+          <span class="kicker">JP Segurança do Trabalho</span>
+          <h1>Entrega de EPI V12</h1>
+          <p>Gestão de empresas, trabalhadores, EPIs e fichas com cadastros organizados e emissão de documentos.</p>
+          <div class="feature-grid">
+            <div class="feature"><span>✓</span> Empresas e trabalhadores</div>
+            <div class="feature"><span>✓</span> Consulta CA / EPI</div>
+            <div class="feature"><span>✓</span> Fichas de EPI</div>
+            <div class="feature"><span>✓</span> Conexão com leitor local</div>
+          </div>
+        </div>
+      </aside>
+      <section class="login-card">
+        <div class="login-head">
+          <div class="login-logo"><img src="/__APP_PREFIX__/assets/logo-jp.png" alt="JP" /></div>
+          <div><span class="kicker">Acesso ao sistema</span><h2>Entrega de EPI</h2><p>Entre com seu usuário e senha.</p></div>
+        </div>
+        <form id="loginForm" class="form">
+          <div class="field"><label for="username">Usuário</label><input id="username" autocomplete="username" placeholder="Digite seu usuário" required /></div>
+          <div class="field">
+            <div class="label-row"><label for="password">Senha</label><a href="#" id="forgotLink" class="link">Esqueci minha senha</a></div>
+            <div class="password-wrap"><input id="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required /><button type="button" id="togglePassword" class="toggle-password">Mostrar</button></div>
+          </div>
+          <label class="remember-row"><input type="checkbox" id="rememberUser" /><span>Lembrar usuário neste computador</span></label>
+          <div id="loginMessage" class="message hidden"></div>
+          <button type="submit" class="btn btn-primary" id="loginButton">Entrar</button>
+        </form>
+        <div class="info-box"><strong>V12.7.1:</strong> dashboard, cadastros, EPIs, fichas no modelo aprovado e verificação do leitor local.</div>
+        <div class="login-footer"><span>Versão <b>12.7.1</b></span><span>Ambiente <b>Produção</b></span></div>
+      </section>
+    </section>
+  </main>
+
+  <section id="appShell" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-logo"><img src="/__APP_PREFIX__/assets/logo-jp.png" alt="JP" /></div>
+        <div class="brand-text"><strong>EntregaEPI V12</strong><span id="userBadge">Usuário autenticado</span></div>
+      </div>
+      <div class="company-box">
+        <label>Empresa em uso</label>
+        <select id="empresaAtivaSelect"><option value="">Selecione ou cadastre uma empresa</option></select>
+        <small>Os dados são filtrados pela empresa selecionada.</small>
+      </div>
+      <nav class="nav">
+        <button class="active" data-screen="dashboard">▦ Dashboard</button>
+        <button data-screen="empresas">▤ Empresas</button>
+        <button data-screen="trabalhadores">♙ Trabalhadores</button>
+        <button data-screen="epis">◇ EPIs e CA</button>
+        <button data-screen="entrega">▣ Entrega de EPI</button>
+        <button data-screen="fichas">▧ Fichas</button>
+        <button data-screen="biometria">◉ Biometria</button>
+        <button data-screen="config">⚙ Configurações</button>
+      </nav>
+      <div class="sidebar-footer"><small>Ambiente: Produção</small><small>Versão: 12.7.1</small><button id="logoutButton" class="btn btn-secondary">Sair</button></div>
+    </aside>
+
+    <main class="main">
+      <div id="appMessage" class="message hidden" role="alert" aria-live="polite"></div>
+      <section id="screen-dashboard" class="screen active">
+        <div class="topbar">
+          <div><span class="kicker">Painel inicial</span><h1>Dashboard</h1><p>Visão geral de empresas, trabalhadores, EPIs e fichas de EPI.</p></div>
+          <button id="refreshButton" class="btn btn-dark">Atualizar</button>
+        </div>
+
+        <div id="actionBanner" class="action-banner hidden">
+          <strong>Para começar:</strong> cadastre ou selecione uma empresa. Depois cadastre trabalhadores, EPIs e gere as fichas.
+          <button class="btn btn-secondary" onclick="goScreen('empresas')">Cadastrar empresa</button>
+        </div>
+
+        <div class="metrics">
+          <div class="metric-card"><span class="pill">Empresas</span><strong id="metricEmpresas">0</strong><p>Empresas cadastradas</p></div>
+          <div class="metric-card"><span class="pill">Trabalhadores</span><strong id="metricTrabalhadores">0</strong><p>Da empresa selecionada</p></div>
+          <div class="metric-card"><span class="pill">EPIs</span><strong id="metricEpis">0</strong><p>Banco de EPIs da empresa</p></div>
+          <div class="metric-card"><span class="pill">Fichas</span><strong id="metricFichas">0</strong><p>Fichas geradas</p></div>
+        </div>
+
+        <div class="dashboard-grid">
+          <div class="card list-card"><h2>Próximas ações</h2><div id="nextActions" class="list"></div></div>
+          <div class="card list-card"><h2>Últimas fichas</h2><div id="dashboardFichas" class="list"></div></div>
+        </div>
+      </section>
+
+      <section id="screen-empresas" class="screen">
+        <div class="topbar"><div><span class="kicker">Cadastro</span><h1>Empresas</h1><p>Cadastro de empresas com localidade para emissão das fichas.</p></div><button class="btn btn-primary" onclick="refreshEmpresas().catch(handleAppError)">Atualizar empresas</button></div>
+        <div class="two-col">
+          <form id="empresaForm" class="card form-card">
+            <h2>Nova empresa</h2>
+            <div class="field"><label>Nome da empresa</label><input name="nome" required placeholder="PAZ SEGURANÇA DO TRABALHO"></div>
+            <div class="field"><label>CNPJ</label><input name="cnpj" placeholder="00.000.000/0001-00"></div>
+            <div class="field"><label>Localidade</label><input name="localidade" placeholder="Dourados/MS"></div>
+            <div class="field"><label>Responsável</label><input name="responsavel" placeholder="Responsável pela empresa"></div>
+            <button class="btn btn-primary" type="submit">Salvar empresa</button>
+          </form>
+          <div class="card list-card"><h2>Empresas cadastradas</h2><div id="empresasList" class="list">Carregando...</div></div>
+        </div>
+      </section>
+
+      <section id="screen-trabalhadores" class="screen">
+        <div class="topbar"><div><span class="kicker">Cadastro</span><h1>Trabalhadores</h1><p>Campos no padrão de importação e ficha de EPI.</p></div><button class="btn btn-primary" onclick="refreshTrabalhadores().catch(handleAppError)">Atualizar trabalhadores</button></div>
+        <div class="two-col wide">
+          <form id="trabalhadorForm" class="card form-card">
+            <h2>Novo trabalhador</h2>
+            <div class="grid-form">
+              <div class="field"><label>Nome completo</label><input name="nomeCompleto" required></div>
+              <div class="field"><label>CPF</label><input name="cpf" required></div>
+              <div class="field"><label>Matrícula eSocial</label><input name="matriculaESocial" required></div>
+              <div class="field"><label>Função</label><input name="funcao" required></div>
+              <div class="field"><label>Setor</label><input name="setor"></div>
+              <div class="field"><label>Localidade</label><input name="localidade" required></div>
+              <div class="field"><label>Data de Admissão</label><input name="dataAdmissao" placeholder="dd/mm/aaaa"></div>
+              <div class="field"><label>Status</label><select name="status"><option>Ativo</option><option>Inativo</option></select></div>
+              <div class="field"><label>RG</label><input name="rg"></div>
+              <div class="field"><label>E-mail</label><input name="email"></div>
+              <div class="field"><label>Telefone</label><input name="telefone"></div>
+              <div class="field"><label>Observações</label><input name="observacoes"></div>
+            </div>
+            <button class="btn btn-primary" type="submit">Salvar trabalhador</button>
+          </form>
+          <div class="card list-card"><h2>Trabalhadores cadastrados</h2><div id="trabalhadoresList" class="list">Carregando...</div></div>
+        </div>
+      </section>
+
+      <section id="screen-epis" class="screen">
+        <div class="topbar"><div><span class="kicker">Banco de EPIs</span><h1>EPIs e CA</h1><p>Consulta de CA e cadastro de EPI por empresa.</p></div><button class="btn btn-primary" onclick="refreshEpis().catch(handleAppError)">Atualizar EPIs</button></div>
+        <div class="two-col">
+          <form id="epiForm" class="card form-card">
+            <h2>Consulta / cadastro</h2>
+            <div class="inline"><div class="field grow"><label>CA</label><input name="ca" id="caInput" placeholder="365"></div><button class="btn btn-secondary" type="button" onclick="consultarCA()">Consultar CA</button></div>
+            <div id="caMessage" class="message hidden" role="status"></div><a class="link" href="https://caepi.trabalho.gov.br/internet/ConsultaCAInternet.aspx" target="_blank" rel="noopener noreferrer">Abrir consulta oficial do CA no MTE</a>
+            <div class="field"><label>Descrição do EPI</label><input name="descricao" id="epiDescricao" required></div>
+            <div class="field"><label>Fabricante</label><input name="fabricante" id="epiFabricante"></div>
+            <div class="grid-form two"><div class="field"><label>Validade</label><input name="validade" id="epiValidade"></div><div class="field"><label>Situação</label><input name="situacao" id="epiSituacao"></div></div>
+            <button class="btn btn-primary" type="submit">Inserir no cadastro</button>
+          </form>
+          <div class="card list-card"><h2>EPIs cadastrados</h2><div id="episList" class="list">Carregando...</div></div>
+        </div>
+      </section>
+
+      <section id="screen-entrega" class="screen">
+        <div class="topbar"><div><span class="kicker">Movimentação</span><h1>Entrega de EPI</h1><p>Gera ficha de EPI no modelo aprovado, com os dados do trabalhador e o Termo de Responsabilidade.</p></div></div>
+        <form id="entregaForm" class="card form-card">
+          <div class="grid-form">
+            <div class="field"><label>Trabalhador</label><select name="trabalhadorId" id="entregaTrabalhador" required></select></div>
+            <div class="field"><label>Tipo</label><select name="tipo"><option>Entrega</option><option>Troca</option><option>Devolução</option></select></div>
+            <div class="field"><label>EPI</label><select name="epiId" id="entregaEpi" required></select></div>
+            <div class="field"><label>Quantidade</label><input name="quantidade" type="number" min="1" step="1" value="1" required></div>
+          </div>
+          <button class="btn btn-primary" type="submit">Gerar ficha de EPI</button>
+        </form>
+      </section>
+
+      <section id="screen-fichas" class="screen">
+        <div class="topbar"><div><span class="kicker">Documentos</span><h1>Fichas de EPI</h1><p>Fichas geradas na V12.</p></div><button class="btn btn-primary" onclick="refreshFichas().catch(handleAppError)">Atualizar fichas</button></div>
+        <div class="card list-card"><h2>Fichas cadastradas</h2><div id="fichasList" class="list">Carregando...</div></div>
+      </section>
+
+      <section id="screen-biometria" class="screen">
+        <div class="topbar"><div><span class="kicker">Assinatura</span><h1>Biometria</h1><p>Verificação da conexão com o leitor biométrico instalado neste computador.</p></div><button class="btn btn-primary" onclick="testBiometriaLocal()">Verificar leitor</button></div>
+        <div class="card"><div class="card-body"><h2>Status local</h2><p>A verificação abaixo testa a conexão com o serviço do leitor neste computador. Consulte as assinaturas registradas na aba Fichas.</p><pre id="bioOutput">Aguardando teste...</pre></div></div>
+      </section>
+
+      <section id="screen-config" class="screen">
+        <div class="topbar"><div><span class="kicker">Sistema</span><h1>Configurações</h1><p>Diagnóstico técnico e parâmetros da V12.</p></div></div>
+        <div class="card"><div class="card-head"><h2>Diagnóstico técnico</h2><div class="actions"><button class="btn btn-secondary" onclick="testHealth()">Testar API</button><button class="btn btn-secondary" onclick="testCA()">Testar CA 365</button></div></div><pre id="apiOutput">Aguardando diagnóstico...</pre></div>
+        <div class="card"><div class="card-body"><h2>Configuração carregada</h2><pre id="configOutput"></pre></div></div>
+      </section>
+    </main>
+  </section>
+
+  <script src="/__APP_PREFIX__/assets/ficha.js?v=1271"></script>
+  <script src="/__APP_PREFIX__/assets/app.js?v=1271"></script>
+</body>
+</html>

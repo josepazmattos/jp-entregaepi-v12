@@ -1,0 +1,10 @@
+node_modules/
+__pycache__/
+*.py[cod]
+.deploy/
+tests/output/
+backend/src/data/caepi/
+.env
+.env.*
+!.env.example
+*.log
