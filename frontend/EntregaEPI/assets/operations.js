@@ -41,20 +41,44 @@ function editCompany(id){
     catch(error){dialogMessage(dialog,error.message,'error');}finally{button.disabled=false;}
   };
 }
+function deleteCompany(id){
+  if(!isMaster())return;
+  const item=cache.empresas.find(x=>x.id===id);if(!item)return;
+  const context=operationContext(),dialog=dialogShell(document,'Excluir empresa',item.nome);
+  dialog.querySelector('.dialog-content').innerHTML='<p>A empresa sairá da lista ativa e seu acesso será bloqueado. Os trabalhadores e as fichas já emitidas serão preservados no histórico. As fichas são registros de entrega e não movimentam estoque.</p><p>Salve no seu Drive os documentos que desejar antes de continuar.</p><label for="companyDeleteName">Digite o nome da empresa para confirmar</label><input id="companyDeleteName" autocomplete="off">';
+  const button=document.createElement('button');button.className='btn btn-danger';button.textContent='Confirmar exclusão';dialog.querySelector('.dialog-actions').prepend(button);
+  button.onclick=async()=>{if(button.disabled)return;button.disabled=true;
+    try{assertOperationContext(context);ensureSuccess(await api('/api/empresas/'+encodeURIComponent(id),{method:'DELETE',body:JSON.stringify({_version:item._version||1,confirmacao:dialog.querySelector('input').value})}));assertOperationContext(context);dialog.close();await refreshAll();setText('appMessage','Empresa excluída. Documentos preservados no histórico.');$('appMessage').className='message success';}
+    catch(error){if(dialog.isConnected)dialogMessage(dialog,error.message,'error');else handleAppError(error);button.disabled=false;}
+  };
+}
+async function loadBiometricGallery(dialog,worker,context){
+  const gallery=dialog.querySelector('.bio-gallery');if(!gallery)return;
+  gallery.textContent='Carregando digitais cadastradas…';
+  try{
+    const result=ensureSuccess(await api('/api/trabalhadores/'+encodeURIComponent(worker.id)+'/biometrias'));assertOperationContext(context);if(!dialog.isConnected)return;
+    const items=result.body.items||[];
+    gallery.innerHTML=items.length?items.map(item=>`<article class="bio-card"><div class="bio-card-image">${/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(item.imageDataUrl||'')?`<img src="${escapeHtml(item.imageDataUrl)}" alt="Digital cadastrada: ${escapeHtml(fingerLabel(item.fingerCode))}">`:'<span>Imagem não armazenada<br><small>Recadastre para obter a miniatura</small></span>'}</div><strong>${escapeHtml(fingerLabel(item.fingerCode))}</strong><small>Cadastrada em ${escapeHtml(new Date(item.enrolledAt).toLocaleDateString('pt-BR'))}</small><button type="button" class="btn btn-secondary" data-recapture="${escapeHtml(item.fingerCode)}">Recadastrar</button></article>`).join(''):'<p>Nenhuma digital cadastrada.</p>';
+    gallery.querySelectorAll('[data-recapture]').forEach(button=>button.onclick=()=>{const select=dialog.querySelector('#operationFinger'),capture=dialog.querySelector('#enrollFingerprint');if(select.disabled)return;select.value=button.dataset.recapture;capture.disabled=false;capture.textContent='Cadastrar digital';select.focus();dialogMessage(dialog,'Dedo selecionado. Para salvar a miniatura, use JP Biometria 12.9.1 ou superior (Sistema → Biometria). Clique em Cadastrar digital para fazer uma nova captura.');});
+  }catch(error){if(dialog.isConnected)gallery.textContent=error.message||'Não foi possível carregar as imagens.';}
+}
 function fingerLabel(code){return window.JP_BIOMETRIA.FINGERS.find(x=>x[0]===code)?.[1]||code;}
 function workerBiometrics(id){
   const worker=cache.trabalhadores.find(x=>x.id===id);if(!worker||String(worker.empresaId)!==String(activeEmpresaId))return;
   const dialog=dialogShell(document,'Digitais do trabalhador',worker.nomeCompleto||worker.nome||'Trabalhador');
   renderBiometricDialog(dialog,worker,null);
+  loadBiometricGallery(dialog,worker,operationContext());
 }
 function renderBiometricDialog(dialog,worker,ficha){
   const context=operationContext(),content=dialog.querySelector('.dialog-content'),entries=Object.keys(worker.biometrias||{}),kind=ficha?'verify':'enroll';
   const fingers=ficha?window.JP_BIOMETRIA.FINGERS.filter(x=>entries.includes(x[0])):window.JP_BIOMETRIA.FINGERS;
   const company=cache.empresas.find(x=>String(x.id)===String(activeEmpresaId));
-  content.innerHTML=`<p><strong>${escapeHtml(company?.nome||'Empresa selecionada')}</strong>${ficha?'<br>Ficha: '+escapeHtml(ficha.numero||ficha.id):''}</p><div class="bio-summary">${entries.length?entries.map(code=>'<span>'+escapeHtml(fingerLabel(code))+' cadastrado</span>').join(''):'<span>Nenhuma digital cadastrada</span>'}</div><label for="operationFinger">Dedo utilizado</label><select id="operationFinger">${fingers.map(([code,label])=>`<option value="${code}">${label}</option>`).join('')}</select><p>${ficha?'A digital será comparada com o cadastro deste dedo. A assinatura só será concluída se houver correspondência.':'Selecione o dedo e posicione-o no leitor quando a luz acender. O cadastro ficará vinculado a este trabalhador e à empresa, disponível para as próximas entregas.'}</p>`;
+  content.innerHTML=`<p><strong>${escapeHtml(company?.nome||'Empresa selecionada')}</strong>${ficha?'<br>Ficha: '+escapeHtml(ficha.numero||ficha.id):''}</p>${ficha?'':'<div class="bio-gallery" aria-live="polite"></div>'}<div class="bio-summary">${entries.length?entries.map(code=>'<span>'+escapeHtml(fingerLabel(code))+' cadastrado</span>').join(''):'<span>Nenhuma digital cadastrada</span>'}</div><label for="operationFinger">Dedo utilizado</label><select id="operationFinger">${fingers.map(([code,label])=>`<option value="${code}">${label}</option>`).join('')}</select><p>${ficha?'A digital será comparada com o cadastro deste dedo. A assinatura só será concluída se houver correspondência.':'Selecione o dedo e posicione-o no leitor quando a luz acender. O cadastro ficará vinculado a este trabalhador e à empresa, disponível para as próximas entregas.'}</p>`;
   const button=dialog.ownerDocument.createElement('button');button.type='button';button.className='btn btn-primary';button.id=ficha?'verifyFingerprint':'enrollFingerprint';button.textContent=ficha?'Capturar e assinar':'Cadastrar digital';dialog.querySelector('.dialog-actions').prepend(button);
   if(ficha&&!entries.length){button.disabled=true;content.querySelector('select').disabled=true;dialogMessage(dialog,'Cadastre uma digital em Trabalhadores → Digitais antes de assinar.','error');return;}
+  if(!ficha)content.querySelector('.bio-summary').remove();
   let completedBody=null;
+  if(!ficha)content.querySelector('select').onchange=()=>{if(!completedBody&&!content.querySelector('select').disabled){button.disabled=false;button.textContent='Cadastrar digital';}};
   button.onclick=async()=>{
     if(button.disabled)return;
     const fingerCode=content.querySelector('select').value;
@@ -85,7 +109,7 @@ function renderBiometricDialog(dialog,worker,ficha){
         updatePrintWindow(dialog.ownerDocument.defaultView,item);
         dialog.close();
       }else{
-        await refreshTrabalhadores(false);dialogMessage(dialog,'Digital cadastrada. Ela já pode ser usada nas próximas entregas.','success');
+        await refreshTrabalhadores(false);assertOperationContext(context);await loadBiometricGallery(dialog,worker,context);if(!entries.includes(fingerCode))entries.push(fingerCode);dialogMessage(dialog,'Digital cadastrada. Ela já pode ser usada nas próximas entregas.','success');
         button.textContent='Concluído';button.disabled=true;completedBody=null;
       }
     }catch(error){

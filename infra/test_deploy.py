@@ -175,7 +175,7 @@ def make_project(root):
     binary[152:154] = b"\x0b\x02"
     (root / "frontend/EntregaEPI/assets" / deploy.EXECUTABLE).write_bytes(binary)
     (root / "frontend/EntregaEPI/assets" / deploy.MANIFEST).write_text(json.dumps({
-        "version": "12.9.0", "buildSha": COMMIT, "filename": deploy.EXECUTABLE,
+        "version": "12.9.1", "buildSha": COMMIT, "filename": deploy.EXECUTABLE,
         "sha256": hashlib.sha256(binary).hexdigest(), "sizeBytes": len(binary)}))
     ca = root / "backend/src/data/caepi"
     shard_bytes = gzip.compress(json.dumps({"items": [{"ca": "365", "name": "EPI SINTÉTICO"}]}).encode())

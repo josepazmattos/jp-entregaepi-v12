@@ -65,7 +65,9 @@ export function createBiometricsService(store) {
     const now = new Date().toISOString(), operations = [];
     if (kind === 'enroll') {
       if (proof.enrolled !== true) bad('O leitor não confirmou o cadastro.');
-      operations.push({type:previous?'update':'create',entity:'biometria',id,...(previous?{expectedVersion:previous._version}:{}),data:{empresaId:worker.empresaId,trabalhadorId:worker.id,fingerCode:challenge.fingerCode,template,publicKey,enrolledAt:now,cadastradoPor:actor}});
+      const capture = body.fingerImageDataUrl ? validateCaptureImage(body.fingerImageDataUrl) : null;
+      if (capture && proof.imageHash !== hash(capture.bytes) || !capture && proof.imageHash) bad('A imagem não corresponde ao cadastro capturado.', 'BIOMETRIA_IMAGEM_DIVERGENTE');
+      operations.push({type:previous?'update':'create',entity:'biometria',id,...(previous?{expectedVersion:previous._version}:{}),data:{empresaId:worker.empresaId,trabalhadorId:worker.id,fingerCode:challenge.fingerCode,template,publicKey,imageDataUrl:capture?.dataUrl || "",enrolledAt:now,cadastradoPor:actor}});
       operations.push({type:'update',entity:'trabalhador',id:worker.id,expectedVersion:worker._version || 1,data:{biometrias:{...(worker.biometrias||{}),[challenge.fingerCode]:{id,enrolledAt:now}}}});
     } else {
       if (proof.matched !== true) bad('A digital não corresponde ao cadastro. A ficha continua sem assinatura.', 'BIOMETRIA_DIVERGENTE', 422);
@@ -82,5 +84,13 @@ export function createBiometricsService(store) {
     await store.transact({scope,expectedRevision:revision,mutationId:`biometria:${challenge.id}`,operations});
     return {item:await store.get(kind==='enroll'?'trabalhador':'ficha',kind==='enroll'?worker.id:ficha.id),replayed:false};
   }
-  return {challenge,complete};
+  async function gallery(worker) {
+    const items = await Promise.all(Object.entries(worker.biometrias || {}).filter(([finger]) => fingerValid(finger)).map(async ([fingerCode, meta]) => {
+      const item = await store.get('biometria', enrollmentId(worker, fingerCode));
+      if (!item || item.id !== meta.id || item.empresaId !== worker.empresaId || item.trabalhadorId !== worker.id || item.fingerCode !== fingerCode) return null;
+      return {fingerCode, enrolledAt:item.enrolledAt, imageDataUrl:item.imageDataUrl || ''};
+    }));
+    return items.filter(Boolean);
+  }
+  return {challenge,complete,gallery};
 }

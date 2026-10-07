@@ -61,7 +61,7 @@ final class NitgenReader implements BioReader {
                 textFir=inner(bsp,BSP+"$FIR_TEXTENCODE");invoke(bsp,"GetTextFIRFromHandle",fir,textFir);checkError(bsp,"GetTextFIRFromHandle");
                 String template=(String)field(textFir,"TextFIR");
                 if(template==null||template.length()<40||template.length()>120000)throw new BioFailure("TEMPLATE_INVALID","O SDK não retornou o template biométrico.",422);
-                return JPBiometriaAgent.map("ok",true,"template",template);
+                return JPBiometriaAgent.map("ok",true,"template",template,"fingerImageDataUrl",imageFromExport(data).dataUrl);
             }
             if (purpose.equals("verify")) {
                 textFir=inner(bsp,BSP+"$FIR_TEXTENCODE");textFir.getClass().getField("TextFIR").set(textFir,storedTemplate);

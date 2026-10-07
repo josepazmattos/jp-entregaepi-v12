@@ -8,6 +8,8 @@ import caepiRoutes from './routes/caepi.routes.js';
 import auditoriaRoutes from './routes/auditoria.routes.js';
 import { requireAuth } from './middleware/auth.js';
 import { probeStorage } from './db/store.js';
+import * as storage from './db/store.js';
+import { companyActive } from './middleware/company-active.js';
 import { caepiStatus } from './services/caepi.service.js';
 
 const app = express();
@@ -23,7 +25,7 @@ app.get('/health', async (req, res) => {
   res.status(storage.ready ? 200 : 503).json({
     ok: storage.ready,
     service: 'JP EntregaEPI V12 API',
-    version: process.env.APP_VERSION || '12.9.0',
+    version: process.env.APP_VERSION || '12.9.1',
     buildSha: process.env.BUILD_SHA || null,
     mode: storage.mode,
     durable: storage.durable,
@@ -33,7 +35,7 @@ app.get('/health', async (req, res) => {
 });
 
 app.use('/api/caepi', caepiRoutes);
-app.use('/api', requireAuth);
+app.use('/api', requireAuth, companyActive(storage));
 app.use('/api/empresas', empresasRoutes);
 app.use('/api/trabalhadores', trabalhadoresRoutes);
 app.use('/api/epis', episRoutes);

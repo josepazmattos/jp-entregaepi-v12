@@ -61,7 +61,7 @@ public final class JPBiometriaAgentTest {
     static final class FakeReader implements BioReader {
         final AtomicInteger probes=new AtomicInteger(), captures=new AtomicInteger();
         volatile boolean match=true;
-        public Map<String,Object> enroll(String finger){return JPBiometriaAgent.map("ok",true,"template","SYNTHETIC_TEMPLATE_NOT_REAL_BIOMETRIC_DATA_0123456789");}
+        public Map<String,Object> enroll(String finger){try{return JPBiometriaAgent.map("ok",true,"template","SYNTHETIC_TEMPLATE_NOT_REAL_BIOMETRIC_DATA_0123456789","fingerImageDataUrl",syntheticImage());}catch(Exception e){throw new RuntimeException(e);}}
         public Map<String,Object> verify(String finger,String template)throws BioFailure{
             try{return JPBiometriaAgent.map("ok",true,"matched",match,"fingerImageDataUrl",syntheticImage());}
             catch(Exception e){throw new BioFailure("TEST_IMAGE_FAILED","test",500);}
@@ -128,6 +128,7 @@ public final class JPBiometriaAgentTest {
             check(enrolled.code==200,"enrollment produces signed template evidence");
             Map<String,Object> enrolledBody=Json.object(enrolled.body);
             check(enrolledBody.containsKey("template")&&enrolledBody.containsKey("proofSignature"),"enrollment returns template and proof");
+            check(enrolledBody.containsKey("fingerImageDataUrl") && Json.object((String)enrolledBody.get("proof")).containsKey("imageHash"),"enrollment binds preview image to proof");
             Map<String,Object> verification=JPBiometriaAgent.map("kind","verify","challengeId","verify-challenge","workerId","worker-test","fichaId","ficha-test","fingerCode","R_INDEX","template",enrolledBody.get("template"),"publicKey",enrolledBody.get("publicKey"));
             reader.match=false;
             Response mismatch=request(port,"POST","/api/signature",ORIGIN,Json.encode(verification),null);

@@ -57,6 +57,7 @@ async function selectedWorker(req) {
   if (!worker) throw httpError(404, 'Trabalhador não encontrado.');
   assertRecordAccess(req, worker); return worker;
 }
+router.get('/:id/biometrias', async (req,res) => { const worker=await selectedWorker(req); ok(res,{items:await biometrics.gallery(worker)}); });
 router.patch('/:id', async (req,res) => {
   const worker=await selectedWorker(req);
   ok(res, await importer.editWorker({body:objectBody(req),worker,actor:req.auth.sub}));

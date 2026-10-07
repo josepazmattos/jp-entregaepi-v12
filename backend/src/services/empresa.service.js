@@ -31,6 +31,7 @@ export function createCompanyService({ storage, accounts }) {
   async function company(id) {
     const item = await storage.get('empresa', id);
     if (!item) throw httpError(404, 'Empresa não encontrada.', 'EMPRESA_NAO_ENCONTRADA');
+    if (item.excluidaEm) throw httpError(403, 'Esta empresa foi excluída. O acesso está bloqueado.', 'EMPRESA_EXCLUIDA');
     return item;
   }
   function assertRegistration(item) {
@@ -59,6 +60,7 @@ export function createCompanyService({ storage, accounts }) {
     throw httpError(409, 'O cadastro foi atualizado em outra sessão. Atualize a tela e retome o acesso.', 'REGISTRO_ALTERADO');
   }
   async function provision(item) {
+    if (item.excluidaEm) throw httpError(403, 'Empresa excluída.', 'EMPRESA_EXCLUIDA');
     assertRegistration(item);
     if (item.acessoStatus === 'ativo' && item.cognitoSub) return result(item);
     accounts.assertReady();
@@ -137,5 +139,12 @@ export function createCompanyService({ storage, accounts }) {
     const updated = await storage.update('empresa', id, fields, { expectedVersion: expectedVersion ?? item._version });
     return publicCompany(updated);
   }
-  return { register, resume, edit, company, publicCompany };
+  async function exclude(id, body, actor) {
+    const item = await company(id);
+    if (body.confirmacao !== item.nome) throw httpError(400, 'Digite o nome da empresa para confirmar.', 'EMPRESA_CONFIRMACAO_INVALIDA');
+    if (!Number.isSafeInteger(body._version) || body._version < 1) throw httpError(400, 'Atualize a tela antes de excluir.', 'EMPRESA_VERSAO_INVALIDA');
+    await storage.update('empresa', id, {status:'Excluída', excluidaEm:new Date().toISOString(), excluidaPor:actor}, {expectedVersion:body._version});
+    return {excluida:true, documentosPreservados:true};
+  }
+  return { register, resume, edit, exclude, company, publicCompany };
 }

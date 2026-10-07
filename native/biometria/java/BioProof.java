@@ -26,7 +26,7 @@ final class BioProof {
             String template=kind.equals("enroll")?(String)result.get("template"):(String)request.get("template");
             if(template==null||template.length()<40||template.length()>120000)throw new IllegalArgumentException();
             Map<String,Object> proof=JPBiometriaAgent.map("v",1,"kind",kind,"challengeId",request.get("challengeId"),"workerId",request.get("workerId"),"fichaId",request.get("fichaId"),"fingerCode",request.get("fingerCode"),"templateHash",hash(template.getBytes(StandardCharsets.UTF_8)));
-            if(kind.equals("enroll"))proof.put("enrolled",true);
+            if(kind.equals("enroll")){proof.put("enrolled",true);String image=(String)result.get("fingerImageDataUrl");proof.put("imageHash",hash(Base64.getDecoder().decode(image.substring(image.indexOf(',')+1))));}
             else {
                 if(!Boolean.TRUE.equals(result.get("matched")))throw new BioFailure("BIOMETRIA_DIVERGENTE","A digital não corresponde ao cadastro. A ficha continua sem assinatura.",422);
                 String image=(String)result.get("fingerImageDataUrl");
@@ -34,7 +34,7 @@ final class BioProof {
             }
             String payload=Json.encode(proof);Signature signature=Signature.getInstance("SHA256withECDSA");signature.initSign(key.getPrivate());signature.update(payload.getBytes(StandardCharsets.UTF_8));
             Map<String,Object> out=JPBiometriaAgent.map("ok",true,"proof",payload,"proofSignature",Base64.getEncoder().encodeToString(signature.sign()),"publicKey",publicKey());
-            if(kind.equals("enroll"))out.put("template",template);
+            if(kind.equals("enroll")){out.put("template",template);out.put("fingerImageDataUrl",result.get("fingerImageDataUrl"));}
             else {out.put("fingerImageDataUrl",result.get("fingerImageDataUrl"));out.put("matched",true);out.put("realFingerImage",true);}
             return out;
         } catch(BioFailure e){throw e;}catch(Exception e){throw new BioFailure("BIOMETRIC_PROOF_FAILED","Não foi possível confirmar a operação biométrica.",503);}

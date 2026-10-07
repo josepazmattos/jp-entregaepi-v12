@@ -13,7 +13,7 @@ export function createEmpresasRouter({ storage = defaultStorage, accounts = comp
     const items = req.auth.master
       ? await storage.list('empresa')
       : (await Promise.all(req.auth.empresaIds.map(id => storage.get('empresa', id)))).filter(Boolean);
-    ok(res, { items: items.map(publicCompany) });
+    ok(res, { items: items.filter(item => !item.excluidaEm).map(publicCompany) });
   });
 
   router.get('/:id', async (req, res) => {
@@ -39,6 +39,7 @@ export function createEmpresasRouter({ storage = defaultStorage, accounts = comp
     if (body._version != null && (!Number.isSafeInteger(body._version) || body._version < 1)) throw httpError(400, 'A versão do cadastro é inválida. Atualize a tela.', 'EMPRESA_VERSAO_INVALIDA');
     ok(res, { item: await service.edit(req.params.id, body, { expectedVersion: body._version }) });
   });
+  router.delete('/:id', requireMaster, async (req,res) => { ok(res, await service.exclude(req.params.id, objectBody(req), req.auth.sub)); });
   return router;
 }
 
