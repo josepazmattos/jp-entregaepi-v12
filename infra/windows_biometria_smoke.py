@@ -274,6 +274,25 @@ class WindowsSmoke:
                 require(time.monotonic() < deadline, "INSTALLER_TIMEOUT",
                         "O inicializador não terminou em 90 segundos. Nenhum processo foi encerrado à força.")
         require(len(output) <= MAX_JSON, "INSTALLER_OUTPUT_INVALID", "A saída do instalador excedeu o contrato de diagnóstico.")
+        if process.returncode != 0:
+            # Classify only fixed launcher messages; never persist paths or raw output.
+            try:
+                message = str(json.loads(output).get("message", ""))
+            except (ValueError, UnicodeError, AttributeError):
+                message = ""
+            categories = {
+                "Não foi possível gravar o agente Java": "JAVA_AGENT_FILE_UPDATE",
+                "Não foi possível atualizar o inicializador": "LAUNCHER_FILE_UPDATE",
+                "O agente não aceitou a parada segura": "SAFE_STOP_REJECTED",
+                "O agente não concluiu a parada": "SAFE_STOP_TIMEOUT",
+                "O agente encerrou antes": "AGENT_EARLY_EXIT",
+                "O agente não confirmou a inicialização": "AGENT_START_TIMEOUT",
+                "O processo do agente não iniciou": "AGENT_PROCESS_FAILED",
+                "Não foi possível proteger": "DIRECTORY_PROTECTION_FAILED",
+                "Não foi possível registrar": "REGISTRATION_FAILED",
+            }
+            self.report["installerFailureKind"] = next((code for prefix, code in categories.items() if prefix in message), "UNCLASSIFIED")
+            print("Installer failure category: " + self.report["installerFailureKind"])
         require(process.returncode == 0, "INSTALLER_FAILED", "O executável Windows retornou falha ao instalar ou iniciar a ponte.")
         if not quiet:
             return None
@@ -317,6 +336,21 @@ class WindowsSmoke:
             require(time.monotonic() < deadline, "SDK_DIAGNOSTIC_TIMEOUT", "O diagnóstico de SDK ausente não terminou no prazo.")
             time.sleep(0.2)
         capabilities = result.get("capabilities")
+        allowed_codes = {"SDK_NOT_FOUND", "SDK_DLL_NOT_FOUND", "SDK_ARCH_MISMATCH", "SDK_LOAD_FAILED", "SDK_STATUS_FAILED", "JAVA_NOT_FOUND", "JAVA_ARCH_MISMATCH", "READER_NOT_FOUND", "WINDOWS_REQUIRED", "INITIALIZING"}
+        observed = {
+            "javaService": result.get("service") == "JP Biometria Local Java",
+            "expectedAgent": result.get("agent") == "JPBiometria",
+            "diagnosticOnly": result.get("runtime") == "diagnostic-only",
+            "errorCode": result.get("errorCode") if result.get("errorCode") in allowed_codes else "UNEXPECTED",
+            "busy": result.get("busy") is True,
+            "checking": result.get("checking") is True,
+            "capture": capabilities.get("capture") is True if isinstance(capabilities, dict) else False,
+            "captureContract": isinstance(capabilities, dict) and capabilities.get("captureMethod") == "POST" and capabilities.get("capturePath") == "/api/capture",
+            "templatesDisabled": isinstance(capabilities, dict) and capabilities.get("templates") is False,
+            "verifyDisabled": isinstance(capabilities, dict) and capabilities.get("verify") is False,
+        }
+        self.report["observedSDKStatus"] = observed
+        print("SDK status contract: " + json.dumps(observed, sort_keys=True))
         require(result.get("service") == "JP Biometria Local Java" and result.get("agent") == "JPBiometria"
                 and result.get("runtime") != "diagnostic-only" and result.get("errorCode") == "SDK_NOT_FOUND"
                 and result.get("busy") is False and isinstance(capabilities, dict)
@@ -405,7 +439,7 @@ class WindowsSmoke:
         deadline = time.monotonic() + 12
         while True:
             code, result = self.control.json(refreshed["port"], "/status")
-            if result.get("errorCode") != "SDK_CHECKING":
+            if result.get("checking") is False and result.get("errorCode") != "INITIALIZING":
                 break
             require(time.monotonic() < deadline, "SDK_REFRESH_TIMEOUT", "A nova verificação não concluiu.")
             time.sleep(0.1)
