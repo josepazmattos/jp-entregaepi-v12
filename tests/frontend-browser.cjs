@@ -18,13 +18,15 @@ const requests=[];
 const pageErrors=[];
 const printEvents=[];
 const printListeners=new Set();
-results.printEvents=printEvents;
+const imageRequests=[],imageResponses=[],failedRequests=[],consoleMessages=[],serverRequests=[];
+Object.assign(results,{printEvents,imageRequests,imageResponses,failedRequests,consoleMessages,serverRequests});
 let apiFailure=0;
 let browser;
 let page;
 const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
 const idToken=`${encode({alg:'RS256',typ:'JWT'})}.${encode({sub:'USUARIO-SINTETICO','cognito:username':'USUARIO-TESTE','cognito:groups':['MASTER'],exp:4102444800})}.ASSINATURA_DE_TOKEN_SINTETICA`;
 const server=http.createServer((req,res)=>{
+  serverRequests.push({url:req.url,method:req.method});
   const relative=decodeURIComponent(new URL(req.url,'http://localhost').pathname).replace(/^\/EntregaEPI\/?/,'');
   const file=path.resolve(frontend,relative||'index.html');
   if(!file.startsWith(frontend+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end('Não encontrado');return;}
@@ -37,6 +39,10 @@ const server=http.createServer((req,res)=>{
 
 function passed(name){results.checks.push({name,passed:true});console.log(`PASSOU: ${name}`);}
 function pdfPages(file){const matches=fs.readFileSync(file).toString('latin1').match(/\/Type\s*\/Page\b/g);return matches?.length||0;}
+function diagnosticWithTimeout(promise,milliseconds){
+  let timer;
+  return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Tempo limite ao gerar evidência visual.')),milliseconds)})]).finally(()=>clearTimeout(timer));
+}
 
 function waitForPrintCall(afterIndex){
   const recorded=printEvents.slice(afterIndex).find(event=>event.kind==='print_called');
@@ -56,19 +62,11 @@ async function printAndInspect(context,record,prefix,{expectedPages=1}={}){
   const popupPromise=context.waitForEvent('page');
   await page.locator(`button[data-ficha-id="${record.id}"]`).click();
   const popup=await popupPromise;
-  await popup.waitForSelector('.docx-epi-table');
-  await popup.waitForFunction(()=>Array.from(document.images).every(img=>img.complete&&img.naturalWidth>0));
   try{
+    await popup.waitForSelector('.docx-epi-table');
+    await popup.waitForFunction(()=>Array.from(document.images).every(img=>img.complete&&img.naturalWidth>0),null,{timeout:10000});
     const invocation=await waitForPrintCall(printStart);
     assert.equal(invocation.title,await popup.title(),'window.print pertence à ficha aberta');
-  }catch(error){
-    // Mesmo uma falha na instrumentação deixa evidência visual para diagnóstico.
-    results.printFailure=await popup.evaluate(()=>({readyState:document.readyState,fontStatus:document.fonts?.status,printFunction:String(window.print).slice(0,200)})).catch(()=>({}));
-    await popup.emulateMedia({media:'print'});
-    await popup.pdf({path:path.join(output,`${prefix}-falha.pdf`),format:'A4',preferCSSPageSize:true,printBackground:true,displayHeaderFooter:false}).catch(()=>{});
-    await popup.screenshot({path:path.join(output,`${prefix}-falha.png`),fullPage:true}).catch(()=>{});
-    throw error;
-  }
   const geometry=await popup.evaluate(()=>{
     const metadata=document.querySelector('.docx-meta').getBoundingClientRect();
     const term=document.querySelector('.docx-term-title').getBoundingClientRect();
@@ -100,6 +98,31 @@ async function printAndInspect(context,record,prefix,{expectedPages=1}={}){
   const bodyText=await popup.locator('body').innerText();
   await popup.close();
   return bodyText;
+  }catch(error){
+    // Captura evidência para qualquer falha após abrir a ficha, incluindo imagens.
+    results.printFailure=await popup.evaluate(async()=>{
+      const describeSource=value=>value&&value.length>220?value.slice(0,160)+`... (${value.length} caracteres)`:value;
+      return {url:document.URL,baseURI:document.baseURI,origin:window.origin,readyState:document.readyState,visibilityState:document.visibilityState,fontStatus:document.fonts?.status,printFunction:String(window.print).slice(0,200),
+        images:await Promise.all(Array.from(document.images).map(async(img,index)=>{
+          const decode=await Promise.race([img.decode().then(()=>({ok:true}),error=>({ok:false,error:error.message})),new Promise(resolve=>setTimeout(()=>resolve({pending:true}),1000))]);
+          return {index,src:describeSource(img.getAttribute('src')),currentSrc:describeSource(img.currentSrc),complete:img.complete,naturalWidth:img.naturalWidth,naturalHeight:img.naturalHeight,decode};
+        }))};
+    }).catch(()=>({}));
+    await popup.emulateMedia({media:'print'}).catch(()=>{});
+    await diagnosticWithTimeout(popup.pdf({path:path.join(output,`${prefix}-falha.pdf`),format:'A4',preferCSSPageSize:true,printBackground:true,displayHeaderFooter:false}),10000).catch(pdfError=>{results.diagnosticPdfError=pdfError.message});
+    try{
+      await popup.screenshot({path:path.join(output,`${prefix}-falha.png`),fullPage:true,timeout:10000});
+    }catch(screenshotError){
+      results.diagnosticScreenshotError=screenshotError.message;
+      const session=await context.newCDPSession(popup).catch(()=>null);
+      if(session){
+        const capture=await session.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true}).catch(()=>null);
+        if(capture)fs.writeFileSync(path.join(output,`${prefix}-falha.png`),Buffer.from(capture.data,'base64'));
+        await session.detach();
+      }
+    }
+    throw error;
+  }
 }
 
 async function main(){
@@ -109,6 +132,14 @@ async function main(){
   results.browser=await browser.version();
   const context=await browser.newContext({viewport:{width:1365,height:1000},locale:'pt-BR',timezoneId:'America/Campo_Grande'});
   context.on('page',newPage=>newPage.on('pageerror',error=>pageErrors.push(error.message)));
+  context.on('console',message=>{if(['error','warning'].includes(message.type()))consoleMessages.push({type:message.type(),text:message.text(),location:message.location()})});
+  context.on('request',request=>{
+    if(request.resourceType()!=='image')return;
+    const headers=request.headers();
+    imageRequests.push({url:request.url(),referer:headers.referer||'',origin:headers.origin||'',fetchSite:headers['sec-fetch-site']||''});
+  });
+  context.on('response',response=>{if(response.request().resourceType()==='image')imageResponses.push({url:response.url(),status:response.status(),contentType:response.headers()['content-type']||''})});
+  context.on('requestfailed',request=>failedRequests.push({url:request.url(),resourceType:request.resourceType(),failure:request.failure()}));
   await context.exposeBinding('__jpPrintObserved',(_source,event)=>{
     printEvents.push(event);
     for(const listener of printListeners)listener(event);
@@ -139,7 +170,9 @@ async function main(){
       return popup;
     };
   });
-  await context.route('**/*',async route=>{
+  // Recursos locais são servidos por HTTP, sem interceptação; todas as externas continuam simuladas ou bloqueadas.
+  results.localAssetsIntercepted=false;
+  await context.route(url=>url.origin!==origin,async route=>{
     const request=route.request(),url=new URL(request.url());
     if(url.origin===origin){await route.continue();return;}
     const json=async(status,body)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
