@@ -318,11 +318,65 @@ class DeploymentTests(unittest.TestCase):
         cli = deploy.AwsCli(self.operation.private)
         response = subprocess.CompletedProcess([], 1, stdout="PRIVATE_RESPONSE", stderr=
             "An error occurred (AccessDeniedException) when calling the UpdateFunctionConfiguration operation: PRIVATE_REQUEST")
-        with patch.object(deploy.subprocess, "run", return_value=response):
+        with patch.object(deploy.subprocess, "run", return_value=response) as run:
             with self.assertRaises(deploy.AwsError) as raised:
                 cli.call("lambda", "update-function-configuration", {"Environment": {"Variables": {"VALUE": "PRIVATE_VALUE"}}})
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("--cli-error-format") + 1], "legacy")
+        self.assertIn("--cli-input-json", command)
+        self.assertNotIn("PRIVATE_VALUE", " ".join(command))
         self.assertNotIn("PRIVATE", str(raised.exception))
         self.assertIn("AccessDeniedException", str(raised.exception))
+        self.assertFalse(list(cli.request_dir.iterdir()))
+
+    def test_streaming_get_object_uses_explicit_flags_and_outfile_last(self):
+        cli = deploy.AwsCli(self.operation.private)
+        self.operation.aws = cli
+        destination = self.operation.private / "frontend-before" / "streaming.bin"
+        expected_body = b"FRONTEND-ANTERIOR-SINTETICO"
+
+        def download(command, **kwargs):
+            self.assertEqual(command[:3], ["aws", "s3api", "get-object"])
+            self.assertNotIn("--cli-input-json", command)
+            self.assertEqual(command[-1], str(destination))
+            for flag, value in (("--bucket", deploy.BUCKET),
+                                ("--key", "EntregaEPI/assets/app.js"),
+                                ("--expected-bucket-owner", deploy.ACCOUNT),
+                                ("--cli-error-format", "legacy")):
+                self.assertEqual(command[command.index(flag) + 1], value)
+            self.assertTrue(kwargs["capture_output"])
+            destination.write_bytes(expected_body)
+            return subprocess.CompletedProcess(command, 0,
+                stdout=json.dumps({"ETag": '"synthetic-etag"', "ContentType": "text/javascript"}), stderr="")
+
+        with patch.object(deploy.subprocess, "run", side_effect=download):
+            metadata = self.operation.get_object("EntregaEPI/assets/app.js", destination)
+        self.assertEqual(metadata["ETag"], '"synthetic-etag"')
+        self.assertEqual(destination.read_bytes(), expected_body)
+        self.assertEqual(destination.stat().st_mode & 0o777, 0o600)
+        self.assertFalse(list(cli.request_dir.iterdir()))
+
+    def test_streaming_missing_object_is_classified_without_exposing_error_details(self):
+        self.operation.aws = deploy.AwsCli(self.operation.private)
+        destination = self.operation.private / "missing-object.bin"
+        destination.write_bytes(b"ARQUIVO-PARCIAL-SINTETICO")
+        response = subprocess.CompletedProcess([], 254, stdout="PRIVATE_RESPONSE", stderr=
+            "An error occurred (NoSuchKey) when calling the GetObject operation: PRIVATE_REQUEST")
+        with patch.object(deploy.subprocess, "run", return_value=response) as run:
+            self.assertIsNone(self.operation.get_object("EntregaEPI/assets/new.js", destination))
+        command = run.call_args.args[0]
+        self.assertEqual(command[command.index("--cli-error-format") + 1], "legacy")
+        self.assertNotIn("--cli-input-json", command)
+        self.assertFalse(destination.exists())
+
+    def test_streaming_request_rejects_extra_parameters_before_starting_cli(self):
+        cli = deploy.AwsCli(self.operation.private)
+        parameters = {"Bucket": deploy.BUCKET, "Key": "EntregaEPI/assets/app.js",
+                      "ExpectedBucketOwner": deploy.ACCOUNT, "Unexpected": "PRIVATE_VALUE"}
+        with patch.object(deploy.subprocess, "run") as run:
+            with self.assertRaisesRegex(deploy.DeployError, "Parâmetros inesperados"):
+                cli.call("s3api", "get-object", parameters, extra=[self.operation.private / "output.bin"])
+        run.assert_not_called()
         self.assertFalse(list(cli.request_dir.iterdir()))
 
 

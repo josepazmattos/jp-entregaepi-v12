@@ -114,7 +114,6 @@ jobs:
           role-to-assume: arn:aws:iam::003020057405:role/jp-entregaepi-v12-github-actions-role
           role-session-name: entregaepi-${{ github.run_id }}-${{ github.run_attempt }}
           aws-region: sa-east-1
-          allowed-account-ids: "003020057405"
           role-duration-seconds: 3600
           retry-max-attempts: 3
       - name: Publicar com backup e restauração automática

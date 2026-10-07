@@ -120,19 +120,34 @@ class AwsCli:
              extra: tuple | list = ()) -> dict:
         if operation not in ALLOWED_AWS.get(service, set()):
             raise DeployError("Operação AWS fora do escopo da implantação.")
+        params = params or {}
         self.counter += 1
-        request_file = self.request_dir / f"{self.counter:05d}.json"
-        save_json(request_file, params or {})
+        request_file = None
         command = ["aws", service, operation, "--region", REGION, "--output", "json",
-                   "--no-cli-pager", "--no-cli-auto-prompt", "--cli-input-json",
-                   f"file://{request_file}", *map(str, extra)]
+                   "--no-cli-pager", "--no-cli-auto-prompt", "--cli-error-format", "legacy"]
+        if (service, operation) == ("s3api", "get-object"):
+            # Streaming output disables --cli-input-json in AWS CLI. Keep the
+            # three public request values explicit and the output filename last.
+            flags = {"Bucket": "--bucket", "Key": "--key",
+                     "ExpectedBucketOwner": "--expected-bucket-owner"}
+            if set(params) != set(flags) or len(extra) != 1 or any(
+                    not isinstance(value, str) or not value for value in params.values()):
+                raise DeployError("Parâmetros inesperados no download de backup S3.")
+            for name, flag in flags.items():
+                command.extend((flag, params[name]))
+            command.append(str(extra[0]))
+        else:
+            request_file = self.request_dir / f"{self.counter:05d}.json"
+            save_json(request_file, params)
+            command.extend(("--cli-input-json", f"file://{request_file}", *map(str, extra)))
         try:
             answer = subprocess.run(command, capture_output=True, text=True, timeout=180,
                                     env={**os.environ, "AWS_PAGER": "", "AWS_CLI_AUTO_PROMPT": "off"})
         except (OSError, subprocess.TimeoutExpired) as error:
             raise AwsError(service, operation, type(error).__name__) from None
         finally:
-            request_file.unlink(missing_ok=True)
+            if request_file is not None:
+                request_file.unlink(missing_ok=True)
         if answer.returncode:
             match = re.search(r"\(([A-Za-z0-9_.-]+)\) when calling", answer.stderr)
             code = match.group(1) if match else "CLI_FAILED"
