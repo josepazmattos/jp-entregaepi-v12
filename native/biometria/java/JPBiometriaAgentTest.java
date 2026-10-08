@@ -127,6 +127,9 @@ public final class JPBiometriaAgentTest {
             Response enrolled=request(port,"POST","/api/enroll",ORIGIN,Json.encode(enrollment),null);
             check(enrolled.code==200,"enrollment produces signed template evidence");
             Map<String,Object> enrolledBody=Json.object(enrolled.body);
+            int probesAfterEnroll=reader.probes.get();
+            Response fresh=request(port,"GET","/status",ORIGIN,null,null);
+            check(fresh.code==200&&fresh.body.contains("\"checking\":false")&&reader.probes.get()==probesAfterEnroll,"successful enrollment does not reopen SDK on immediate status query");
             check(enrolledBody.containsKey("template")&&enrolledBody.containsKey("proofSignature"),"enrollment returns template and proof");
             check(enrolledBody.containsKey("fingerImageDataUrl") && Json.object((String)enrolledBody.get("proof")).containsKey("imageHash"),"enrollment binds preview image to proof");
             Map<String,Object> verification=JPBiometriaAgent.map("kind","verify","challengeId","verify-challenge","workerId","worker-test","fichaId","ficha-test","fingerCode","R_INDEX","template",enrolledBody.get("template"),"publicKey",enrolledBody.get("publicKey"));

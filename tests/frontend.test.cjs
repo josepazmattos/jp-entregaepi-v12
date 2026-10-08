@@ -160,7 +160,7 @@ function appHarness(route){
     fetch:async(url,options={})=>{requests.push({url,options});const answer=await route(url,options);return {status:answer.status||200,ok:(answer.status||200)<400,text:async()=>JSON.stringify(answer.body),json:async()=>answer.body}}
   });
   context.window=context;
-  context.JP_CONFIG={apiBaseUrl:'https://api.example.test',version:'12.9.2'};
+  context.JP_CONFIG={apiBaseUrl:'https://api.example.test',version:'12.9.3'};
   vm.runInContext(moduleSource,context);
   vm.runInContext(biometricSource,context);
   vm.runInContext(appSource,context);
@@ -346,7 +346,7 @@ test('resumo da configuração usa versão, empresa e perfil da sessão carregad
   app.context.JP_CONFIG.ambiente='producao';
   app.context.sessionStorage.setItem('jp-v12-auth',JSON.stringify({idToken:'TEST_ID_TOKEN',expiresAt:Date.now()+60000,payload:{'cognito:groups':['MASTER']}}));
   await app.run('refreshAll()');
-  assert.equal(app.elements.configVersion.textContent,'12.9.2');
+  assert.equal(app.elements.configVersion.textContent,'12.9.3');
   assert.equal(app.elements.configEnvironment.textContent,'Produção');
   assert.equal(app.elements.configCompany.textContent,company.nome);
   assert.equal(app.elements.configProfile.textContent,'Master');
@@ -357,7 +357,7 @@ test('resumo da configuração usa versão, empresa e perfil da sessão carregad
 
 test('diagnóstico da API só apresenta operação pronta quando a persistência está confirmada',async()=>{
   let durable=false;
-  const app=appHarness(()=>({body:{ok:true,version:'12.9.2',storageReady:true,durable}}));
+  const app=appHarness(()=>({body:{ok:true,version:'12.9.3',storageReady:true,durable}}));
   await app.run('testHealth()');
   assert.equal(app.elements.apiStatusBadge.dataset.state,'warning');
   assert.equal(app.elements.healthTestButton.disabled,false);
@@ -376,7 +376,7 @@ test('resumo técnico de CA identifica a cópia oficial e a necessidade de confe
 });
 
 test('agente reconhecido informa leitor conectado sem afirmar identidade biométrica',async()=>{
-  const app=appHarness(()=>({body:{ok:true,service:'JP Biometria Local Java',version:'12.9.2',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture',verify:true,templates:true},sdk:true,reader:true,deviceCount:1,deviceName:'NITGEN HFDU06'}}));
+  const app=appHarness(()=>({body:{ok:true,service:'JP Biometria Local Java',version:'12.9.3',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture',verify:true,templates:true},sdk:true,reader:true,deviceCount:1,deviceName:'NITGEN HFDU06'}}));
   await app.run('testBiometriaLocal()');
   assert.equal(app.elements.bioStatusBadge.textContent,'Leitor conectado');
   assert.equal(app.elements.bioStatusBadge.dataset.state,'success');
@@ -641,10 +641,10 @@ test('prévia e sincronização preservam matrícula alfanumérica longa integra
 
 require('./biometria.test.cjs');
 
-test('diagnóstico12.9.2 sem Java ou SDK mostra o motivo seguro sem pedir atualização da versão',async()=>{
+test('diagnóstico12.9.3 sem Java ou SDK mostra o motivo seguro sem pedir atualização da versão',async()=>{
   const expected={JAVA_NOT_FOUND:/Java não localizado/,JAVA_ARCH_MISMATCH:/Java e SDK com arquiteturas diferentes/,SDK_NOT_FOUND:/SDK NITGEN não localizado/,SDK_DLL_NOT_FOUND:/Bibliotecas do SDK NITGEN ausentes/,SDK_ARCH_MISMATCH:/Bibliotecas NITGEN incompatíveis entre si/};
   for(const [errorCode,title] of Object.entries(expected)){
-    const app=appHarness(()=>({body:{ok:false,service:'JP Biometria Local',version:'12.9.2',runtime:'diagnostic-only',sdk:false,reader:false,deviceCount:0,capabilities:{capture:false,captureMethod:'POST',capturePath:'/api/capture'},errorCode,message:'TEMPLATE-PRIVADO-NÃO-EXIBIR'}}));
+    const app=appHarness(()=>({body:{ok:false,service:'JP Biometria Local',version:'12.9.3',runtime:'diagnostic-only',sdk:false,reader:false,deviceCount:0,capabilities:{capture:false,captureMethod:'POST',capturePath:'/api/capture'},errorCode,message:'TEMPLATE-PRIVADO-NÃO-EXIBIR'}}));
     await app.run('testBiometriaLocal()');assert.equal(app.elements.bioStatusBadge.dataset.state,'warning');assert.equal(app.elements.bioStatusBadge.textContent,'Requer atenção');assert.match(app.elements.bioStatusTitle.textContent,title);assert.ok(!app.elements.bioStatusText.textContent.includes('precisa ser atualizado'));assert.ok(!app.elements.bioStatusText.textContent.includes('PRIVADO'));assert.ok(app.elements.bioOutput.textContent.includes(errorCode));assert.equal(app.elements.bioRegisterButton.disabled,true);
   }
 });

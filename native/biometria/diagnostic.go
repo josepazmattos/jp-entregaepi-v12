@@ -177,7 +177,7 @@ func (d *diagnosticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		d.headers(w, r)
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, "<!doctype html><html lang='pt-BR'><meta charset='utf-8'><meta name='viewport' content='width=device-width'><title>JP Biometria</title><style>body{font:16px system-ui;max-width:760px;margin:40px auto;padding:20px}</style><h1>JP Biometria 12.9.2</h1><p>"+runtimeMessages[d.problem]+"</p><p>Esta ponte de diagnóstico está disponível, mas a captura ainda não pode ser iniciada.</p></html>")
+		fmt.Fprint(w, "<!doctype html><html lang='pt-BR'><meta charset='utf-8'><meta name='viewport' content='width=device-width'><title>JP Biometria</title><style>body{font:16px system-ui;max-width:760px;margin:40px auto;padding:20px}</style><h1>JP Biometria 12.9.3</h1><p>"+runtimeMessages[d.problem]+"</p><p>Esta ponte de diagnóstico está disponível, mas a captura ainda não pode ser iniciada.</p></html>")
 		return
 	}
 	if r.Method != "POST" {

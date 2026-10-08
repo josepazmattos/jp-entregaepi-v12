@@ -51,7 +51,8 @@ export function createBiometricsService(store) {
     const proofHash = hash(JSON.stringify([body.proof,body.proofSignature]));
     if (challenge.used) {
       if (challenge.proofHash !== proofHash) bad('Esta captura já foi utilizada.', 'BIOMETRIA_REUTILIZADA', 409);
-      return { item: kind === 'verify' ? await store.get('ficha', ficha.id) : await store.get('trabalhador',worker.id), replayed: true };
+      const saved=kind==='enroll'?await store.get('biometria',enrollmentId(worker,challenge.fingerCode)):null;
+      return {...(saved?{biometria:{fingerCode:saved.fingerCode,enrolledAt:saved.enrolledAt,imageDataUrl:saved.imageDataUrl||''}}:{}), item: kind === 'verify' ? await store.get('ficha', ficha.id) : await store.get('trabalhador',worker.id), replayed: true };
     }
     if (challenge.expiresAtEpoch*1000 <= Date.now()) bad('A tentativa expirou. Capture novamente.', 'BIOMETRIA_EXPIRADA', 410);
     if ((worker._version || 1) !== challenge.workerVersion || ficha && ((ficha._version || 1) !== challenge.fichaVersion || !signaturePending(ficha))) bad('O cadastro ou a ficha mudou durante a captura. Atualize e tente novamente.', 'REGISTRO_ALTERADO', 409);
@@ -62,10 +63,12 @@ export function createBiometricsService(store) {
     const proof = readProof(body, challenge, publicKey);
     const template = kind === 'enroll' ? templateText(body.template) : previous.template;
     if (proof.templateHash !== hash(template)) bad('O template não corresponde ao cadastro selecionado.', 'BIOMETRIA_TEMPLATE_DIVERGENTE');
-    const now = new Date().toISOString(), operations = [];
+    const now = new Date().toISOString(), operations = [];let savedBiometric;
     if (kind === 'enroll') {
       if (proof.enrolled !== true) bad('O leitor não confirmou o cadastro.');
-      const capture = body.fingerImageDataUrl ? validateCaptureImage(body.fingerImageDataUrl) : null;
+      if(!body.fingerImageDataUrl)bad('O componente não enviou a imagem da digital. Atualize o JP Biometria e capture novamente. O cadastro anterior foi preservado.', 'BIOMETRIA_IMAGEM_OBRIGATORIA', 428);
+      const capture = validateCaptureImage(body.fingerImageDataUrl);
+      savedBiometric={fingerCode:challenge.fingerCode,enrolledAt:now,imageDataUrl:capture.dataUrl};
       if (capture && proof.imageHash !== hash(capture.bytes) || !capture && proof.imageHash) bad('A imagem não corresponde ao cadastro capturado.', 'BIOMETRIA_IMAGEM_DIVERGENTE');
       operations.push({type:previous?'update':'create',entity:'biometria',id,...(previous?{expectedVersion:previous._version}:{}),data:{empresaId:worker.empresaId,trabalhadorId:worker.id,fingerCode:challenge.fingerCode,template,publicKey,imageDataUrl:capture?.dataUrl || "",enrolledAt:now,cadastradoPor:actor}});
       operations.push({type:'update',entity:'trabalhador',id:worker.id,expectedVersion:worker._version || 1,data:{biometrias:{...(worker.biometrias||{}),[challenge.fingerCode]:{id,enrolledAt:now}}}});
@@ -82,7 +85,7 @@ export function createBiometricsService(store) {
     operations.push({type:'update',entity:'biometria_desafio',id:challenge.id,expectedVersion:challenge._version,data:{used:true,proofHash}});
     const scope=workerScope(worker.empresaId), revision=await store.readScope(scope);
     await store.transact({scope,expectedRevision:revision,mutationId:`biometria:${challenge.id}`,operations});
-    return {item:await store.get(kind==='enroll'?'trabalhador':'ficha',kind==='enroll'?worker.id:ficha.id),replayed:false};
+    return {item:await store.get(kind==='enroll'?'trabalhador':'ficha',kind==='enroll'?worker.id:ficha.id),replayed:false,...(savedBiometric?{biometria:savedBiometric}:{})};
   }
   async function gallery(worker) {
     const items = await Promise.all(Object.entries(worker.biometrias || {}).filter(([finger]) => fingerValid(finger)).map(async ([fingerCode, meta]) => {

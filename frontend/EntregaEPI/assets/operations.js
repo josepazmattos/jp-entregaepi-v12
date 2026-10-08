@@ -52,15 +52,19 @@ function deleteCompany(id){
     catch(error){if(dialog.isConnected)dialogMessage(dialog,error.message,'error');else handleAppError(error);button.disabled=false;}
   };
 }
+function renderBiometricGallery(dialog,items){
+  const gallery=dialog.querySelector('.bio-gallery');if(!gallery)return;dialog.biometricGalleryItems=items;
+    gallery.innerHTML=items.length?items.map(item=>`<article class="bio-card"><div class="bio-card-image">${/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(item.imageDataUrl||'')?`<img src="${escapeHtml(item.imageDataUrl)}" alt="Digital cadastrada: ${escapeHtml(fingerLabel(item.fingerCode))}">`:'<span>Imagem não armazenada<br><small>Recadastre para obter a miniatura</small></span>'}</div><strong>${escapeHtml(fingerLabel(item.fingerCode))}</strong><small>Cadastrada em ${escapeHtml(new Date(item.enrolledAt).toLocaleDateString('pt-BR'))}</small><button type="button" class="btn btn-secondary" data-recapture="${escapeHtml(item.fingerCode)}">Recadastrar</button></article>`).join(''):'<p>Nenhuma digital cadastrada.</p>';
+    gallery.querySelectorAll('[data-recapture]').forEach(button=>button.onclick=()=>{const select=dialog.querySelector('#operationFinger'),capture=dialog.querySelector('#enrollFingerprint');if(select.disabled)return;select.value=button.dataset.recapture;capture.disabled=false;capture.click();});
+}
 async function loadBiometricGallery(dialog,worker,context){
   const gallery=dialog.querySelector('.bio-gallery');if(!gallery)return;
   gallery.textContent='Carregando digitais cadastradas…';
   try{
     const result=ensureSuccess(await api('/api/trabalhadores/'+encodeURIComponent(worker.id)+'/biometrias'));assertOperationContext(context);if(!dialog.isConnected)return;
     const items=result.body.items||[];
-    gallery.innerHTML=items.length?items.map(item=>`<article class="bio-card"><div class="bio-card-image">${/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(item.imageDataUrl||'')?`<img src="${escapeHtml(item.imageDataUrl)}" alt="Digital cadastrada: ${escapeHtml(fingerLabel(item.fingerCode))}">`:'<span>Imagem não armazenada<br><small>Recadastre para obter a miniatura</small></span>'}</div><strong>${escapeHtml(fingerLabel(item.fingerCode))}</strong><small>Cadastrada em ${escapeHtml(new Date(item.enrolledAt).toLocaleDateString('pt-BR'))}</small><button type="button" class="btn btn-secondary" data-recapture="${escapeHtml(item.fingerCode)}">Recadastrar</button></article>`).join(''):'<p>Nenhuma digital cadastrada.</p>';
-    gallery.querySelectorAll('[data-recapture]').forEach(button=>button.onclick=()=>{const select=dialog.querySelector('#operationFinger'),capture=dialog.querySelector('#enrollFingerprint');if(select.disabled)return;select.value=button.dataset.recapture;capture.disabled=false;capture.textContent='Cadastrar digital';select.focus();dialogMessage(dialog,'Dedo selecionado. Para salvar a miniatura, use JP Biometria 12.9.2 ou superior (Sistema → Biometria). Clique em Cadastrar digital para fazer uma nova captura.');});
-  }catch(error){if(dialog.isConnected)gallery.textContent=error.message||'Não foi possível carregar as imagens.';}
+    renderBiometricGallery(dialog,[...new Map([...items,...(dialog.biometricGalleryItems||[])].map(item=>[item.fingerCode,item])).values()]);
+  }catch(error){if(dialog.isConnected&&!dialog.biometricGalleryItems)gallery.textContent=error.message||'Não foi possível carregar as imagens.';}
 }
 function fingerLabel(code){return window.JP_BIOMETRIA.FINGERS.find(x=>x[0]===code)?.[1]||code;}
 function workerBiometrics(id){
@@ -93,7 +97,7 @@ function renderBiometricDialog(dialog,worker,ficha){
         const client=getBiometricClient(),base=ficha?'/api/fichas/'+encodeURIComponent(ficha.id):'/api/trabalhadores/'+encodeURIComponent(worker.id);
         // Independent preparation only. Capture starts after BOTH checks succeed.
         const prepared=await Promise.allSettled([
-          client.discover({signal:controller.signal}).then(status=>{if(!status.ready)throw window.JP_BIOMETRIA.unavailableError(status);if(!status.verificationAvailable)throw new Error('Atualize o JP Biometria em Sistema → Biometria para cadastrar e comparar digitais.');return status;}),
+          client.discover({signal:controller.signal,requireEnrollmentImage:!ficha}).then(status=>{if(!status.ready)throw window.JP_BIOMETRIA.unavailableError(status);if(!ficha&&!status.enrollmentImageAvailable){const error=new Error('O JP Biometria deste computador precisa ser atualizado para recadastrar com imagem. Instale a atualização abaixo e tente novamente. A digital anterior foi preservada.');error.code='BIO_AGENT_IMAGE_UPDATE';throw error;}if(!status.verificationAvailable)throw new Error('Atualize o JP Biometria em Sistema → Biometria para cadastrar e comparar digitais.');return status;}),
           api(base+'/biometria/desafio',{method:'POST',body:JSON.stringify({fingerCode}),signal:controller.signal}).then(ensureSuccess)
         ]);assertOperationContext(context);
         const failed=prepared.find(result=>result.status==='rejected');if(failed)throw failed.reason;
@@ -101,6 +105,7 @@ function renderBiometricDialog(dialog,worker,ficha){
         dialogMessage(dialog,'Posicione o '+fingerLabel(fingerCode).toLocaleLowerCase('pt-BR')+' no leitor. Aguarde a captura e a conferência.');
         const response=await client.biometric(start.body.challenge,{signal:controller.signal});assertOperationContext(context);
         if(controller.signal.aborted)throw new Error('Operação cancelada.');
+        if(!ficha&&!response.fingerImageDataUrl){const error=new Error('O componente não enviou a imagem da digital. Atualize o JP Biometria e tente novamente. O cadastro anterior foi preservado.');error.code='BIOMETRIA_IMAGEM_OBRIGATORIA';throw error;}
         completedBody={...response,challengeId:start.body.challenge.challengeId};
       }
       dialogMessage(dialog,ficha?'Correspondência confirmada pelo leitor. Salvando a assinatura...':'Salvando o cadastro da digital...');
@@ -112,12 +117,19 @@ function renderBiometricDialog(dialog,worker,ficha){
         updatePrintWindow(dialog.ownerDocument.defaultView,item);
         dialog.close();
       }else{
-        await refreshTrabalhadores(false);assertOperationContext(context);await loadBiometricGallery(dialog,worker,context);if(!entries.includes(fingerCode))entries.push(fingerCode);dialogMessage(dialog,'Digital cadastrada. Ela já pode ser usada nas próximas entregas.','success');
-        button.textContent='Concluído';button.disabled=true;completedBody=null;
+        const saved=result.body?.biometria,item=result.body?.item;
+        if(item?.id!==worker.id||saved?.fingerCode!==fingerCode||!saved.imageDataUrl)throw new Error('A imagem do cadastro não foi confirmada. Atualize a lista e confira a digital antes de tentar novamente.');
+        worker=item;cache.trabalhadores=cache.trabalhadores.map(x=>x.id===item.id?item:x);renderTrabalhadores();renderEntregaOptions();
+        renderBiometricGallery(dialog,[...(dialog.biometricGalleryItems||[]).filter(x=>x.fingerCode!==fingerCode),saved]);
+        if(!entries.includes(fingerCode))entries.push(fingerCode);dialogMessage(dialog,'Digital cadastrada com imagem para conferência visual. Você pode recadastrar ou cadastrar outro dedo.','success');
+        button.textContent='Cadastrar outra digital';button.disabled=false;completedBody=null;
       }
     }catch(error){
       if(!dialog.isConnected||controller.signal.aborted)return;
       dialogMessage(dialog,error.message||'Não foi possível concluir a operação.','error');
+      if(error.code==='BIO_AGENT_IMAGE_UPDATE'||error.code==='BIOMETRIA_IMAGEM_OBRIGATORIA'){
+        const link=dialog.ownerDocument.createElement('a');link.href=document.getElementById('bioRepairLink').href;link.textContent='Instalar / atualizar JP Biometria';link.className='btn btn-secondary';link.setAttribute('download','');dialog.querySelector('.dialog-message').appendChild(dialog.ownerDocument.createElement('br'));dialog.querySelector('.dialog-message').appendChild(link);
+      }
       if(error.status&&error.status<500&&error.status!==408){completedBody=null;}
       button.textContent=completedBody?'Tentar salvar novamente':ficha?'Capturar e assinar':'Cadastrar digital';button.disabled=false;
     }finally{

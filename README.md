@@ -1,12 +1,13 @@
-# JP EntregaEPI 12.9.2
+# JP EntregaEPI 12.9.3
 
 Aplicação de entrega de equipamentos para empresas clientes. O administrador
 **Master** cadastra as empresas e disponibiliza seus acessos. Cada empresa
 organiza seus trabalhadores e fichas; o catálogo de equipamentos é compartilhado.
 Autenticação em Cognito, API em Lambda e persistência em DynamoDB.
 
-- Aplicação: https://www.jptreinamentos.com.br/EntregaEPI/?v=1292
+- Aplicação: https://www.jptreinamentos.com.br/EntregaEPI/?v=1293
 - Versão e commit publicados: https://www.jptreinamentos.com.br/EntregaEPI/version.json
+- [Recadastro com imagem 12.9.3](docs/V12_9_3_RECADASTRO_COM_IMAGEM.md)
 - [Desempenho de login e assinatura 12.9.2](docs/V12_9_2_DESEMPENHO.md)
 - [Galeria de digitais e exclusão de empresas 12.9.1](docs/V12_9_1_GALERIA_E_EMPRESAS.md)
 - [Fichas, assinatura e edição de cadastros 12.9.0](docs/V12_9_0_FICHAS_E_BIOMETRIA.md)
