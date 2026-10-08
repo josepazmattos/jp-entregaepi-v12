@@ -1,4 +1,4 @@
-(function ensureConfig(){if(!window.JP_CONFIG||!window.JP_CONFIG.apiBaseUrl){window.JP_CONFIG={version:"12.9.1",appBasePath:"/EntregaEPI/",apiBaseUrl:"https://g4pdu3t1va.execute-api.sa-east-1.amazonaws.com",cognitoRegion:"sa-east-1",userPoolId:"sa-east-1_3FNCoTvr0",clientId:"2q2inha617oeer4vb0m0hjoja0",ambiente:"producao"}}})();
+(function ensureConfig(){if(!window.JP_CONFIG||!window.JP_CONFIG.apiBaseUrl){window.JP_CONFIG={version:"12.9.2",appBasePath:"/EntregaEPI/",apiBaseUrl:"https://g4pdu3t1va.execute-api.sa-east-1.amazonaws.com",cognitoRegion:"sa-east-1",userPoolId:"sa-east-1_3FNCoTvr0",clientId:"2q2inha617oeer4vb0m0hjoja0",ambiente:"producao"}}})();
 const $=id=>document.getElementById(id), tokenKey="jp-v12-auth", rememberedUserKey="jp-v12-remembered-user", activeCompanyKey="jp-v12-active-company";
 let sessionGeneration=0,companyGeneration=0,authAttempt=0,importAttempt=0,logoCreateGeneration=0,logoEditGeneration=0;let lastSessionUsername="";let cache={empresas:[],trabalhadores:[],epis:[],fichas:[]};let activeEmpresaId=sessionStorage.getItem(activeCompanyKey)||"";
 let firstAccessChallenge=null,empresaLogoDraft="",empresaLogoEdit=null,empresaRequestId="",importPreview=null,companyLoginAutomatic=true;
@@ -224,16 +224,17 @@ async function testCA(){
 }
 async function refreshAll(){
   clearAppError();
+  await Promise.all([refreshEpis(false),(async()=>{
   await refreshEmpresas(false);
   if(activeEmpresaId){
-    await Promise.all([refreshTrabalhadores(false),refreshEpis(false),refreshFichas(false)]);
+    await Promise.all([refreshTrabalhadores(false),refreshFichas(false)]);
   }else{
     cache.trabalhadores=[];cache.fichas=[];
     $("trabalhadoresList").textContent="Selecione uma empresa.";
     $("fichasList").textContent="Selecione uma empresa.";
-    await refreshEpis(false);
     renderEntregaOptions();
   }
+  })()]);
   $("metricEmpresas").textContent=cache.empresas.length;
   $("metricTrabalhadores").textContent=cache.trabalhadores.length;
   $("metricEpis").textContent=cache.epis.length;

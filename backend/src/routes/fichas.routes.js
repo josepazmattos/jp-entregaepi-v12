@@ -45,6 +45,7 @@ async function signingContext(req) {
   if(ficha.trabalhadorSnapshot?.cpf && String(ficha.trabalhadorSnapshot.cpf).replace(/\D/g,'')!==String(worker.cpf).replace(/\D/g,'')) throw httpError(409,'O CPF atual diverge do registrado na ficha. Confira a identidade do trabalhador.');
   return {ficha,worker,actor:req.auth.sub,kind:'verify'};
 }
+router.get('/:id/assinatura-contexto',async(req,res)=>{const {ficha,worker}=await signingContext(req);ok(res,{ficha,worker});});
 router.post('/:id/biometria/desafio',async(req,res)=>{
   const context=await signingContext(req);
   ok(res,{challenge:await biometrics.challenge({...context,fingerCode:objectBody(req).fingerCode})});

@@ -14,7 +14,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 /** Loopback-only bridge. A local private control key is never exposed to browser responses. */
 public final class JPBiometriaAgent implements AutoCloseable {
-    static final String VERSION = "12.9.1", SERVICE = "JP Biometria Local Java";
+    static final String VERSION = "12.9.2", SERVICE = "JP Biometria Local Java";
     static final int FIRST_PORT = 8789, LAST_PORT = 8799, MAX_BODY = 16384;
     static final Set<String> WEB_ORIGINS = new HashSet<>(Arrays.asList("https://www.jptreinamentos.com.br", "https://jptreinamentos.com.br"));
     private final HttpServer server;
@@ -218,7 +218,7 @@ public final class JPBiometriaAgent implements AutoCloseable {
         exchange.getResponseHeaders().set("Content-Security-Policy", "default-src 'none'; script-src 'nonce-" + nonce + "'; style-src 'unsafe-inline'; connect-src 'self'; img-src data:; frame-ancestors 'none'; base-uri 'none'");
         String html = "<!doctype html><html lang='pt-BR'><meta charset='utf-8'><meta name='viewport' content='width=device-width'><title>JP Biometria</title>"
             + "<style>body{font:16px system-ui;max-width:760px;margin:40px auto;padding:20px;color:#15382c}button{padding:12px;margin:5px}pre{white-space:pre-wrap}img{max-width:250px}</style>"
-            + "<h1>JP Biometria 12.9.1</h1><p>Teste local de conexão e captura. A imagem aparece apenas nesta janela e não é salva.</p>"
+            + "<h1>JP Biometria 12.9.2</h1><p>Teste local de conexão e captura. A imagem aparece apenas nesta janela e não é salva.</p>"
             + "<button id='status'>Verificar leitor</button><button id='capture'>Testar captura</button><pre id='result'>Clique em Verificar leitor.</pre><img id='image' alt='Captura do leitor' hidden>"
             + "<script nonce='" + nonce + "'>const out=document.getElementById('result'),img=document.getElementById('image');"
             + "document.getElementById('status').onclick=async()=>{try{const r=await fetch('/status',{cache:'no-store'}),j=await r.json();out.textContent=j.message+'\\nVersão: '+j.version+'\\nSDK: '+j.sdk+' | Leitor: '+j.reader;}catch(e){out.textContent='Não foi possível consultar o serviço.'}};"

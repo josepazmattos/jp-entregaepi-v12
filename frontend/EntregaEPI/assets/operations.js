@@ -59,7 +59,7 @@ async function loadBiometricGallery(dialog,worker,context){
     const result=ensureSuccess(await api('/api/trabalhadores/'+encodeURIComponent(worker.id)+'/biometrias'));assertOperationContext(context);if(!dialog.isConnected)return;
     const items=result.body.items||[];
     gallery.innerHTML=items.length?items.map(item=>`<article class="bio-card"><div class="bio-card-image">${/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(item.imageDataUrl||'')?`<img src="${escapeHtml(item.imageDataUrl)}" alt="Digital cadastrada: ${escapeHtml(fingerLabel(item.fingerCode))}">`:'<span>Imagem não armazenada<br><small>Recadastre para obter a miniatura</small></span>'}</div><strong>${escapeHtml(fingerLabel(item.fingerCode))}</strong><small>Cadastrada em ${escapeHtml(new Date(item.enrolledAt).toLocaleDateString('pt-BR'))}</small><button type="button" class="btn btn-secondary" data-recapture="${escapeHtml(item.fingerCode)}">Recadastrar</button></article>`).join(''):'<p>Nenhuma digital cadastrada.</p>';
-    gallery.querySelectorAll('[data-recapture]').forEach(button=>button.onclick=()=>{const select=dialog.querySelector('#operationFinger'),capture=dialog.querySelector('#enrollFingerprint');if(select.disabled)return;select.value=button.dataset.recapture;capture.disabled=false;capture.textContent='Cadastrar digital';select.focus();dialogMessage(dialog,'Dedo selecionado. Para salvar a miniatura, use JP Biometria 12.9.1 ou superior (Sistema → Biometria). Clique em Cadastrar digital para fazer uma nova captura.');});
+    gallery.querySelectorAll('[data-recapture]').forEach(button=>button.onclick=()=>{const select=dialog.querySelector('#operationFinger'),capture=dialog.querySelector('#enrollFingerprint');if(select.disabled)return;select.value=button.dataset.recapture;capture.disabled=false;capture.textContent='Cadastrar digital';select.focus();dialogMessage(dialog,'Dedo selecionado. Para salvar a miniatura, use JP Biometria 12.9.2 ou superior (Sistema → Biometria). Clique em Cadastrar digital para fazer uma nova captura.');});
   }catch(error){if(dialog.isConnected)gallery.textContent=error.message||'Não foi possível carregar as imagens.';}
 }
 function fingerLabel(code){return window.JP_BIOMETRIA.FINGERS.find(x=>x[0]===code)?.[1]||code;}
@@ -90,11 +90,14 @@ function renderBiometricDialog(dialog,worker,ficha){
       assertOperationContext(context);
       if(!completedBody){
         dialogMessage(dialog,'Localizando o leitor. Aguarde...');
-        const client=getBiometricClient(),status=await client.discover({signal:controller.signal});assertOperationContext(context);
-        if(!status.ready)throw window.JP_BIOMETRIA.unavailableError(status);
-        if(!status.verificationAvailable)throw new Error('Atualize o JP Biometria em Sistema → Biometria para cadastrar e comparar digitais.');
-        const base=ficha?'/api/fichas/'+encodeURIComponent(ficha.id):'/api/trabalhadores/'+encodeURIComponent(worker.id);
-        const start=ensureSuccess(await api(base+'/biometria/desafio',{method:'POST',body:JSON.stringify({fingerCode}),signal:controller.signal}));assertOperationContext(context);
+        const client=getBiometricClient(),base=ficha?'/api/fichas/'+encodeURIComponent(ficha.id):'/api/trabalhadores/'+encodeURIComponent(worker.id);
+        // Independent preparation only. Capture starts after BOTH checks succeed.
+        const prepared=await Promise.allSettled([
+          client.discover({signal:controller.signal}).then(status=>{if(!status.ready)throw window.JP_BIOMETRIA.unavailableError(status);if(!status.verificationAvailable)throw new Error('Atualize o JP Biometria em Sistema → Biometria para cadastrar e comparar digitais.');return status;}),
+          api(base+'/biometria/desafio',{method:'POST',body:JSON.stringify({fingerCode}),signal:controller.signal}).then(ensureSuccess)
+        ]);assertOperationContext(context);
+        const failed=prepared.find(result=>result.status==='rejected');if(failed)throw failed.reason;
+        const start=prepared[1].value;
         dialogMessage(dialog,'Posicione o '+fingerLabel(fingerCode).toLocaleLowerCase('pt-BR')+' no leitor. Aguarde a captura e a conferência.');
         const response=await client.biometric(start.body.challenge,{signal:controller.signal});assertOperationContext(context);
         if(controller.signal.aborted)throw new Error('Operação cancelada.');
@@ -129,9 +132,12 @@ function setupPrintWindow(preview,ficha,context){
   const toolbar=doc.createElement('div');toolbar.className='print-toolbar';toolbar.innerHTML='<span id="printSignatureStatus"></span><button id="signDocument" class="primary" type="button">Assinar biometricamente</button><button id="printDocument" type="button">Imprimir</button>';doc.body.prepend(toolbar);
   toolbar.querySelector('#printDocument').onclick=()=>preview.print();
   toolbar.querySelector('#signDocument').onclick=async()=>{
-    try{assertOperationContext(context);await refreshFichas(false);await refreshTrabalhadores(false);assertOperationContext(context);
-      const current=cache.fichas.find(x=>x.id===ficha.id);if(!current||!canSignFicha(current)){if(current)updatePrintWindow(preview,current);throw new Error('Esta ficha não está pendente. Confira a situação atual.');}
-      const worker=cache.trabalhadores.find(x=>x.id===current.trabalhadorId);if(!worker)throw new Error('Cadastro do trabalhador não localizado.');
+    try{assertOperationContext(context);const result=ensureSuccess(await api('/api/fichas/'+encodeURIComponent(ficha.id)+'/assinatura-contexto'));assertOperationContext(context);
+      const current=result.body.ficha,worker=result.body.worker;
+      if(current?.id!==ficha.id||current?.empresaId!==context.empresa||worker?.id!==current.trabalhadorId||worker?.empresaId!==context.empresa)throw new Error('O cadastro não corresponde à ficha selecionada.');
+      cache.fichas=cache.fichas.map(x=>x.id===current.id?current:x);cache.trabalhadores=cache.trabalhadores.map(x=>x.id===worker.id?worker:x);
+      if(!current||!canSignFicha(current)){if(current)updatePrintWindow(preview,current);throw new Error('Esta ficha não está pendente. Confira a situação atual.');}
+      if(!worker)throw new Error('Cadastro do trabalhador não localizado.');
       const dialog=dialogShell(doc,'Assinar biometricamente',current.trabalhadorSnapshot?.nomeCompleto||current.trabalhadorNome||worker.nomeCompleto);renderBiometricDialog(dialog,worker,current);
     }catch(error){toolbar.querySelector('#printSignatureStatus').textContent=error.message;}
   };

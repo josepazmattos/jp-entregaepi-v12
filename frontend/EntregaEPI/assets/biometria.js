@@ -109,9 +109,13 @@
         if(signal.aborted)throw failure('BIO_CANCELLED');
         if(!response.ok){
           const body=await readJson(response,16000,controller.signal).catch(()=>null);
-          const error=failure('BIO_HTTP',{httpStatus:response.status});
-          if(body?.code==='BIOMETRIA_DIVERGENTE')error.message='A digital não corresponde ao cadastro. A ficha continua sem assinatura.';
-          if(body?.code==='BIOMETRIC_DEVICE_DIFFERENT')error.message='Esta digital foi cadastrada em outro computador. Cadastre-a neste computador antes de assinar.';
+          const agentCode=safeCode(body?.errorCode||body?.code);
+          const error=failure('BIO_HTTP',{httpStatus:response.status,agentCode});
+          if(agentCode==='BIOMETRIA_DIVERGENTE')error.message='A digital não corresponde ao cadastro. A ficha continua sem assinatura.';
+          if(agentCode==='BIOMETRIC_DEVICE_DIFFERENT')error.message='Esta digital foi cadastrada em outro computador. Cadastre-a neste computador antes de assinar.';
+          const known={READER_BUSY:'O leitor está em uso. Aguarde a operação atual e tente novamente.',SDK_API_INCOMPATIBLE:'O SDK instalado não oferece a interface esperada pelo JP Biometria. Confira a instalação do componente Java NITGEN.',SDK_LOAD_FAILED:'Não foi possível carregar o SDK NITGEN. Confira Java e bibliotecas da mesma arquitetura.',READER_NOT_FOUND:'O SDK não localizou o leitor NITGEN. Confira a conexão USB.',CAPTURE_FAILED:'O SDK não concluiu a captura. Feche outros programas que estejam usando o leitor e tente novamente.'};
+          if(Object.prototype.hasOwnProperty.call(known,agentCode))error.message=known[agentCode];
+          if(/^NITGEN_[0-9]{1,10}$/.test(agentCode||''))error.message='O leitor NITGEN não concluiu a operação. Código: '+agentCode+'. Confira a posição do dedo e feche outros programas de captura antes de tentar novamente.';
           throw error;
         }
         const body=await readJson(response,maxBytes,controller.signal);
@@ -128,32 +132,43 @@
     async function discover({signal,automatic=false}={}){
       return locked(async operationSignal=>{
         const ports=selected?[selected.port,...PORTS.filter(port=>port!==selected.port)]:PORTS;
-        const diagnostics=[],deadline=Date.now()+discoveryTimeout;let recognized=null;selected=null;
-        async function pause(){
-          if(operationSignal.aborted)throw failure('BIO_CANCELLED');
-          await new Promise((resolve,reject)=>{const done=()=>{operationSignal.removeEventListener('abort',abort);resolve();};const timer=setTimeout(done,pollInterval);const abort=()=>{clearTimeout(timer);operationSignal.removeEventListener('abort',abort);reject(failure('BIO_CANCELLED'));};operationSignal.addEventListener('abort',abort,{once:true});});
-        }
-        for(const port of ports){
-          if(Date.now()>=deadline)break;
+        const diagnostics=[],deadline=Date.now()+discoveryTimeout;let recognized=null,winner=null,fatal=null;selected=null;
+        const search=new AbortController(),abort=()=>search.abort();operationSignal.addEventListener('abort',abort,{once:true});
+        if(operationSignal.aborted)search.abort();
+        function pause(ms){return new Promise(resolve=>{if(search.signal.aborted)return resolve();const done=()=>{clearTimeout(timer);search.signal.removeEventListener('abort',done);resolve();};const timer=setTimeout(done,ms);search.signal.addEventListener('abort',done,{once:true});});}
+        async function probe(port){
+          if(search.signal.aborted||Date.now()>=deadline)return null;
           try{
-            const fetchStatus=()=>request(port,'/status?ts='+Date.now(),operationSignal,Math.max(1,Math.min(port===8789?primaryStatusTimeout:statusTimeout,deadline-Date.now())),16384);
+            const fetchStatus=()=>request(port,'/status?ts='+Date.now(),search.signal,Math.max(1,Math.min(port===8789?primaryStatusTimeout:statusTimeout,deadline-Date.now())),16384);
             let status=normalizeStatus(await fetchStatus(),port);
             const checkingDeadline=Math.min(deadline,Date.now()+checkingTimeout);
-            // A fresh native agent probes the SDK asynchronously. This bounded,
-            // read-only wait is also used by the authorized login verification.
-            while(status.compatible&&status.checking&&!status.busy&&Date.now()+pollInterval<checkingDeadline){await pause();status=normalizeStatus(await fetchStatus(),port);}
-            diagnostics.push({port,code:status.code});if(status.ready){selected=status;lastDiagnostics=diagnostics;return status;}if(!recognized||(!recognized.compatible&&status.compatible))recognized=status;
+            while(status.compatible&&status.checking&&!status.busy&&!search.signal.aborted&&Date.now()+pollInterval<checkingDeadline){await pause(pollInterval);if(search.signal.aborted)return null;status=normalizeStatus(await fetchStatus(),port);}
+            if(search.signal.aborted)return null;
+            diagnostics.push({port,code:status.code});
+            if(status.ready){winner=status;search.abort();return status;}
+            if(!recognized||(!recognized.compatible&&status.compatible))recognized=status;
           }catch(error){
-            if(error.code==='BIO_CANCELLED')throw error;
+            if(search.signal.aborted)return null;
             diagnostics.push({port,code:error.code,httpStatus:error.httpStatus});
-            if(error.code==='BIO_PERMISSION'){lastDiagnostics=diagnostics;throw error;}
+            if(error.code==='BIO_PERMISSION'){fatal=error;search.abort();}
           }
+          return null;
         }
-        lastDiagnostics=diagnostics;
-        if(recognized){selected=recognized;return recognized;}
-        if(diagnostics.some(item=>item.code==='BIO_PROTOCOL'))throw failure('BIO_PROTOCOL');
-        if(diagnostics.some(item=>item.code==='BIO_HTTP'))throw failure('BIO_HTTP');
-        throw failure('BIO_NETWORK');
+        try{
+          // Prefer the known port. If it stalls, look elsewhere without waiting
+          // its full timeout. Only GET /status is raced, never a capture or write.
+          const primary=probe(ports[0]);
+          const fallback=(async()=>{await Promise.race([primary,pause(options.discoveryHedgeMs??200)]);for(const port of ports.slice(1)){if(search.signal.aborted)break;await probe(port);}})();
+          await Promise.all([primary,fallback]);
+          if(operationSignal.aborted)throw failure('BIO_CANCELLED');
+          lastDiagnostics=diagnostics;
+          if(fatal)throw fatal;
+          if(winner){selected=winner;return winner;}
+          if(recognized){selected=recognized;return recognized;}
+          if(diagnostics.some(item=>item.code==='BIO_PROTOCOL'))throw failure('BIO_PROTOCOL');
+          if(diagnostics.some(item=>item.code==='BIO_HTTP'))throw failure('BIO_HTTP');
+          throw failure('BIO_NETWORK');
+        }finally{search.abort();operationSignal.removeEventListener('abort',abort);}
       },signal,automatic);
     }
     async function capture({fingerCode,purpose='test',signal}={}){

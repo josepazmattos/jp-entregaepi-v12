@@ -1,6 +1,6 @@
 {
   "name": "jp-entregaepi-tests",
-  "version": "12.9.1",
+  "version": "12.9.2",
   "private": true,
   "scripts": {
     "test": "node --test frontend.test.cjs && node frontend-browser.cjs && node ficha-matricula-browser.cjs && node frontend-startup-browser.cjs && node operations-browser.cjs",
