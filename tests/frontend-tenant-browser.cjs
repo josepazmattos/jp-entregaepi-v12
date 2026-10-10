@@ -70,7 +70,8 @@ module.exports=async function runTenantBrowser({browser,origin,output}){
         return json(200,{ok:true,item:saved,acesso:{login:body.login,status:'ativo',trocaObrigatoria:true}});
       }
       if(/^\/api\/empresas\/[^/]+$/.test(url.pathname)&&request.method()==='PATCH'){
-        const id=url.pathname.split('/').pop(),record=companies.find(item=>item.id===id);assert.ok(record);if(role!=='MASTER')assert.equal(id,company.id);
+        if(role!=='MASTER')return json(403,{ok:false,error:'Apenas Master.'});
+        const id=url.pathname.split('/').pop(),record=companies.find(item=>item.id===id);assert.ok(record);
         assert.equal(body._version,record._version);if(body.logoDataUrl!==undefined){assert.ok(Buffer.from(body.logoDataUrl.split(',')[1]||'','base64').length<=48*1024);record.logoDataUrl=body.logoDataUrl;}else{assert.equal(role,'MASTER');Object.assign(record,body);}record._version++;
         return json(200,{ok:true,item:record});
       }
@@ -93,6 +94,7 @@ module.exports=async function runTenantBrowser({browser,origin,output}){
         assert.equal(body.tipo,'sem_ca');assert.equal(body.ca,'');assert.equal(body.validade,'');assert.ok(!Object.hasOwn(body,'empresaId'));
         const item={...body,id:'EQUIPAMENTO-SEM-CA-SINTETICO',semCA:true,catalogoCompartilhado:true};catalog.push(item);return json(200,{ok:true,item,reutilizado:false});
       }
+      if(url.pathname.startsWith('/api/trabalhadores/importacao/')&&role!=='MASTER')return json(403,{ok:false,error:'Apenas Master.'});
       if(url.pathname==='/api/trabalhadores/importacao/previa'){
         assert.equal(selected,companyA.id);assert.equal(Buffer.from(body.arquivoBase64,'base64').readUInt16LE(0),0x4b50);
         const received=new ExcelJS.Workbook();await received.xlsx.load(Buffer.from(body.arquivoBase64,'base64'));
@@ -144,44 +146,54 @@ module.exports=async function runTenantBrowser({browser,origin,output}){
     assert.equal(await alpha.page.locator('#password').inputValue(),'');assert.equal(await alpha.page.evaluate(()=>sessionStorage.getItem('jp-v12-auth')),null);
     await inspect(alpha.page,'desktop-primeiro-acesso');const challengeBefore=result.requests.filter(x=>x.operation==='RespondToAuthChallenge').length;await alpha.page.locator('#initialPasswordConfirm').fill('INCORRETA');await alpha.page.locator('#newPassword').fill('SenhaDefinitivaSintetica8');await alpha.page.locator('#newPasswordConfirm').fill('SenhaDefinitivaSintetica8');await alpha.page.locator('#newPasswordButton').click();await alpha.page.waitForFunction(()=>document.getElementById('newPasswordMessage').textContent.includes('senha inicial'));assert.equal(result.requests.filter(x=>x.operation==='RespondToAuthChallenge').length,challengeBefore);await alpha.page.locator('#initialPasswordConfirm').fill('12345678');await alpha.page.locator('#newPassword').fill('SenhaDefinitivaSintetica8');await alpha.page.locator('#newPasswordConfirm').fill('SenhaDefinitivaSintetica8');await alpha.page.locator('#newPasswordButton').click();await loaded(alpha.page);
     assert.equal(await alpha.page.locator('#newPassword').inputValue(),'');assert.equal(await alpha.page.locator('#empresaAtivaSelect').isDisabled(),true);
-    assert.equal(await alpha.page.locator('.nav [data-screen="empresas-cadastradas"]').isVisible(),false);await navigate(alpha.page,'empresas');assert.equal(await alpha.page.locator('#empresaForm').isVisible(),false);assert.equal(await alpha.page.locator('#empresaAccessForm').isVisible(),false);assert.equal(await alpha.page.locator('#empresasList .item').count(),1);
-    await alpha.page.locator('#empresaLogoAtualFile').setInputFiles(logo);await alpha.page.waitForFunction(()=>!document.getElementById('empresaLogoSave').disabled);await alpha.page.locator('#empresaLogoSave').click();await alpha.page.waitForFunction(()=>document.getElementById('appMessage').textContent.includes('Logotipo atualizado'));
-    await inspect(alpha.page,'desktop-minha-empresa');passed('primeiro acesso define senha sem persistir credenciais e empresa altera somente seu logotipo');
+    for(const screen of ['empresas','empresas-cadastradas']){
+      assert.equal(await alpha.page.locator(`.nav [data-screen="${screen}"]`).isVisible(),false);
+      await alpha.page.evaluate(screen=>activateScreen(screen),screen);
+      assert.equal(await alpha.page.locator(`#screen-${screen}`).isVisible(),false);
+    }
+    assert.equal(await alpha.page.locator('#empresaAtivaSelect').isVisible(),false);
+    assert.equal(await alpha.page.locator('.metrics .metric-card:visible').count(),3);
+    assert.equal(await alpha.page.locator('.quick-actions .shortcut:visible').count(),3);
+    assert.equal(await alpha.page.locator('#empresaLogoForm').isVisible(),false);
+    await inspect(alpha.page,'desktop-dashboard-empresa');
+    await master.page.locator('#empresaLogoAtualFile').setInputFiles(logo);await master.page.waitForFunction(()=>!document.getElementById('empresaLogoSave').disabled);await master.page.locator('#empresaLogoSave').click();await master.page.waitForFunction(()=>document.getElementById('appMessage').textContent.includes('Logotipo atualizado'));
+    passed('Empresa acessa Dashboard compacto sem gestão empresarial; somente Master atualiza logotipo');
 
     const second=await makeContext('EMPRESA',companyA,{mobile:true});await login(second,'SenhaDefinitivaSintetica8');await loaded(second.page);
     const beta=await makeContext('EMPRESA',companyB);await login(beta,'SENHA-BETA-SINTETICA');await loaded(beta.page);
     assert.equal(await second.page.locator('#empresaAtivaSelect').inputValue(),companyA.id);assert.equal(await beta.page.locator('#empresaAtivaSelect').inputValue(),companyB.id);
     await navigate(alpha.page,'trabalhadores');assert.ok((await alpha.page.locator('#trabalhadoresList').innerText()).includes('BIA'));assert.ok(!(await alpha.page.locator('#trabalhadoresList').innerText()).includes('EXCLUSIVO BETA'));
-    await alpha.page.locator('#workerCompanySelect').selectOption(companyA.id);await alpha.page.locator('#workerRegistrationMethod').selectOption('modelo');
-    const downloadPromise=alpha.page.waitForEvent('download');await alpha.page.locator('#trabalhadoresTemplateButton').click();const download=await downloadPromise;
+    await navigate(master.page,'trabalhadores');
+    await master.page.locator('#workerCompanySelect').selectOption(companyA.id);await master.page.locator('#workerRegistrationMethod').selectOption('modelo');
+    const downloadPromise=master.page.waitForEvent('download');await master.page.locator('#trabalhadoresTemplateButton').click();const download=await downloadPromise;
     const downloaded=await download.path();assert.equal(fs.readFileSync(downloaded).readUInt16LE(0),0x4b50);assert.equal(download.suggestedFilename(),'Modelo_Trabalhadores_JP_EntregaEPI.xlsx');
-    await alpha.page.locator('#trabalhadoresImportFile').setInputFiles({name:'Equipe_Sintetica.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:workbookBuffer});await alpha.page.waitForFunction(()=>document.querySelectorAll('#trabalhadoresImportRows tr').length===500);
-    assert.equal(await alpha.page.locator('#trabalhadoresImportCommit').isDisabled(),false);await inspect(alpha.page,'desktop-importacao-previa');
-    await alpha.page.locator('#trabalhadoresImportCommit').click();await alpha.page.waitForFunction(()=>document.getElementById('trabalhadoresImportMessage').textContent.includes('interrompida'));
-    assert.equal(importProgress,160);await alpha.page.reload();await loaded(alpha.page);await navigate(alpha.page,'trabalhadores');await alpha.page.waitForFunction(()=>document.getElementById('trabalhadoresImportContext').textContent.includes('160 de 500'));await alpha.page.locator('#workerCompanySelect').selectOption(companyA.id);
-    await alpha.page.locator('#trabalhadoresImportCommit').click();await alpha.page.waitForFunction(()=>document.getElementById('trabalhadoresImportMessage').textContent.includes('Sincronização concluída'));
+    await master.page.locator('#trabalhadoresImportFile').setInputFiles({name:'Equipe_Sintetica.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:workbookBuffer});await master.page.waitForFunction(()=>document.querySelectorAll('#trabalhadoresImportRows tr').length===500);
+    assert.equal(await master.page.locator('#trabalhadoresImportCommit').isDisabled(),false);await inspect(master.page,'desktop-importacao-previa');
+    await master.page.locator('#trabalhadoresImportCommit').click();await master.page.waitForFunction(()=>document.getElementById('trabalhadoresImportMessage').textContent.includes('interrompida'));
+    assert.equal(importProgress,160);await master.page.reload();await loaded(master.page);await navigate(master.page,'trabalhadores');await master.page.waitForFunction(()=>document.getElementById('trabalhadoresImportContext').textContent.includes('160 de 500'));await master.page.locator('#workerCompanySelect').selectOption(companyA.id);
+    await master.page.locator('#trabalhadoresImportCommit').click();await master.page.waitForFunction(()=>document.getElementById('trabalhadoresImportMessage').textContent.includes('Sincronização concluída'));
     assert.equal(importProgress,500);assert.equal(confirmCalls,7);assert.equal(workers[companyA.id].length,500);assert.equal(new Set(workers[companyA.id].map(item=>item.id)).size,500);
-    assert.equal(await alpha.page.locator('#workerListCard').isVisible(),false);await alpha.page.locator('#workerRegistrationMethod').selectOption('consultar');await alpha.page.waitForFunction(()=>document.querySelectorAll('#trabalhadoresList .item').length===15);const names=await alpha.page.locator('#trabalhadoresList .item strong').allTextContents();assert.equal(names[0],'ÁLVARO SINTÉTICO');assert.equal(names.length,15);assert.match(await alpha.page.locator('#workerListCount').innerText(),/1–15 de 500/);await alpha.page.locator('#workerPageNext').click();assert.match(await alpha.page.locator('#workerListCount').innerText(),/16–30 de 500/);await alpha.page.locator('#trabalhadorSearch').fill('ZULMIRA');assert.equal(await alpha.page.locator('#trabalhadoresList .item').count(),1);assert.match(await alpha.page.locator('#workerListCount').innerText(),/1–1 de 1/);await alpha.page.locator('#trabalhadorSearch').fill('');
+    assert.equal(await master.page.locator('#workerListCard').isVisible(),false);await master.page.locator('#workerRegistrationMethod').selectOption('consultar');await master.page.waitForFunction(()=>document.querySelectorAll('#trabalhadoresList .item').length===15);const names=await master.page.locator('#trabalhadoresList .item strong').allTextContents();assert.equal(names[0],'ÁLVARO SINTÉTICO');assert.equal(names.length,15);assert.match(await master.page.locator('#workerListCount').innerText(),/1–15 de 500/);await master.page.locator('#workerPageNext').click();assert.match(await master.page.locator('#workerListCount').innerText(),/16–30 de 500/);await master.page.locator('#trabalhadorSearch').fill('ZULMIRA');assert.equal(await master.page.locator('#trabalhadoresList .item').count(),1);assert.match(await master.page.locator('#workerListCount').innerText(),/1–1 de 1/);await master.page.locator('#trabalhadorSearch').fill('');
     assert.equal(workers[companyA.id].find(item=>item.id===rows[0].id).matriculaESocial,longMatricula);
-    assert.ok((await alpha.page.locator('#trabalhadoresList .item').filter({hasText:'ÁLVARO SINTÉTICO'}).innerText()).includes(longMatricula));
+    assert.ok((await master.page.locator('#trabalhadoresList .item').filter({hasText:'ÁLVARO SINTÉTICO'}).innerText()).includes(longMatricula));
     passed('Excel de 500 linhas sincroniza em sete lotes e retoma após perda da resposta e recarga da página');
 
-    await alpha.page.locator('#workerRegistrationMethod').selectOption('modelo');assert.equal(await alpha.page.locator('#workerListCard').isVisible(),false);await alpha.page.locator('#trabalhadoresImportFile').setInputFiles({name:'Equipe_Invalida.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:workbookBuffer});await alpha.page.waitForFunction(()=>document.querySelector('#trabalhadoresImportRows tr')?.textContent.includes('CPF inválido'));
-    assert.equal(await alpha.page.locator('#trabalhadoresImportCommit').isDisabled(),true);assert.equal(await alpha.page.locator('#trabalhadoresImportRows script').count(),0);assert.equal(confirmCalls,7);assert.equal(workers[companyB.id].length,1);
-    await navigate(second.page,'trabalhadores');await second.page.locator('#screen-trabalhadores .topbar button').click();await second.page.waitForFunction(()=>document.querySelectorAll('#trabalhadoresList .item').length===15);await second.page.locator('#workerCompanySelect').selectOption(companyA.id);await second.page.locator('#workerRegistrationMethod').selectOption('consultar');await second.page.locator('#trabalhadorSearch').fill('alvaro');assert.equal(await second.page.locator('#trabalhadoresList .item').count(),1);
+    await master.page.locator('#workerRegistrationMethod').selectOption('modelo');assert.equal(await master.page.locator('#workerListCard').isVisible(),false);await master.page.locator('#trabalhadoresImportFile').setInputFiles({name:'Equipe_Invalida.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:workbookBuffer});await master.page.waitForFunction(()=>document.querySelector('#trabalhadoresImportRows tr')?.textContent.includes('CPF inválido'));
+    assert.equal(await master.page.locator('#trabalhadoresImportCommit').isDisabled(),true);assert.equal(await master.page.locator('#trabalhadoresImportRows script').count(),0);assert.equal(confirmCalls,7);assert.equal(workers[companyB.id].length,1);
+    await navigate(second.page,'trabalhadores');await second.page.getByRole('button',{name:'Atualizar trabalhadores',exact:true}).click();await second.page.waitForFunction(()=>document.querySelectorAll('#trabalhadoresList .item').length===15);assert.equal(await second.page.locator('#workerCompanySelect').isVisible(),false);assert.equal(await second.page.locator('#workerImportCard').isVisible(),false);await second.page.locator('#trabalhadorSearch').fill('alvaro');assert.equal(await second.page.locator('#trabalhadoresList .item').count(),1);
     assert.ok((await second.page.locator('#trabalhadoresList .item').innerText()).includes(longMatricula));
     assert.equal(await second.page.locator('#trabalhadoresList .item').evaluate(item=>item.scrollWidth<=item.clientWidth+1),true,'matrícula longa quebra dentro do cartão no celular');
     await inspect(second.page,'mobile-trabalhadores');await navigate(beta.page,'trabalhadores');assert.equal(await beta.page.locator('#trabalhadoresList .item').count(),1);assert.match(await beta.page.locator('#trabalhadoresList').innerText(),/EXCLUSIVO BETA/);
     passed('prévia inválida bloqueia escrita e a sincronização fica restrita à empresa selecionada');
 
-    await beta.page.locator('#workerCompanySelect').selectOption(companyB.id);await beta.page.locator('#workerRegistrationMethod').selectOption('manual');
+    await beta.page.locator('#clientNewWorker').click();
     const matriculaInput=beta.page.locator('#trabalhadorMatricula');
     assert.equal(await matriculaInput.getAttribute('type'),'text');assert.equal(await matriculaInput.getAttribute('maxlength'),null);assert.equal(await matriculaInput.getAttribute('pattern'),null);
     await beta.page.locator('#trabalhadorNome').fill('COLABORADOR COM MATRÍCULA LONGA');await beta.page.locator('#trabalhadorCpf').fill(cpf(543210987));
     await matriculaInput.fill(longMatricula);assert.equal(await matriculaInput.inputValue(),longMatricula);
     await beta.page.locator('#trabalhadorFuncao').fill('FUNÇÃO SINTÉTICA');await beta.page.locator('#trabalhadorLocalidade').fill('LOCALIDADE SINTÉTICA');
     await beta.page.locator('#trabalhadorForm button[type="submit"]').click();await beta.page.waitForFunction(()=>document.querySelectorAll('#trabalhadoresList .item').length===2);
-    await beta.page.locator('#workerRegistrationMethod').selectOption('consultar');const longItem=beta.page.locator('#trabalhadoresList .item').filter({hasText:'COLABORADOR COM MATRÍCULA LONGA'});
+    assert.equal(await beta.page.locator('#trabalhadorForm').isVisible(),false);assert.equal(await beta.page.locator('#workerListCard').isVisible(),true);const longItem=beta.page.locator('#trabalhadoresList .item').filter({hasText:'COLABORADOR COM MATRÍCULA LONGA'});
     assert.ok((await longItem.innerText()).includes(longMatricula));assert.equal(await longItem.evaluate(item=>item.scrollWidth<=item.clientWidth+1),true);
     await inspect(beta.page,'desktop-matricula-alfanumerica-longa');
     passed('matrícula alfanumérica de 729 caracteres mantém letras, números e zeros no cadastro, Excel e lista móvel');
@@ -194,7 +206,7 @@ module.exports=async function runTenantBrowser({browser,origin,output}){
     assert.ok(!(await beta.page.locator('#episList').innerText()).includes(companyA.nome));passed('equipamento sem CA entra no catálogo comum e fica disponível à outra empresa e ao Master sem autoria');
 
     await alpha.page.locator('#logoutButton').click();assert.equal(await alpha.page.evaluate(()=>sessionStorage.getItem('jp-v12-auth')),null);
-    assert.ok(await second.page.evaluate(()=>sessionStorage.getItem('jp-v12-auth')));await navigate(second.page,'dashboard');await second.page.locator('#refreshButton').click();await second.page.waitForFunction(()=>document.getElementById('metricTrabalhadores').textContent==='500');
+    assert.ok(await second.page.evaluate(()=>sessionStorage.getItem('jp-v12-auth')));await navigate(second.page,'dashboard');await inspect(second.page,'mobile-dashboard-empresa');await second.page.locator('#refreshButton').click();await second.page.waitForFunction(()=>document.getElementById('metricTrabalhadores').textContent==='500');
     assert.equal(await second.page.locator('#appShell').isVisible(),true);assert.equal(result.requests.filter(item=>item.operation==='GlobalSignOut').length,0);
     passed('duas sessões da mesma empresa funcionam simultaneamente e sair de uma mantém a outra autenticada');
     assert.deepEqual(errors,[]);assert.ok(!result.unexpectedExternal);result.passed=true;return result;
