@@ -33,7 +33,7 @@ export function createEmpresasRouter({ storage = defaultStorage, accounts = comp
     ok(res, result);
   });
 
-  router.patch('/:id', async (req, res) => {
+  router.patch('/:id', requireMaster, async (req, res) => {
     assertCompanyAccess(req, req.params.id);
     const body = objectBody(req);
     if (body._version != null && (!Number.isSafeInteger(body._version) || body._version < 1)) throw httpError(400, 'A versão do cadastro é inválida. Atualize a tela.', 'EMPRESA_VERSAO_INVALIDA');

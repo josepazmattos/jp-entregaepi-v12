@@ -24,7 +24,17 @@ function editWorker(id){
   const form=$('trabalhadorForm');for(const field of form.elements)if(field.name)field.value=item[field.name]??(field.name==='nomeCompleto'?item.nome||'':'');
   setText('workerFormTitle','Editar trabalhador');$('workerEditCancel').classList.remove('hidden');form.scrollIntoView({block:'start',behavior:'smooth'});$('trabalhadorNome').focus({preventScroll:true});
 }
-function cancelWorkerEdit(){workerEdit=null;$('trabalhadorForm').reset();setText('workerFormTitle','Novo trabalhador');$('workerEditCancel').classList.add('hidden');}
+function cancelWorkerEdit(){
+  workerEdit=null;$('trabalhadorForm').reset();setText('workerFormTitle','Novo trabalhador');$('workerEditCancel').classList.add('hidden');
+  if(!isMaster()){$('workerRegistrationMethod').value='consultar';renderWorkerRegistration();}
+}
+function openWorkerRegistration(){
+  goScreen('trabalhadores');
+  if(isMaster())return;
+  if(!requireEmpresa())return;
+  cancelWorkerEdit();workerRegistrationCompany=activeEmpresaId;$('workerRegistrationMethod').value='manual';renderWorkerRegistration();
+  setText('workerFormTitle','Novo colaborador');$('trabalhadorNome').focus();
+}
 async function changeWorkerStatus(id){
   const initialContext=operationContext();
   try{await refreshTrabalhadores(false);assertOperationContext(initialContext);}catch(error){handleAppError(error);return;}
@@ -45,6 +55,7 @@ async function submitWorker(event){
   catch(error){handleAppError(error);}finally{button.disabled=false;}
 }
 function editCompany(id){
+  if(!isMaster())return;
   const item=cache.empresas.find(x=>x.id===id);if(!item)return;
   const context=operationContext(),dialog=dialogShell(document,'Editar empresa',item.nome||'Empresa selecionada');
   const fields=[['nome','Nome da empresa'],['localidade','Localidade'],['uf','UF'],['responsavel','Responsável'],['email','E-mail'],['telefone','Telefone']];

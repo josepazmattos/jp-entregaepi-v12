@@ -535,3 +535,13 @@ h3 { font-size: 16px; line-height: 1.4; letter-spacing: -.01em; }
 .worker-registration{margin-bottom:24px;padding:24px}.worker-registration .grid-form{margin:0}.worker-list-only{display:block}
 
 .worker-list-filters{display:grid;grid-template-columns:minmax(0,1fr) 180px;gap:16px;margin-bottom:20px}.worker-pagination{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-top:20px;color:var(--muted)}.worker-status{display:inline-flex;align-items:center;border-radius:20px;padding:6px 10px;background:#e7f5ed;color:#17643c;font-size:12px;font-weight:700}.worker-status.inactive{background:#edf0f2;color:#586573}#workerColumns>#trabalhadorForm{max-width:850px;margin-inline:auto}@media(max-width:600px){.worker-list-filters{grid-template-columns:1fr}.worker-pagination{align-items:flex-start}}
+
+/* Company access keeps the daily workflow visible without management controls. */
+.client-company-name{max-width:320px;overflow-wrap:anywhere;font-weight:600;color:var(--jp-ink);font-size:14px}
+.company-profile .metrics,.company-profile .quick-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
+.worker-toolbar{display:flex;gap:12px;flex-wrap:wrap}
+@media(max-width:700px){
+  .company-profile .metrics,.company-profile .quick-actions{grid-template-columns:1fr}
+  .client-company-name{max-width:100%;font-size:12px}
+  .worker-toolbar{width:100%}.worker-toolbar .btn{flex:1}
+}

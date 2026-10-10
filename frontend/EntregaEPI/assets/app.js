@@ -51,6 +51,12 @@ function isMaster(){return currentGroups().includes("MASTER");}
 function saveActiveCompany(id){activeEmpresaId=String(id||"");sessionStorage.setItem(activeCompanyKey,activeEmpresaId);localStorage.removeItem(activeCompanyKey);}
 function renderRoleAccess(){
   const master=isMaster();
+  $("appShell").classList.toggle("company-profile",!master);
+  $("clientCompanyName")?.classList.toggle("hidden",master);
+  setText("clientCompanyName",cache.empresas.find(item=>item.id===activeEmpresaId)?.nome||"Minha empresa");
+  $("clientNewWorker")?.classList.toggle("hidden",master);
+  if($("clientNewWorker"))$("clientNewWorker").disabled=!activeEmpresaId;
+  setText("workerShortcutTitle",master?"Novo trabalhador":"Novo colaborador");
   document.querySelectorAll("[data-master-only]").forEach(node=>node.classList.toggle("hidden",!master));
   $("empresasColumns")?.classList.toggle("company-self",!master);
   $("empresasColumns")?.classList.toggle("company-registration-only",master);
@@ -69,13 +75,16 @@ function renderWorkerRegistration(){
   if(!cache.empresas.some(item=>item.id===workerRegistrationCompany)||workerRegistrationCompany!==activeEmpresaId)workerRegistrationCompany="";
   select.innerHTML='<option value="">Selecione a empresa</option>'+cache.empresas.map(item=>`<option value="${escapeHtml(item.id)}">${escapeHtml(item.nome)}</option>`).join("");select.value=workerRegistrationCompany;
   const socOption=method.querySelector('option[value="soc"]');if(socOption){socOption.hidden=!isMaster();socOption.disabled=!isMaster();}
-  if(!workerRegistrationCompany||method.value==='soc'&&!isMaster())method.value="";
+  if(!isMaster()){workerRegistrationCompany=activeEmpresaId;if(method.value!=="manual")method.value="consultar";}
+  else if(!workerRegistrationCompany)method.value="";
   method.disabled=!workerRegistrationCompany;const value=method.value;
-  $("workerImportCard")?.classList.toggle("hidden",!['modelo','soc'].includes(value));
+  $("workerImportCard")?.classList.toggle("hidden",!isMaster()||!['modelo','soc'].includes(value));
   $("workerStandardImport")?.classList.toggle("hidden",value!=='modelo');
   const soc=document.querySelector('.soc-import');if(soc){soc.classList.toggle('hidden',value!=='soc'||!isMaster());soc.open=value==='soc';}
   $("trabalhadorForm")?.classList.toggle("hidden",value!=='manual');
   $("workerListCard")?.classList.toggle("hidden",value!=='consultar');
+  if(!isMaster()){$("workerEditCancel")?.classList.toggle("hidden",value!=="manual");setText("workerEditCancel","Voltar à lista");}
+  else setText("workerEditCancel","Cancelar edição");
   if(value==='consultar')renderTrabalhadores();
   setText('workerImportHeading',value==='soc'?'Importar lista do SOC':'Importar equipe pelo Excel');
 }
@@ -118,7 +127,8 @@ function setSidebarOpen(open,returnFocus=false){
 }
 function activateScreen(screen,focusContent=true){
   if(!Object.prototype.hasOwnProperty.call(screenLabels,screen))return;
-  if(screen==="empresas-cadastradas"&&!isMaster())return;
+  if(["empresas","empresas-cadastradas"].includes(screen)&&!isMaster())return;
+  if(screen==="trabalhadores"&&!isMaster()){cancelWorkerEdit();renderWorkerRegistration();}
   if(screen!=="biometria"&&biometricCapture)resetBiometricCapture();
   document.querySelectorAll(".nav button").forEach(button=>{
     const active=button.dataset.screen===screen;button.classList.toggle("active",active);
@@ -277,7 +287,7 @@ async function refreshAll(){
   renderConfigSummary();
   await restoreImportPreview();
 }
-function renderDashboard(){const banner=$("actionBanner");if(!activeEmpresaId&&isMaster()){banner.classList.remove("hidden")}else banner.classList.add("hidden");const actions=[];if(!cache.empresas.length)actions.push(isMaster()?"Cadastre a primeira empresa cliente.":"Solicite ao administrador a vinculação deste acesso à sua empresa.");if(activeEmpresaId&&!cache.trabalhadores.length)actions.push("Cadastre trabalhadores ou importe a equipe pelo Excel.");if(activeEmpresaId&&!cache.epis.length)actions.push("Cadastre equipamentos no catálogo compartilhado.");if(activeEmpresaId&&cache.trabalhadores.length&&cache.epis.length)actions.push("Gere uma ficha de EPI.");$("nextActions").innerHTML=actions.length?actions.map(a=>`<div class="item"><strong>${escapeHtml(a)}</strong></div>`).join(""):'<div class="item"><strong>Fluxo inicial concluído.</strong><small>Você já pode gerar e acompanhar fichas de EPI.</small></div>';$("dashboardFichas").innerHTML=cache.fichas.length?cache.fichas.slice(0,6).map(f=>itemHtml(f,[f.trabalhadorNome||f.trabalhadorId,f.tipo,f.status,f.data])).join(""):"Nenhuma ficha gerada para a empresa selecionada."}
+function renderDashboard(){const banner=$("actionBanner");if(!activeEmpresaId&&isMaster()){banner.classList.remove("hidden")}else banner.classList.add("hidden");const actions=[];if(!cache.empresas.length)actions.push(isMaster()?"Cadastre a primeira empresa cliente.":"Solicite ao administrador a vinculação deste acesso à sua empresa.");if(activeEmpresaId&&!cache.trabalhadores.length)actions.push(isMaster()?"Cadastre trabalhadores ou importe a equipe pelo Excel.":"Inclua sua equipe pelo botão Novo colaborador.");if(activeEmpresaId&&!cache.epis.length)actions.push("Cadastre equipamentos no catálogo compartilhado.");if(activeEmpresaId&&cache.trabalhadores.length&&cache.epis.length)actions.push("Gere uma ficha de EPI.");$("nextActions").innerHTML=actions.length?actions.map(a=>`<div class="item"><strong>${escapeHtml(a)}</strong></div>`).join(""):'<div class="item"><strong>Fluxo inicial concluído.</strong><small>Você já pode gerar e acompanhar fichas de EPI.</small></div>';$("dashboardFichas").innerHTML=cache.fichas.length?cache.fichas.slice(0,6).map(f=>itemHtml(f,[f.trabalhadorNome||f.trabalhadorId,f.tipo,f.status,f.data])).join(""):"Nenhuma ficha gerada para a empresa selecionada."}
 async function refreshEmpresas(update=true){const r=await api("/api/empresas");ensureSuccess(r,"Não foi possível carregar as empresas.");cache.empresas=asArray(r);renderEmpresas();if(update)await refreshAllSafe();return r}
 function renderEmpresas(){
   const el=$("empresasList"),sel=$("empresaAtivaSelect");if(!el||!sel)return;sel.innerHTML='<option value="">Selecione uma empresa</option>';
@@ -286,7 +296,7 @@ function renderEmpresas(){
   if(!cache.empresas.length){el.textContent="Nenhuma empresa cadastrada.";return;}
   el.innerHTML=cache.empresas.map(e=>{
     const pending=isMaster()&&e.acessoStatus==="pendente";
-    const actions=`<div class="item-actions"><button class="btn btn-secondary" type="button" data-edit-company="${escapeHtml(e.id)}" onclick="editCompany(this.dataset.editCompany)">Editar</button>${isMaster()?`<button class="btn btn-danger" type="button" data-delete-company="${escapeHtml(e.id)}" onclick="deleteCompany(this.dataset.deleteCompany)">Excluir</button>${e.acessoStatus==="ativo"?`<button class="btn btn-secondary" type="button" data-reset-company="${escapeHtml(e.id)}" onclick="resetCompanyPassword(this.dataset.resetCompany)">Restaurar senha inicial</button>`:""}`:""}${pending?`<button class="btn btn-secondary" type="button" data-empresa-id="${escapeHtml(e.id)}" onclick="resumeCompanyAccess(this)">Retomar acesso</button>`:""}</div>`;
+    const actions=isMaster()?`<div class="item-actions"><button class="btn btn-secondary" type="button" data-edit-company="${escapeHtml(e.id)}" onclick="editCompany(this.dataset.editCompany)">Editar</button>${isMaster()?`<button class="btn btn-danger" type="button" data-delete-company="${escapeHtml(e.id)}" onclick="deleteCompany(this.dataset.deleteCompany)">Excluir</button>${e.acessoStatus==="ativo"?`<button class="btn btn-secondary" type="button" data-reset-company="${escapeHtml(e.id)}" onclick="resetCompanyPassword(this.dataset.resetCompany)">Restaurar senha inicial</button>`:""}`:""}${pending?`<button class="btn btn-secondary" type="button" data-empresa-id="${escapeHtml(e.id)}" onclick="resumeCompanyAccess(this)">Retomar acesso</button>`:""}</div>`:"";
     return itemHtml(e,[e.cnpj,e.localidade,e.login?"Login: "+e.login:"",e.acessoStatus==="pendente"?"Acesso pendente de criação":e.acessoStatus==="ativo"?"Acesso da empresa criado":e.status],actions);
   }).join("");
   cache.empresas.forEach(e=>{const o=document.createElement("option");o.value=e.id;o.textContent=e.nome||"Empresa";if(String(e.id)===String(activeEmpresaId))o.selected=true;sel.appendChild(o);});
@@ -423,7 +433,7 @@ function resetCompanyLogoEditor(){
 }
 function renderCompanyLogoEditor(){
   const empresa=cache.empresas.find(item=>String(item.id)===String(activeEmpresaId));
-  if(!empresa){resetCompanyLogoEditor();return;}
+  if(!isMaster()||!empresa){resetCompanyLogoEditor();return;}
   $("empresaLogoForm")?.classList.remove("hidden");setText("empresaLogoCompany",empresa.nome||"Empresa selecionada");
   if(empresaLogoEdit===null){
     const logo=/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(String(empresa.logoDataUrl||""))?empresa.logoDataUrl:"";
@@ -438,6 +448,7 @@ function renderCompanyLogoEditor(){
   }
 }
 async function selectLogo(event,editing){
+  if(!isMaster())return;
   const file=event.target.files?.[0];if(!file)return;
   const attempt=editing?++logoEditGeneration:++logoCreateGeneration,generation=sessionGeneration,company=companyGeneration;
   const current=()=>attempt===(editing?logoEditGeneration:logoCreateGeneration)&&generation===sessionGeneration&&(!editing||company===companyGeneration);
@@ -483,7 +494,7 @@ async function submitExistingCompanyAccess(event){
   }catch(error){if(generation===sessionGeneration&&company===companyGeneration)handleAppError(error);}finally{button.disabled=false;}
 }
 async function submitCompanyLogo(event){
-  event.preventDefault();if(!requireEmpresa()||empresaLogoEdit===null)return;
+  event.preventDefault();if(!isMaster()||!requireEmpresa()||empresaLogoEdit===null)return;
   const button=$("empresaLogoSave"),generation=sessionGeneration,selectedGeneration=companyGeneration;if(button.disabled)return;button.disabled=true;clearAppError();
   try{
     const company=cache.empresas.find(item=>String(item.id)===String(activeEmpresaId));
@@ -544,7 +555,7 @@ function renderImportProgress(report){
   else setImportMessage("success","Planilha conferida. Revise a prévia e clique em Sincronizar trabalhadores para aplicar as alterações.");
 }
 async function previewWorkersFile(event){
-  const soc=event.target.id==="trabalhadoresSocFile";if(soc&&!isMaster()){event.target.value="";return;}
+  const soc=event.target.id==="trabalhadoresSocFile";if(!isMaster()){event.target.value="";return;}
   const matriculaColumn=$("socMatriculaColumn")?.value||"matricula";
   const file=event.target.files?.[0];if(!file)return;if(!requireEmpresa()){event.target.value="";return;}
   clearImportPreview();const attempt=importAttempt,generation=sessionGeneration,company=companyGeneration;
@@ -565,6 +576,7 @@ async function previewWorkersFile(event){
 }
 function setWorkerImportBusy(busy){for(const id of ["trabalhadoresImportFile","trabalhadoresSocFile","socMatriculaColumn"])if($(id))$(id).disabled=busy;}
 async function restoreImportPreview(){
+  if(!isMaster()){clearImportReference();return;}
   if(importPreview||!activeEmpresaId)return;
   const key=importReferenceKey();if(!key)return;
   let reference;try{reference=JSON.parse(sessionStorage.getItem(key)||"null");}catch(error){sessionStorage.removeItem(key);return;}
@@ -577,7 +589,7 @@ async function restoreImportPreview(){
   }catch(error){if(error.code==="SESSION_CHANGED"||attempt!==importAttempt)return;if([404,410].includes(error.status))sessionStorage.removeItem(key);else if(error.status===401)handleAppError(error);else setImportMessage("warn","Não foi possível recuperar a prévia pendente. Clique em Atualizar trabalhadores para tentar novamente.");}
 }
 async function confirmWorkersImport(){
-  if(!importPreview||importPreview.podeConfirmar!==true||String(importPreview.empresaId)!==String(activeEmpresaId))return;
+  if(!isMaster()||!importPreview||importPreview.podeConfirmar!==true||String(importPreview.empresaId)!==String(activeEmpresaId))return;
   const button=$("trabalhadoresImportCommit");if(button.disabled)return;
   const attempt=importAttempt,generation=sessionGeneration,company=companyGeneration,id=importPreview.importacaoId;
   button.disabled=true;setWorkerImportBusy(true);$("trabalhadoresImportCancel").disabled=true;
@@ -612,6 +624,7 @@ async function confirmWorkersImport(){
   }
 }
 function downloadWorkersTemplate(){
+  if(!isMaster())return;
   if(!workerRegistrationCompany||workerRegistrationCompany!==activeEmpresaId){$("workerCompanySelect")?.focus();return;}
   const anchor=document.createElement("a");anchor.href=(window.JP_CONFIG.appBasePath||"/EntregaEPI/").replace(/\/?$/, "/")+"assets/modelo-trabalhadores.xlsx";anchor.download="Modelo_Trabalhadores_JP_EntregaEPI.xlsx";document.body.appendChild(anchor);anchor.click();anchor.remove();
 }
@@ -928,8 +941,11 @@ async function submitCadastro(event, path, empresaRequired=false) {
       if(body.tipo==="sem_ca"){body.ca="";body.validade="";body.situacao="Sem CA";}
     }
     const result=ensureSuccess(await api(path,{method:"POST",body:JSON.stringify(body)}),"Não foi possível salvar o cadastro.");
-    form.reset();if(path==="/api/epis")updateEquipmentKind();await refreshAll();
+    form.reset();if(path==="/api/epis")updateEquipmentKind();
+    if(path==="/api/trabalhadores"&&!isMaster()){cancelWorkerEdit();workerListPage=1;$("trabalhadorSearch").value="";$("workerStatusFilter").value="todos";}
+    await refreshAll();
     if(generation!==sessionGeneration||(empresaRequired&&company!==companyGeneration))return;
+    if(path==="/api/trabalhadores"&&!isMaster()){$("appMessage").className="message success";$("appMessage").textContent="Colaborador cadastrado na sua empresa.";}
     if(path==="/api/epis"){ $("appMessage").className="message success";$("appMessage").textContent=result.body?.reutilizado?"O equipamento já estava no catálogo compartilhado e está disponível para uso.":"Equipamento incluído no catálogo compartilhado de todas as empresas.";}
   }catch(error){if(generation===sessionGeneration&&(!empresaRequired||company===companyGeneration))handleAppError(error);}finally{if(generation===sessionGeneration&&(!empresaRequired||company===companyGeneration))button.disabled=false;}
 }

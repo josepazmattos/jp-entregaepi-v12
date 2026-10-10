@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#146544" />
   <title>JP EntregaEPI</title>
   <script src="/__APP_PREFIX__/config.js?v=1294"></script>
-  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=20261010-empresas" />
+  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=20261010-perfil-empresa" />
 </head>
 <body>
   <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
@@ -94,7 +94,7 @@
       <nav class="nav" aria-label="Navegação do sistema">
         <div class="nav-group"><p class="nav-label">Gestão</p>
           <button type="button" class="nav-button active" data-screen="dashboard" aria-current="page"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-grid"></use></svg><span>Dashboard</span></button>
-          <button type="button" class="nav-button" data-screen="empresas"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg><span>Empresas</span></button>
+          <button type="button" class="nav-button hidden" data-screen="empresas" data-master-only><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg><span>Empresas</span></button>
         <button class="nav-button nav-subitem hidden" type="button" data-screen="empresas-cadastradas" data-master-only><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg><span>Empresas Cadastradas</span></button>
           <button type="button" class="nav-button" data-screen="trabalhadores"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-users"></use></svg><span>Trabalhadores</span></button>
           <button type="button" class="nav-button" data-screen="epis"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg><span>EPIs e CA</span></button>
@@ -115,7 +115,7 @@
       <header class="app-header">
         <div class="header-context"><button id="menuToggle" class="icon-button menu-toggle" type="button" aria-label="Abrir menu" aria-controls="primarySidebar" aria-expanded="false"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-menu"></use></svg></button><div class="breadcrumb"><span>Gestão de EPI</span><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-chevron"></use></svg><strong id="currentSectionLabel">Dashboard</strong></div></div>
         <div class="header-controls">
-          <div class="company-box"><label for="empresaAtivaSelect">Empresa em uso</label><select id="empresaAtivaSelect"><option value="">Selecione ou cadastre uma empresa</option></select></div>
+          <div class="company-box" data-master-only><label for="empresaAtivaSelect">Empresa em uso</label><select id="empresaAtivaSelect"><option value="">Selecione ou cadastre uma empresa</option></select></div><span id="clientCompanyName" class="client-company-name hidden"></span>
           <div class="user-menu"><span class="user-avatar"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-user"></use></svg></span><div><small>Usuário</small><strong id="userBadge">Usuário autenticado</strong></div></div>
         </div>
       </header>
@@ -125,15 +125,15 @@
           <div class="topbar"><div><span class="kicker">Painel de gestão</span><h1 id="title-dashboard">Dashboard</h1><p>Acompanhe os cadastros e as movimentações da sua operação.</p></div><div class="dashboard-tools"><div class="health-indicators" aria-label="Estado dos serviços"><button type="button" id="healthSystem" class="health-chip" data-state="idle" onclick="goScreen('config')">Sistema <span>Verificando</span></button><button type="button" id="healthCA" class="health-chip" data-state="idle" onclick="goScreen('config')">CA <span>Verificando</span></button><button type="button" id="healthBio" class="health-chip" data-state="idle" onclick="goScreen('config')">Biometria <span>Verificando</span></button></div><button id="refreshButton" class="btn btn-secondary" type="button"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Atualizar</button></div></div>
           <div id="actionBanner" class="action-banner hidden"><div><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-info"></use></svg><p><strong>Comece pela empresa.</strong><span>Cadastre ou selecione uma empresa para organizar os trabalhadores, EPIs e fichas.</span></p></div><button class="btn btn-secondary" type="button" onclick="goScreen('empresas')"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-plus"></use></svg>Cadastrar empresa</button></div>
           <div class="metrics">
-            <article class="metric-card"><div class="metric-top"><span>Empresas</span><span class="metric-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg></span></div><strong id="metricEmpresas">0</strong><p>Empresas cadastradas</p></article>
+            <article class="metric-card" data-master-only><div class="metric-top"><span>Empresas</span><span class="metric-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg></span></div><strong id="metricEmpresas">0</strong><p>Empresas cadastradas</p></article>
             <article class="metric-card"><div class="metric-top"><span>Trabalhadores</span><span class="metric-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-users"></use></svg></span></div><strong id="metricTrabalhadores">0</strong><p>Na empresa selecionada</p></article>
             <article class="metric-card"><div class="metric-top"><span>EPIs</span><span class="metric-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg></span></div><strong id="metricEpis">0</strong><p>Equipamentos cadastrados</p></article>
             <article class="metric-card"><div class="metric-top"><span>Fichas</span><span class="metric-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-file"></use></svg></span></div><strong id="metricFichas">0</strong><p>Documentos emitidos</p></article>
           </div>
           <div class="section-heading"><div><h2>Acesso rápido</h2><p>As principais ações da sua rotina.</p></div></div>
           <div class="quick-actions">
-            <button type="button" class="shortcut" onclick="goScreen('empresas')"><span class="shortcut-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg></span><span><strong id="companyShortcutTitle">Empresas</strong><small id="companyShortcutText">Consulte os dados e o logotipo</small></span><svg class="icon shortcut-arrow" aria-hidden="true" focusable="false"><use href="#icon-chevron"></use></svg></button>
-            <button type="button" class="shortcut" onclick="goScreen('trabalhadores')"><span class="shortcut-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-users"></use></svg></span><span><strong>Novo trabalhador</strong><small>Cadastre a equipe</small></span><svg class="icon shortcut-arrow" aria-hidden="true" focusable="false"><use href="#icon-chevron"></use></svg></button>
+            <button type="button" class="shortcut" data-master-only onclick="goScreen('empresas')"><span class="shortcut-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg></span><span><strong id="companyShortcutTitle">Empresas</strong><small id="companyShortcutText">Consulte os dados e o logotipo</small></span><svg class="icon shortcut-arrow" aria-hidden="true" focusable="false"><use href="#icon-chevron"></use></svg></button>
+            <button type="button" class="shortcut" onclick="openWorkerRegistration()"><span class="shortcut-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-users"></use></svg></span><span><strong id="workerShortcutTitle">Novo trabalhador</strong><small>Cadastre a equipe</small></span><svg class="icon shortcut-arrow" aria-hidden="true" focusable="false"><use href="#icon-chevron"></use></svg></button>
             <button type="button" class="shortcut" onclick="goScreen('epis')"><span class="shortcut-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg></span><span><strong>Consultar CA</strong><small>Localize um equipamento</small></span><svg class="icon shortcut-arrow" aria-hidden="true" focusable="false"><use href="#icon-chevron"></use></svg></button>
             <button type="button" class="shortcut" onclick="goScreen('entrega')"><span class="shortcut-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-package"></use></svg></span><span><strong>Gerar ficha</strong><small>Registre a movimentação</small></span><svg class="icon shortcut-arrow" aria-hidden="true" focusable="false"><use href="#icon-chevron"></use></svg></button>
           </div>
@@ -143,7 +143,7 @@
           </div>
         </section>
 
-        <section id="screen-empresas" class="screen" aria-labelledby="title-empresas">
+        <section id="screen-empresas" class="screen hidden" data-master-only aria-labelledby="title-empresas">
           <div class="topbar"><div><span class="kicker">Cadastros</span><h1 id="title-empresas">Empresas</h1><p id="empresasIntro">Consulte os dados e o logotipo utilizados nas fichas da sua empresa.</p></div><button class="btn btn-secondary" type="button" onclick="refreshEmpresas().catch(handleAppError)"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Atualizar empresas</button></div>
           <div id="empresaCredentialsPanel" class="card credentials-card hidden" role="status" aria-live="polite">
             <div class="section-heading"><div><h2>Acesso da empresa criado</h2><p>Entregue estes dados ao responsável pela empresa.</p></div><button id="empresaCredentialsDismiss" class="icon-button" type="button" aria-label="Fechar dados do acesso"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-close"></use></svg></button></div>
@@ -189,8 +189,8 @@
         <section id="screen-empresas-cadastradas" class="screen hidden" data-master-only aria-labelledby="title-empresas-cadastradas"><div class="topbar"><div><span class="kicker">Cadastros</span><h1 id="title-empresas-cadastradas">Empresas Cadastradas</h1></div><button class="btn btn-secondary" type="button" onclick="refreshEmpresas().catch(handleAppError)">Atualizar empresas</button></div><div id="companyListMasterHost"></div></section>
 
         <section id="screen-trabalhadores" class="screen" aria-labelledby="title-trabalhadores">
-          <div class="topbar"><div><span class="kicker">Cadastros</span><h1 id="title-trabalhadores">Trabalhadores</h1><p>Mantenha os dados da equipe organizados para cada entrega.</p></div><button class="btn btn-secondary" type="button" onclick="refreshTrabalhadores().catch(handleAppError)"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Atualizar trabalhadores</button></div>
-          <div class="card worker-registration"><div class="grid-form"><div class="field"><label for="workerCompanySelect">1. Selecione a empresa</label><select id="workerCompanySelect"><option value="">Selecione a empresa</option></select></div><div class="field"><label for="workerRegistrationMethod">2. O que deseja fazer?</label><select id="workerRegistrationMethod" disabled><option value="">Selecione uma opção</option><option value="modelo">Baixar / enviar planilha modelo</option><option value="soc">Upload da planilha SOC · Master</option><option value="manual">Preenchimento manual</option><option value="consultar">Consultar trabalhadores</option></select></div></div></div>
+          <div class="topbar"><div><span class="kicker">Cadastros</span><h1 id="title-trabalhadores">Trabalhadores</h1><p>Mantenha os dados da equipe organizados para cada entrega.</p></div><div class="worker-toolbar"><button id="clientNewWorker" class="btn btn-primary hidden" type="button" onclick="openWorkerRegistration()">Novo colaborador</button><button class="btn btn-secondary" type="button" onclick="refreshTrabalhadores().catch(handleAppError)"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Atualizar trabalhadores</button></div></div>
+          <div class="card worker-registration" data-master-only><div class="grid-form"><div class="field"><label for="workerCompanySelect">1. Selecione a empresa</label><select id="workerCompanySelect"><option value="">Selecione a empresa</option></select></div><div class="field"><label for="workerRegistrationMethod">2. O que deseja fazer?</label><select id="workerRegistrationMethod" disabled><option value="">Selecione uma opção</option><option value="modelo">Baixar / enviar planilha modelo</option><option value="soc">Upload da planilha SOC · Master</option><option value="manual">Preenchimento manual</option><option value="consultar">Consultar trabalhadores</option></select></div></div></div>
           <div id="workerImportCard" class="card import-card hidden">
             <div class="section-heading"><div><h2 id="workerImportHeading">Importar equipe pelo Excel</h2><p>Baixe o modelo, preencha os trabalhadores e envie para conferir a sincronização.</p></div><span class="product-tag">.xlsx</span></div>
             <div id="workerStandardImport"><div class="import-actions"><button id="trabalhadoresTemplateButton" class="btn btn-secondary" type="button">Baixar planilha modelo</button><div class="field grow"><label for="trabalhadoresImportFile">Enviar planilha preenchida</label><input id="trabalhadoresImportFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div></div>
@@ -318,7 +318,7 @@
   </section>
   <script src="/__APP_PREFIX__/assets/ficha.js?v=20261010-devolucao"></script>
   <script src="/__APP_PREFIX__/assets/biometria.js?v=1294"></script>
-  <script src="/__APP_PREFIX__/assets/app.js?v=20261010-empresas"></script>
-  <script src="/__APP_PREFIX__/assets/operations.js?v=20261010-empresas-20261010-login"></script>
+  <script src="/__APP_PREFIX__/assets/app.js?v=20261010-perfil-empresa"></script>
+  <script src="/__APP_PREFIX__/assets/operations.js?v=20261010-perfil-empresa"></script>
 </body>
 </html>

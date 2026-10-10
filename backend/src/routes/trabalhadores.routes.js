@@ -28,7 +28,7 @@ router.post('/', async (req, res) => {
   if (empresaId) ok(res, await importer.createWorker({ body, empresaId, actor: req.auth.sub }));
 });
 
-router.post('/importacao/previa', async (req, res) => {
+router.post('/importacao/previa', requireMaster, async (req, res) => {
   const body = objectBody(req);
   const empresaId = await selectedCompany(req, res);
   if (!empresaId) return;
@@ -42,12 +42,12 @@ router.post('/importacao/soc/previa', requireMaster, async (req, res) => {
   ok(res, await importer.preview({ arquivoNome: body.arquivoNome, arquivoBase64: body.arquivoBase64, empresaId, actor: req.auth.sub, origem: 'soc', master: req.auth.master, matriculaColumn: body.matriculaColumn }));
 });
 
-router.get('/importacao/:id', async (req, res) => {
+router.get('/importacao/:id', requireMaster, async (req, res) => {
   const empresaId = await selectedCompany(req, res);
   if (empresaId) ok(res, await importer.getProgress({ id: req.params.id, empresaId, actor: req.auth.sub, master: req.auth.master }));
 });
 
-router.post('/importacao/:id/confirmar', async (req, res) => {
+router.post('/importacao/:id/confirmar', requireMaster, async (req, res) => {
   const body = objectBody(req);
   const empresaId = await selectedCompany(req, res);
   if (!empresaId) return;

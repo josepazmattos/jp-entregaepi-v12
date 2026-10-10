@@ -57,7 +57,7 @@ test('rotas empresas: MASTER cria e enxerga somente dados públicos de acesso na
   assert.equal(listing.body.items[0].cognitoSub, undefined);
 });
 
-test('rotas empresas: conta EMPRESA edita sua logo e recebe403 para criar, provisionar ou alterar outra empresa', async () => {
+test('rotas empresas: conta EMPRESA apenas consulta; só MASTER altera dados e logo', async () => {
   const { storage, request, state } = setup();
   const own = await storage.create('empresa', { nome: 'EMPRESA PRÓPRIA', cnpj: '04252011000110', logoUrl: 'https://legacy.invalid/logo.png' });
   const foreign = await storage.create('empresa', { nome: 'OUTRA EMPRESA', cnpj: '11222333000181' });
@@ -70,7 +70,12 @@ test('rotas empresas: conta EMPRESA edita sua logo e recebe403 para criar, provi
   assert.equal((await request('PATCH', `/api/empresas/${foreign.id}`, { ...auth, body: { nome: 'NÃO GRAVAR' } })).status, 403);
   assert.equal((await request('POST', `/api/empresas/${own.id}/restaurar-senha`, {...auth,body:{}})).status,403);
   assert.equal((await request('PATCH', `/api/empresas/${own.id}`, {...auth,body:{login:'outro'}})).status,403);
-  const updated = await request('PATCH', `/api/empresas/${own.id}`, { ...auth, body: { logoDataUrl: logo, _version: own._version } });
+  for (const body of [{ logoDataUrl: logo }, { nome: 'NÃO ALTERAR', email: 'teste@example.invalid' }]) {
+    assert.equal((await request('PATCH', `/api/empresas/${own.id}`, { ...auth, body: { ...body, _version: own._version } })).status, 403);
+    assert.deepEqual(await storage.get('empresa', own.id), own);
+  }
+  assert.equal((await request('DELETE', `/api/empresas/${own.id}`, { ...auth, body: {} })).status, 403);
+  const updated = await request('PATCH', `/api/empresas/${own.id}`, { body: { logoDataUrl: logo, _version: own._version } });
   assert.equal(updated.status, 200);
   assert.equal(updated.body.item.logoDataUrl, logo);
   assert.equal(updated.body.item.logoUrl, '');
