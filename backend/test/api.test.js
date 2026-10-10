@@ -139,6 +139,24 @@ test('API Lambda: autorização, empresa, emissão e captura em isolamento local
     assert.equal((await request('POST', '/api/fichas', { company: companyA, body: { ...base, data: '31/02/2026' } })).status, 400);
     assert.equal((await request('POST', '/api/fichas', { company: companyA, body: { ...base, modeloFicha: { id: 'JP-DOCX-11.10.6', termoResponsabilidade: 'TEXTO ADULTERADO' } } })).status, 400);
   });
+  await t.test('Master e Cliente emitem itens mistos sem permitir entrega disfarçada para inativo', async () => {
+    const items=[{epiId:epiA.id,quantidade:5,tipoMovimentacao:'Devolução'},{epiId:epiA.id,quantidade:2,tipoMovimentacao:'Entrega'},{epiId:epiA.id,quantidade:9,tipoMovimentacao:'Entrega'}];
+    const client={...basicClaims,'cognito:groups':'[EMPRESA]','custom:empresa_id':companyA};
+    for(const claims of [masterClaims,client]){
+      const result=await request('POST','/api/fichas',{company:companyA,claims,body:{trabalhadorId:workerA.id,itens:items}});
+      assert.equal(result.status,200);assert.equal(result.body.item.tipo,'Entrega e Devolução');assert.equal(result.body.item.itens.length,3);
+      assert.deepEqual(result.body.item.itens.map(item=>item.quantidade),[5,2,9]);
+    }
+    const count=(await storage.list('ficha',companyA)).length;
+    await storage.update('trabalhador',workerA.id,{status:'Inativo'});
+    assert.equal((await request('POST','/api/fichas',{company:companyA,body:{trabalhadorId:workerA.id,tipo:'Devolução',itens:items}})).status,409);
+    assert.equal((await storage.list('ficha',companyA)).length,count);
+    const returned=await request('POST','/api/fichas',{company:companyA,claims:client,body:{trabalhadorId:workerA.id,itens:items.map(item=>({...item,tipoMovimentacao:'Devolução'}))}});
+    assert.equal(returned.status,200);assert.equal(returned.body.item.tipo,'Devolução');
+    await storage.update('trabalhador',workerA.id,{status:'Ativo'});
+    const invalid=await request('POST','/api/fichas',{company:companyA,body:{trabalhadorId:workerA.id,itens:[items[0],{...items[1],tipoMovimentacao:'INVÁLIDO'}]}});
+    assert.equal(invalid.status,400);assert.equal((await storage.list('ficha',companyA)).length,count+1);
+  });
   await t.test('ficha preserva snapshots do cadastro e impede fabricar assinatura na emissão', async () => {
     const response = await request('POST', '/api/fichas', { company: companyA, body: {
       trabalhadorId: workerA.id, tipo: 'Troca', data: '06/10/2026', itens: [{ epiId: epiA.id, quantidade: 2, epiDescricao: 'DESCRIÇÃO ADULTERADA' }],

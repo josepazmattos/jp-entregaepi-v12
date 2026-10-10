@@ -4,6 +4,7 @@ let sessionGeneration=0,companyGeneration=0,authAttempt=0,importAttempt=0,logoCr
 let firstAccessChallenge=null,empresaLogoDraft="",empresaLogoEdit=null,empresaRequestId="",importPreview=null,companyLoginAutomatic=true;
 let logoCreateLoading=false,companySaving=false;
 let userAvatarGeneration=0;
+let entregaItems=[],entregaDraftWorker="",entregaDraftCompany="",entregaSaving=false;
 let companyPdfController=null,companyPdfDraft=null,companyPdfLoading=false;
 let workerRegistrationCompany="";
 let workerListPage=1;
@@ -227,6 +228,7 @@ function clearSessionData(clearDrafts=false) {
   logoCreateLoading=false;companySaving=false;updateCompanySubmitButton();
   ["trabalhadorForm","epiForm","entregaForm","empresaAccessForm"].forEach(id=>{const button=$(id)?.querySelector('button[type="submit"]');if(button)button.disabled=false;});
   cache={empresas:[],trabalhadores:[],epis:[],fichas:[]};
+  clearEntregaDraft();
   activeEmpresaId="";localStorage.removeItem(activeCompanyKey);sessionStorage.removeItem(activeCompanyKey);
   ["empresasList","trabalhadoresList","episList","fichasList","dashboardFichas","nextActions"].forEach(id=>$(id).textContent="");
   ["metricEmpresas","metricTrabalhadores","metricEpis","metricFichas"].forEach(id=>$(id).textContent=0);
@@ -350,12 +352,52 @@ function renderFichas(){
 }
 async function refreshFichas(update=true){if(!activeEmpresaId){$("fichasList").textContent="Selecione uma empresa.";return}const r=await api("/api/fichas");ensureSuccess(r,"Não foi possível carregar as fichas.");cache.fichas=asArray(r);renderFichas();if(update)await refreshAllSafe();return r}
 async function refreshAllSafe(){try{await refreshAll()}catch(error){handleAppError(error)}}
-function renderEntregaOptions(){
+function renderEntregaOptions(preserveWorker=false){
   const companySelect=$("entregaEmpresa");
   if(companySelect){companySelect.innerHTML='<option value="">Selecione uma empresa</option>'+cache.empresas.map(item=>`<option value="${escapeHtml(item.id)}">${escapeHtml(item.nome||"Empresa")}</option>`).join("");companySelect.value=activeEmpresaId;companySelect.disabled=!isMaster();}
   const tsel=$("entregaTrabalhador"),esel=$("entregaEpi"),devolucao=$("entregaTipo")?.value==='Devolução';
-  if(tsel){const selected=tsel.value,workers=cache.trabalhadores.filter(t=>(!t.empresaId||String(t.empresaId)===String(activeEmpresaId))&&(devolucao||t.status!=='Inativo'));tsel.innerHTML=workers.map(t=>`<option value="${escapeHtml(t.id)}">${escapeHtml(t.nomeCompleto||t.nome||"Trabalhador")}${t.status==='Inativo'?' · Inativo':''}</option>`).join("");if(workers.some(t=>t.id===selected))tsel.value=selected;tsel.disabled=!activeEmpresaId||!workers.length;}
-  if(esel){const selected=esel.value;esel.innerHTML=cache.epis.map(e=>`<option value="${escapeHtml(e.id)}">${escapeHtml(equipmentDescription(e)+" - "+equipmentLabel(e))}</option>`).join("");if(cache.epis.some(e=>e.id===selected))esel.value=selected;}
+  if(tsel){const selected=tsel.value,workers=cache.trabalhadores.filter(t=>(!t.empresaId||String(t.empresaId)===String(activeEmpresaId))&&(devolucao||t.status!=='Inativo'||((preserveWorker||entregaItems.length)&&t.id===selected)));tsel.innerHTML=workers.map(t=>`<option value="${escapeHtml(t.id)}">${escapeHtml(t.nomeCompleto||t.nome||"Trabalhador")}${t.status==='Inativo'?' · Inativo':''}</option>`).join("");if(workers.some(t=>t.id===selected))tsel.value=selected;tsel.disabled=!activeEmpresaId||!workers.length||entregaItems.length>0||entregaSaving;}
+  if(esel){const selected=esel.value;esel.innerHTML='<option value="">Selecione um EPI</option>'+cache.epis.map(e=>`<option value="${escapeHtml(e.id)}">${escapeHtml(equipmentDescription(e)+" - "+equipmentLabel(e))}</option>`).join("");esel.value=cache.epis.some(e=>e.id===selected)?selected:"";}
+  renderEntregaDraft();
+}
+function clearEntregaDraft(){
+  entregaItems=[];entregaDraftWorker="";entregaDraftCompany="";entregaSaving=false;
+  renderEntregaDraft();
+}
+function renderEntregaDraft(){
+  $("entregaItemsSection")?.classList.toggle("hidden",!entregaItems.length);
+  const worker=cache.trabalhadores.find(item=>item.id===entregaDraftWorker);
+  setText("entregaItemsCount",`${entregaItems.length} ${entregaItems.length===1?'item adicionado':'itens adicionados'}${worker?' · '+(worker.nomeCompleto||worker.nome||''):''}`);
+  if($("entregaItemsList"))$("entregaItemsList").innerHTML=entregaItems.map((item,index)=>`<li class="delivery-item-row"><div class="delivery-item-details"><strong>${escapeHtml(item.nome)}</strong><small>${escapeHtml(item.caLabel)} · Quantidade: ${item.quantidade}</small><span class="delivery-item-type ${item.tipoMovimentacao==='Devolução'?'return':''}">${escapeHtml(item.tipoMovimentacao)} de EPI</span></div><button class="text-button" type="button" data-remove-delivery="${index}" aria-label="Remover item ${index+1}" ${entregaSaving?'disabled':''}>Remover</button></li>`).join("");
+  ["entregaEpi","entregaQuantidade","entregaTipo","entregaAddItem","entregaClearItems"].forEach(id=>{if($(id))$(id).disabled=entregaSaving;});
+  if($("entregaEpi"))$("entregaEpi").required=!entregaItems.length;
+  if($("entregaQuantidade"))$("entregaQuantidade").required=!entregaItems.length;
+  if($("entregaTrabalhador"))$("entregaTrabalhador").disabled=entregaSaving||entregaItems.length>0||!activeEmpresaId||!cache.trabalhadores.length||$("entregaTrabalhador").options?.length===0;
+}
+function entregaWorker(id){
+  const worker=cache.trabalhadores.find(item=>item.id===id);
+  if(!worker||(worker.empresaId&&String(worker.empresaId)!==String(activeEmpresaId)))throw new Error("Selecione o trabalhador da empresa.");
+  if(entregaItems.length&&(entregaDraftCompany!==activeEmpresaId||entregaDraftWorker!==id))throw new Error("A empresa ou o trabalhador mudou. Limpe os itens e monte a ficha novamente.");
+  return worker;
+}
+function entregaInputItem(body,worker){
+  const epi=cache.epis.find(item=>item.id===body.epiId);
+  if(!epi)throw new Error("Selecione um equipamento do catálogo.");
+  const quantidade=Number(body.quantidade),tipoMovimentacao=body.tipo;
+  if(!Number.isSafeInteger(quantidade)||quantidade<1||quantidade>100000)throw new Error("Informe uma quantidade inteira maior que zero, até 100.000.");
+  if(!['Entrega','Devolução'].includes(tipoMovimentacao))throw new Error("Selecione o tipo de movimentação.");
+  if(worker.status==='Inativo'&&tipoMovimentacao!=='Devolução')throw new Error("O trabalhador está inativo. Apenas devoluções são permitidas.");
+  return {epiId:epi.id,quantidade,tipoMovimentacao,nome:equipmentDescription(epi),caLabel:equipmentLabel(epi)};
+}
+function addEntregaItem(){
+  if(entregaSaving||!requireEmpresa())return;
+  clearAppError();
+  try{
+    const body=formDataObj($("entregaForm")),worker=entregaWorker(entregaDraftWorker||body.trabalhadorId);
+    if(entregaItems.length>=100)throw new Error("Uma ficha admite até 100 itens.");
+    entregaItems.push(entregaInputItem(body,worker));entregaDraftWorker=worker.id;entregaDraftCompany=activeEmpresaId;
+    $("entregaEpi").value="";$("entregaQuantidade").value="1";renderEntregaDraft();$("entregaEpi").focus();
+  }catch(error){handleAppError(error);}
 }
 function updateEquipmentKind(){
   const without=$("epiSemCa")?.checked===true;
@@ -898,6 +940,7 @@ async function changeActiveCompany(id){
   workerListPage=1;$("trabalhadorSearch").value="";$("workerStatusFilter").value="Ativo";
   workerRegistrationCompany="";$("workerRegistrationMethod").value="";
   companyGeneration++;clearCompanyPdf();if(biometricCapture)resetBiometricCapture();logoEditGeneration++;clearCredentials();clearImportPreview();resetCompanyLogoEditor();
+  clearEntregaDraft();
   ["trabalhadorForm","entregaForm"].forEach(id=>{$(id).reset();const button=$(id).querySelector('button[type="submit"]');if(button)button.disabled=false;});if($("trabalhadorSearch"))$("trabalhadorSearch").value="";
   saveActiveCompany(id);cache.trabalhadores=[];cache.fichas=[];$("trabalhadoresList").textContent="Carregando...";$("fichasList").textContent="Carregando...";$("dashboardFichas").textContent="";renderEntregaOptions();
   await refreshAllSafe();
@@ -996,7 +1039,11 @@ $("trabalhadorSearch").addEventListener("input",()=>{workerListPage=1;renderTrab
 $("workerStatusFilter").addEventListener("change",()=>{workerListPage=1;renderTrabalhadores();});
 $("workerPagePrevious").addEventListener("click",()=>{workerListPage--;renderTrabalhadores();});
 $("workerPageNext").addEventListener("click",()=>{workerListPage++;renderTrabalhadores();});
-$("entregaTipo").addEventListener("change",()=>{renderEntregaOptions();setText("movementHelp",$("entregaTipo").value==='Devolução'?"Preenche somente a data de devolução na nova ficha. Use também para registrar o EPI devolvido em uma troca.":"Preenche a data de entrega na nova ficha.");});
+$("entregaTipo").addEventListener("change",()=>{renderEntregaOptions(true);setText("movementHelp",$("entregaTipo").value==='Devolução'?"Preenche somente a data de devolução deste item.":"Preenche a data de entrega deste item.");});
+$("entregaAddItem").addEventListener("click",addEntregaItem);
+$("entregaClearItems").addEventListener("click",()=>{if(!entregaSaving){clearEntregaDraft();renderEntregaOptions();}});
+$("entregaTrabalhador").addEventListener("change",()=>{if(!entregaSaving)clearEntregaDraft();});
+$("entregaItemsList").addEventListener("click",event=>{const button=event.target.closest('[data-remove-delivery]');if(!button||entregaSaving)return;const index=Number(button.dataset.removeDelivery);if(!Number.isInteger(index)||index<0||index>=entregaItems.length)return;entregaItems.splice(index,1);if(!entregaItems.length)clearEntregaDraft();renderEntregaOptions(true);});
 $("epiSearch").addEventListener("input",renderEpis);
 ["epiComCa","epiSemCa"].forEach(id=>$(id).addEventListener("change",updateEquipmentKind));
 $("entregaForm").addEventListener("submit",async event=>{
@@ -1008,21 +1055,23 @@ $("entregaForm").addEventListener("submit",async event=>{
   try{
     const body=formDataObj(form);
     const empresa=cache.empresas.find(item=>item.id===activeEmpresaId)||{};
-    const epi=cache.epis.find(item=>item.id===body.epiId);
-    const trabalhador=cache.trabalhadores.find(item=>item.id===body.trabalhadorId);
-    if(!trabalhador||!epi||(trabalhador.empresaId&&String(trabalhador.empresaId)!==String(activeEmpresaId)))throw new Error("Selecione o trabalhador da empresa e um equipamento do catálogo.");
-    const quantidade=Number(body.quantidade);
-    if(!Number.isInteger(quantidade)||quantidade<1)throw new Error("Informe uma quantidade inteira maior que zero.");
+    const trabalhador=entregaWorker(entregaDraftWorker||body.trabalhadorId);
+    const itens=[...entregaItems];if(body.epiId)itens.push(entregaInputItem(body,trabalhador));
+    if(!itens.length)throw new Error("Selecione um equipamento do catálogo.");
+    if(itens.length>100)throw new Error("Uma ficha admite até 100 itens.");
+    if(trabalhador.status==='Inativo'&&itens.some(item=>item.tipoMovimentacao!=='Devolução'))throw new Error("O trabalhador está inativo. Apenas devoluções são permitidas.");
+    entregaSaving=true;renderEntregaDraft();
     const payload={
       empresaId:activeEmpresaId,trabalhadorId:trabalhador.id,
       trabalhadorNome:trabalhador.nomeCompleto||trabalhador.nome||trabalhador.name,
-      tipo:body.tipo,data:new Date().toLocaleDateString("pt-BR"),
+      data:new Date().toLocaleDateString("pt-BR"),
       ...window.JP_FICHA.createSnapshot(empresa,trabalhador),
-      itens:[{epiId:epi.id,epiDescricao:epi.descricao||epi.name,ca:epi.ca,tipo:epi.tipo||"epi_ca",semCA:isWithoutCA(epi),quantidade}]
+      itens:itens.map(({epiId,quantidade,tipoMovimentacao})=>({epiId,quantidade,tipoMovimentacao}))
     };
     ensureSuccess(await api("/api/fichas",{method:"POST",body:JSON.stringify(payload)}),"Não foi possível gerar a ficha de EPI.");
+    clearEntregaDraft();entregaSaving=true;renderEntregaDraft();$("entregaEpi").value="";$("entregaQuantidade").value="1";
     await refreshAll();if(generation!==sessionGeneration||company!==companyGeneration)return;goScreen("fichas");
-  }catch(error){if(generation===sessionGeneration&&company===companyGeneration)handleAppError(error);}finally{if(generation===sessionGeneration&&company===companyGeneration)button.disabled=false;}
+  }catch(error){if(generation===sessionGeneration&&company===companyGeneration)handleAppError(error);}finally{if(generation===sessionGeneration&&company===companyGeneration){button.disabled=false;entregaSaving=false;renderEntregaDraft();}}
 });
 $("logoutButton").addEventListener("click",()=>{sessionStorage.removeItem(tokenKey);showLogin(true)});$("refreshButton").addEventListener("click",()=>refreshAllSafe());
 document.querySelectorAll(".nav button").forEach(btn=>btn.addEventListener("click",()=>activateScreen(btn.dataset.screen)));

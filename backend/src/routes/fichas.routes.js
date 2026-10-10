@@ -18,7 +18,6 @@ router.post('/', async (req, res) => {
   const [empresa, trabalhador] = await Promise.all([get('empresa', empresaId), get('trabalhador', trabalhadorId)]);
   if (!empresa) return fail(res, 404, 'Empresa não encontrada');
   if (!trabalhador || trabalhador.empresaId !== empresaId) return fail(res, 403, 'O trabalhador não pertence à empresa selecionada');
-  if (trabalhador.status === 'Inativo' && body.tipo !== 'Devolução') return fail(res, 409, 'O trabalhador está inativo');
 
   let itens = Array.isArray(body.itens) ? body.itens : [];
   if (!itens.length && body.epiId) {
@@ -26,10 +25,12 @@ router.post('/', async (req, res) => {
   }
   if (!itens.length) return fail(res, 400, 'A ficha precisa de pelo menos um EPI');
   if (itens.length > 100) return fail(res, 400, 'Uma ficha admite até 100 itens');
+  const equipmentReads = new Map();
   const items = await Promise.all(itens.map(async requested => {
     if (!requested || typeof requested !== 'object' || Array.isArray(requested)) return { requested: {}, epi: null };
     const epiId = textField(requested.epiId, { required: true, field: 'EPI', max: 128 });
-    return { requested, epi: await get('epi', epiId) };
+    if (!equipmentReads.has(epiId)) equipmentReads.set(epiId, get('epi', epiId));
+    return { requested, epi: await equipmentReads.get(epiId) };
   }));
   const item = await create('ficha', buildFicha({ empresaId, empresa, trabalhador, items, body, actor: req.auth.sub }));
   ok(res, { item });
