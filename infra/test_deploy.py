@@ -20,7 +20,7 @@ ENV = {"GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "1"}
 def initial_snapshot():
     code = b"PACOTE-ANTERIOR-SINTETICO"
     config = {"FunctionArn": deploy.FUNCTION_ARN, "Role": deploy.EXECUTION_ROLE,
-              "Runtime": "nodejs20.x", "State": "Active", "LastUpdateStatus": "Successful",
+              "Runtime": "nodejs20.x", "MemorySize": 256, "State": "Active", "LastUpdateStatus": "Successful",
               "RevisionId": "revision-0", "CodeSha256": base64.b64encode(hashlib.sha256(code).digest()).decode(),
               "Environment": {"Variables": {"EXISTING_SETTING": "preservar", "TABLE_NAME": deploy.TABLE}}}
     return {"identity": {"Account": deploy.ACCOUNT,
@@ -95,7 +95,7 @@ class FakeAws:
                 self.code = Path(str(extra[1]).removeprefix("fileb://")).read_bytes()
                 self.snapshot["config"]["CodeSha256"] = base64.b64encode(hashlib.sha256(self.code).digest()).decode()
             elif operation == "update-function-configuration":
-                self.snapshot["config"].update({k: copy.deepcopy(params[k]) for k in ("Runtime", "Environment")})
+                self.snapshot["config"].update({k: copy.deepcopy(params[k]) for k in ("Runtime", "Environment", "MemorySize")})
             else:
                 raise AssertionError(operation)
             self.revision += 1
@@ -294,6 +294,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(self.operation.report["biometriaRelease"], public["biometria"])
         cfg = self.aws.snapshot["config"]
         self.assertEqual(cfg["Runtime"], "nodejs22.x")
+        self.assertEqual(cfg["MemorySize"], 1024)
         self.assertEqual(cfg["Environment"]["Variables"]["EXISTING_SETTING"], "preservar")
         self.assertEqual(cfg["Environment"]["Variables"]["BUILD_SHA"], COMMIT)
         self.assertEqual(cfg["Environment"]["Variables"]["AUTH_COMPANY_CLAIM"], "custom:empresa_id")
@@ -326,6 +327,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(cfg["CodeSha256"], self.aws.initial["config"]["CodeSha256"])
         self.assertEqual(cfg["Environment"], self.aws.initial["config"]["Environment"])
         self.assertEqual(cfg["Runtime"], "nodejs20.x")
+        self.assertEqual(cfg["MemorySize"], 256)
         self.assertTrue(any(r.get("AuthorizationType") == "JWT" for r in self.aws.snapshot["routes"]["Items"]))
         deleted = {c[2]["Key"] for c in self.aws.calls if c[0:2] == ("s3api", "delete-object")}
         self.assertEqual(deleted, {"EntregaEPI/assets/operations.js", "EntregaEPI/assets/ficha.js", "EntregaEPI/assets/biometria.js",
@@ -375,6 +377,16 @@ class DeploymentTests(unittest.TestCase):
         self.operation.lambda_attempted = True
         self.aws.snapshot["config"]["CodeSha256"] = "OUTRO-COMMIT"
         with self.assertRaisesRegex(deploy.DeployError, "Outra implantação"):
+            self.operation.rollback_lambda()
+        self.assertFalse(any(c[0] == "lambda" and c[1].startswith("update-") for c in self.aws.calls))
+
+    def test_concurrent_lambda_memory_is_not_overwritten_by_rollback(self):
+        self.operation.preflight()
+        self.operation.download_lambda_backup()
+        self.operation.lambda_attempted = True
+        self.operation.lambda_owned_hashes.add(self.aws.snapshot["config"]["CodeSha256"])
+        self.aws.snapshot["config"]["MemorySize"] = 2048
+        with self.assertRaisesRegex(deploy.DeployError, "Outra alteração de configuração"):
             self.operation.rollback_lambda()
         self.assertFalse(any(c[0] == "lambda" and c[1].startswith("update-") for c in self.aws.calls))
 

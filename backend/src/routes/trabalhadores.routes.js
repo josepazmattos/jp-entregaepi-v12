@@ -48,10 +48,10 @@ router.get('/importacao/:id', async (req, res) => {
 });
 
 router.post('/importacao/:id/confirmar', async (req, res) => {
-  objectBody(req);
+  const body = objectBody(req);
   const empresaId = await selectedCompany(req, res);
   if (!empresaId) return;
-  try { ok(res, await importer.confirm({ id: req.params.id, empresaId, actor: req.auth.sub, master: req.auth.master })); }
+  try { ok(res, await importer.confirm({ id: req.params.id, empresaId, actor: req.auth.sub, master: req.auth.master, compact: body.resumo === true })); }
   catch (error) {
     if (!error.importacao) throw error;
     fail(res, error.status, error.message, { code: error.code, importacao: error.importacao });

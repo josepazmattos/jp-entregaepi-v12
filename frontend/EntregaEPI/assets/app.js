@@ -320,8 +320,10 @@ function renderFichas(){
 async function refreshFichas(update=true){if(!activeEmpresaId){$("fichasList").textContent="Selecione uma empresa.";return}const r=await api("/api/fichas");ensureSuccess(r,"Não foi possível carregar as fichas.");cache.fichas=asArray(r);renderFichas();if(update)await refreshAllSafe();return r}
 async function refreshAllSafe(){try{await refreshAll()}catch(error){handleAppError(error)}}
 function renderEntregaOptions(){
+  const companySelect=$("entregaEmpresa");
+  if(companySelect){companySelect.innerHTML='<option value="">Selecione uma empresa</option>'+cache.empresas.map(item=>`<option value="${escapeHtml(item.id)}">${escapeHtml(item.nome||"Empresa")}</option>`).join("");companySelect.value=activeEmpresaId;companySelect.disabled=!isMaster();}
   const tsel=$("entregaTrabalhador"),esel=$("entregaEpi"),devolucao=$("entregaTipo")?.value==='Devolução';
-  if(tsel){const selected=tsel.value,workers=cache.trabalhadores.filter(t=>devolucao||t.status!=='Inativo');tsel.innerHTML=workers.map(t=>`<option value="${escapeHtml(t.id)}">${escapeHtml(t.nomeCompleto||t.nome||"Trabalhador")}${t.status==='Inativo'?' · Inativo':''}</option>`).join("");if(workers.some(t=>t.id===selected))tsel.value=selected;}
+  if(tsel){const selected=tsel.value,workers=cache.trabalhadores.filter(t=>(!t.empresaId||String(t.empresaId)===String(activeEmpresaId))&&(devolucao||t.status!=='Inativo'));tsel.innerHTML=workers.map(t=>`<option value="${escapeHtml(t.id)}">${escapeHtml(t.nomeCompleto||t.nome||"Trabalhador")}${t.status==='Inativo'?' · Inativo':''}</option>`).join("");if(workers.some(t=>t.id===selected))tsel.value=selected;tsel.disabled=!activeEmpresaId||!workers.length;}
   if(esel){const selected=esel.value;esel.innerHTML=cache.epis.map(e=>`<option value="${escapeHtml(e.id)}">${escapeHtml(equipmentDescription(e)+" - "+equipmentLabel(e))}</option>`).join("");if(cache.epis.some(e=>e.id===selected))esel.value=selected;}
 }
 function updateEquipmentKind(){
@@ -512,12 +514,7 @@ function importReport(value){return value?.importacao||value?.item||value;}
 function renderImportPreview(report){
   if(!report?.importacaoId||!Array.isArray(report.linhas))throw new Error("O serviço não retornou uma prévia válida. Envie a planilha novamente.");
   importPreview={...report,empresaId:activeEmpresaId};saveImportReference(report);
-  const company=cache.empresas.find(item=>String(item.id)===String(activeEmpresaId));
-  const progress=report.status==="em_andamento"?` · ${Number(report.processados)||0} de ${Number(report.total)||0} processados`:"";
-  const source=report.origem==="soc"?" · SOC: "+(report.matriculaColumn==="matriculaRH"?"Matrícula RH":"Matrícula")+" → matrícula eSocial; Nome Cargo → função; Cidade/Estado da unidade → localidade; S → Ativo, N → Inativo":"";
-  setText("trabalhadoresImportContext",[company?.nome||"Empresa selecionada",report.arquivoNome||"Planilha enviada"].join(" · ")+progress+source);
-  const summary=report.resumo||{};
-  $("trabalhadoresImportSummary").innerHTML=[["criar","Novos"],["atualizar","Atualizações"],["inalterados","Sem alteração"],["erros","Erros"]].map(([key,label])=>`<div class="import-stat${key==="erros"&&summary[key]>0?" has-errors":""}"><strong>${Number(summary[key])||0}</strong><span>${label}</span></div>`).join("");
+  renderImportProgress(report);
   const labels={criar:"Incluir",atualizar:"Atualizar",inalterado:"Manter",erro:"Corrigir"};
   const fieldLabels={nomeCompleto:"Nome completo",cpf:"CPF",matriculaESocial:"Matrícula eSocial",funcao:"Função",localidade:"Localidade",setor:"Setor",dataAdmissao:"Data de admissão",rg:"RG",email:"E-mail",telefone:"Telefone",status:"Status",observacoes:"Observações"};
   $("trabalhadoresImportRows").innerHTML=report.linhas.map(row=>{
@@ -526,6 +523,16 @@ function renderImportPreview(report){
     const data=report.origem==="soc"&&row.dados?`<details class="soc-row-details"><summary>Conferir dados</summary><dl>${Object.entries(fieldLabels).filter(([key])=>row.dados[key]).map(([key,label])=>`<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(row.dados[key])}</dd>`).join("")}</dl></details>`:"";
     return `<tr${row.acao==="erro"?' class="row-error"':""}><td>${escapeHtml(row.linha)}</td><td>${escapeHtml(row.nomeCompleto||"—")}</td><td>${escapeHtml(labels[row.acao]||row.acao||"Conferir")}</td><td>${escapeHtml(detail)}${data}</td></tr>`;
   }).join("");
+}
+function renderImportProgress(report){
+  if(!report?.importacaoId||report.importacaoId!==importPreview?.importacaoId||String(importPreview.empresaId)!==String(activeEmpresaId))throw new Error("A prévia mudou. Envie novamente a planilha.");
+  importPreview={...importPreview,...report};saveImportReference(importPreview);
+  const company=cache.empresas.find(item=>String(item.id)===String(activeEmpresaId));
+  const progress=report.status==="em_andamento"?` · ${Number(report.processados)||0} de ${Number(report.total)||0} processados`:"";
+  const source=report.origem==="soc"?" · SOC: "+(report.matriculaColumn==="matriculaRH"?"Matrícula RH":"Matrícula")+" → matrícula eSocial; Nome Cargo → função; Cidade/Estado da unidade → localidade; S → Ativo, N → Inativo":"";
+  setText("trabalhadoresImportContext",[company?.nome||"Empresa selecionada",report.arquivoNome||"Planilha enviada"].join(" · ")+progress+source);
+  const summary=report.resumo||{};
+  $("trabalhadoresImportSummary").innerHTML=[["criar","Novos"],["atualizar","Atualizações"],["inalterados","Sem alteração"],["erros","Erros"]].map(([key,label])=>`<div class="import-stat${key==="erros"&&summary[key]>0?" has-errors":""}"><strong>${Number(summary[key])||0}</strong><span>${label}</span></div>`).join("");
   $("trabalhadoresImportPreview").classList.remove("hidden");$("trabalhadoresImportCommit").disabled=report.podeConfirmar!==true;
   $("trabalhadoresImportCommit").textContent=report.status==="em_andamento"?"Continuar sincronização":"Sincronizar trabalhadores";
   if(report.status==="concluida")setImportMessage("success","Sincronização concluída. A relação de trabalhadores foi atualizada em ordem alfabética.");
@@ -574,13 +581,14 @@ async function confirmWorkersImport(){
   const button=$("trabalhadoresImportCommit");if(button.disabled)return;
   const attempt=importAttempt,generation=sessionGeneration,company=companyGeneration,id=importPreview.importacaoId;
   button.disabled=true;setWorkerImportBusy(true);$("trabalhadoresImportCancel").disabled=true;
+  button.textContent="Sincronizando…";setImportMessage("warn",`Sincronizando ${Number(importPreview.processados)||0} de ${Number(importPreview.total)||0} trabalhadores. Aguarde.`);
   try{
     let count=0;
     while(count++<10){
       if(attempt!==importAttempt||generation!==sessionGeneration||company!==companyGeneration)return;
-      const result=ensureSuccess(await api("/api/trabalhadores/importacao/"+encodeURIComponent(id)+"/confirmar",{method:"POST",body:"{}"}),"Não foi possível concluir a sincronização.");
+      const result=ensureSuccess(await api("/api/trabalhadores/importacao/"+encodeURIComponent(id)+"/confirmar",{method:"POST",body:JSON.stringify({resumo:true})}),"Não foi possível concluir a sincronização.");
       if(attempt!==importAttempt)return;
-      const report=importReport(result.body);renderImportPreview(report);button.disabled=true;
+      const report=importReport(result.body);renderImportProgress(report);button.disabled=true;
       if(report.status==="concluida"||report.status==="sem_alteracoes"){
         clearImportReference();await refreshTrabalhadores(false);$("metricTrabalhadores").textContent=cache.trabalhadores.length;renderDashboard();return;
       }
@@ -593,7 +601,7 @@ async function confirmWorkersImport(){
     if(attempt!==importAttempt||generation!==sessionGeneration||company!==companyGeneration||error.code==="SESSION_CHANGED")return;
     if(error.status===401){handleAppError(error);return;}
     const report=error.responseBody?.importacao;
-    if(report)renderImportPreview(report);
+    if(report)renderImportProgress(report);
     else{
       try{const result=ensureSuccess(await api("/api/trabalhadores/importacao/"+encodeURIComponent(id)));if(attempt!==importAttempt)return;renderImportPreview(importReport(result.body));}catch(recoveryError){if(recoveryError.code==="SESSION_CHANGED"||attempt!==importAttempt)return;if(recoveryError.status===401){handleAppError(recoveryError);return;}}
       if(importPreview?.status!=="concluida")setImportMessage("warn","A sincronização foi interrompida. Confira o progresso e clique em Continuar sincronização para retomar sem duplicar os cadastros.");
@@ -857,10 +865,11 @@ async function changeActiveCompany(id){
   workerRegistrationCompany="";$("workerRegistrationMethod").value="";
   companyGeneration++;clearCompanyPdf();if(biometricCapture)resetBiometricCapture();logoEditGeneration++;clearCredentials();clearImportPreview();resetCompanyLogoEditor();
   ["trabalhadorForm","entregaForm"].forEach(id=>{$(id).reset();const button=$(id).querySelector('button[type="submit"]');if(button)button.disabled=false;});if($("trabalhadorSearch"))$("trabalhadorSearch").value="";
-  cache.trabalhadores=[];cache.fichas=[];$("trabalhadoresList").textContent="Carregando...";$("fichasList").textContent="Carregando...";$("dashboardFichas").textContent="";renderEntregaOptions();
-  saveActiveCompany(id);await refreshAllSafe();
+  saveActiveCompany(id);cache.trabalhadores=[];cache.fichas=[];$("trabalhadoresList").textContent="Carregando...";$("fichasList").textContent="Carregando...";$("dashboardFichas").textContent="";renderEntregaOptions();
+  await refreshAllSafe();
 }
 $("empresaAtivaSelect").addEventListener("change",event=>changeActiveCompany(event.target.value));
+$("entregaEmpresa").addEventListener("change",event=>{const id=event.target.value;if(!isMaster()||!cache.empresas.some(item=>String(item.id)===String(id))){renderEntregaOptions();return;}if(id!==activeEmpresaId)changeActiveCompany(id);});
 $("workerCompanySelect").addEventListener("change",async event=>{
   const id=event.target.value,generation=sessionGeneration;
   if(!cache.empresas.some(item=>item.id===id)){workerRegistrationCompany="";renderWorkerRegistration();return;}
@@ -964,7 +973,7 @@ $("entregaForm").addEventListener("submit",async event=>{
     const empresa=cache.empresas.find(item=>item.id===activeEmpresaId)||{};
     const epi=cache.epis.find(item=>item.id===body.epiId);
     const trabalhador=cache.trabalhadores.find(item=>item.id===body.trabalhadorId);
-    if(!trabalhador||!epi)throw new Error("Selecione o trabalhador da empresa e um equipamento do catálogo.");
+    if(!trabalhador||!epi||(trabalhador.empresaId&&String(trabalhador.empresaId)!==String(activeEmpresaId)))throw new Error("Selecione o trabalhador da empresa e um equipamento do catálogo.");
     const quantidade=Number(body.quantidade);
     if(!Number.isInteger(quantidade)||quantidade<1)throw new Error("Informe uma quantidade inteira maior que zero.");
     const payload={

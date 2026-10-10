@@ -253,8 +253,9 @@
           <div class="topbar"><div><span class="kicker">Movimentações</span><h1 id="title-entrega">Entrega de EPI</h1><p>Registre a movimentação e emita a ficha do trabalhador.</p></div></div>
           <div class="two-col delivery-layout">
             <form id="entregaForm" class="card form-card">
-              <div class="form-heading"><span class="heading-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-package"></use></svg></span><div><h2>Nova movimentação</h2><p>Selecione o trabalhador e o equipamento.</p></div></div>
+              <div class="form-heading"><span class="heading-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-package"></use></svg></span><div><h2>Nova movimentação</h2><p>Selecione a empresa, o trabalhador e o equipamento.</p></div></div>
               <div class="grid-form">
+                <div class="field span-two"><label for="entregaEmpresa">Empresa</label><select id="entregaEmpresa" required><option value="">Selecione uma empresa</option></select></div>
                 <div class="field span-two"><label for="entregaTipo">Tipo de movimentação</label><select name="tipo" id="entregaTipo"><option value="Entrega">Entrega de EPI</option><option value="Devolução">Devolução de EPI</option></select><p id="movementHelp" class="field-help">Preenche a data de entrega na nova ficha.</p></div>
                 <div class="field span-two"><label for="entregaTrabalhador">Trabalhador</label><select name="trabalhadorId" id="entregaTrabalhador" required></select></div>
                 <div class="field span-two"><label for="entregaEpi">EPI</label><select name="epiId" id="entregaEpi" required></select></div>

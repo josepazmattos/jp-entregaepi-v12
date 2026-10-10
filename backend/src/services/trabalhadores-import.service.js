@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { httpError } from '../middleware/auth.js';
 import { buildWorkerImport, publicImport, findWorkerIdentity, requireValidWorker, normalizeCPF, foldIdentity, WORKER_COLUMNS, validateWorker } from './trabalhadores.service.js';
-import { decodeXlsx, readWorkerXlsx } from './trabalhadores-xlsx.service.js';
+import { decodeXlsxBytes, readWorkerXlsx } from './trabalhadores-xlsx.service.js';
 import { readSocXlsx } from './trabalhadores-soc.service.js';
 import { normalizeCnpj } from './empresa-validation.js';
 
@@ -40,10 +40,13 @@ export function createWorkerImportService(store, { clock = () => new Date() } = 
     return manifest;
   }
 
-  async function present(manifest) {
-    const chunks = await Promise.all(Array.from({ length: manifest.lotesTotal }, (_, index) => store.get(chunkEntity, chunkId(manifest.id, index))));
-    if (chunks.some(chunk => !chunk || chunk.empresaId !== manifest.empresaId || chunk.autorSub !== manifest.autorSub)) throw httpError(409, 'A prévia está incompleta. Envie novamente a planilha.', 'IMPORTACAO_INCOMPLETA');
-    const item = { ...manifest, linhas: chunks.flatMap(chunk => chunk.linhas) };
+  async function present(manifest, { compact = false, linhas } = {}) {
+    if (!compact && !linhas) {
+      const chunks = await Promise.all(Array.from({ length: manifest.lotesTotal }, (_, index) => store.get(chunkEntity, chunkId(manifest.id, index))));
+      if (chunks.some(chunk => !chunk || chunk.empresaId !== manifest.empresaId || chunk.autorSub !== manifest.autorSub)) throw httpError(409, 'A prévia está incompleta. Envie novamente a planilha.', 'IMPORTACAO_INCOMPLETA');
+      linhas = chunks.flatMap(chunk => chunk.linhas);
+    }
+    const item = { ...manifest, ...(compact ? {} : { linhas }) };
     const expired = ['pendente', 'em_andamento'].includes(item.status) && new Date(item.expiresAt).getTime() <= clock().getTime();
     return {
       ...publicImport(item),
@@ -61,7 +64,7 @@ export function createWorkerImportService(store, { clock = () => new Date() } = 
     if (!['modelo', 'soc'].includes(origem)) throw httpError(400, 'Formato de importação inválido.', 'PLANILHA_INVALIDA');
     if (origem === 'soc' && !master) throw httpError(403, 'A importação SOC exige o perfil MASTER.', 'PERFIL_NAO_AUTORIZADO');
     const company = origem === 'soc' ? await store.get('empresa', empresaId) : null;
-    const bytes = decodeXlsx(arquivoBase64, arquivoNome, { soc: origem === 'soc' });
+    const bytes = decodeXlsxBytes(arquivoBase64, arquivoNome);
     const fileHash = createHash('sha256').update(bytes).digest('hex');
     let rows;
     try { rows = origem === 'soc' ? await readSocXlsx(bytes, { companyCnpj: company?.cnpj, matriculaColumn }) : await readWorkerXlsx(bytes); }
@@ -97,28 +100,29 @@ export function createWorkerImportService(store, { clock = () => new Date() } = 
       ],
       result: { importacaoId: id }
     });
-    return present(await store.get(manifestEntity, id));
+    return present(await store.get(manifestEntity, id), { linhas });
   }
 
   async function getProgress({ id, empresaId, actor, master = false }) {
     return present(await manifestFor(id, empresaId, actor, master));
   }
 
-  async function confirm({ id, empresaId, actor, master = false }) {
+  async function confirm({ id, empresaId, actor, master = false, compact = false }) {
+    const progress = manifest => present(manifest, { compact });
     const manifest = await manifestFor(id, empresaId, actor, master);
     if (manifest.origem === 'soc') {
       const company = await store.get('empresa', empresaId);
       if (!company || company.excluidaEm || normalizeCnpj(company.cnpj) !== manifest.empresaCnpj) throw httpError(409, 'O CNPJ da empresa mudou após a prévia. Envie novamente a planilha SOC.', 'IMPORTACAO_DESATUALIZADA');
     }
-    if (manifest.status === 'concluida') return present(manifest);
+    if (manifest.status === 'concluida') return progress(manifest);
     if (!['pendente', 'em_andamento'].includes(manifest.status) || !manifest.podeConfirmar) {
       const error = httpError(409, 'Esta prévia não pode ser sincronizada. Corrija os avisos e envie novamente a planilha.', 'IMPORTACAO_BLOQUEADA');
-      error.importacao = await present(manifest);
+      error.importacao = await progress(manifest);
       throw error;
     }
     if (new Date(manifest.expiresAt).getTime() <= clock().getTime()) {
       const error = httpError(409, 'A prévia expirou. Envie novamente a planilha para conferir o cadastro atual. Os lotes já sincronizados foram preservados.', 'IMPORTACAO_EXPIRADA');
-      error.importacao = await present(manifest);
+      error.importacao = await progress(manifest);
       throw error;
     }
     const chunk = await store.get(chunkEntity, chunkId(id, manifest.nextChunk));
@@ -146,27 +150,27 @@ export function createWorkerImportService(store, { clock = () => new Date() } = 
       if (error.code === 'TRANSACAO_OCUPADA' || error.status === 503) {
         // Temporary contention does not invalidate the approved preview.
         // Return its durable progress when reads are available so the browser can resume.
-        try { error.importacao = await present(await manifestFor(id, empresaId, actor, master)); }
+        try { error.importacao = await progress(await manifestFor(id, empresaId, actor, master)); }
         catch { /* Keep the original recoverable error if storage reads are also unavailable. */ }
         throw error;
       }
       if (!conflicts.has(error.code)) throw error;
       // Another request may have committed this same batch while this browser was waiting.
       const latest = await manifestFor(id, empresaId, actor, master);
-      if (latest.nextChunk > manifest.nextChunk) return present(latest);
+      if (latest.nextChunk > manifest.nextChunk) return progress(latest);
       const message = 'O cadastro mudou após a prévia. Os lotes já sincronizados foram preservados; o restante não foi aplicado. Envie novamente a planilha para conferir as alterações.';
       let blocked = latest;
       try { blocked = await store.update(manifestEntity, id, { status: 'conflito', podeConfirmar: false, erro: message }, { expectedVersion: latest._version }); }
       catch (blockingError) {
         if (!conflicts.has(blockingError.code)) throw blockingError;
         blocked = await manifestFor(id, empresaId, actor, master);
-        if (blocked.nextChunk > manifest.nextChunk) return present(blocked);
+        if (blocked.nextChunk > manifest.nextChunk) return progress(blocked);
       }
       const conflict = httpError(409, message, 'IMPORTACAO_DESATUALIZADA');
-      conflict.importacao = await present(blocked);
+      conflict.importacao = await progress(blocked);
       throw conflict;
     }
-    return present(await manifestFor(id, empresaId, actor, master));
+    return progress(await manifestFor(id, empresaId, actor, master));
   }
 
   async function createWorker({ body, empresaId, actor }) {

@@ -1,4 +1,4 @@
-import { inflateRawSync } from 'node:zlib';
+import zlib, { inflateRawSync } from 'node:zlib';
 import ExcelJS from 'exceljs';
 import { httpError } from '../middleware/auth.js';
 import { WORKER_COLUMNS, WORKER_IMPORT_LIMIT } from './trabalhadores.service.js';
@@ -17,16 +17,23 @@ const crcTable = Array.from({ length: 256 }, (_, n) => {
   return n >>> 0;
 });
 function crc32(buffer) {
+  if (typeof zlib.crc32 === 'function') return zlib.crc32(buffer);
   let crc = 0xffffffff;
   for (const byte of buffer) crc = crcTable[(crc ^ byte) & 255] ^ (crc >>> 8);
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-export function decodeXlsx(base64, name, options) {
+// Decode transport once; every reader still validates the complete archive before parsing.
+export function decodeXlsxBytes(base64, name) {
   if (typeof name !== 'string' || name.length > 180 || !/\.xlsx$/i.test(name.trim()) || /[\u0000-\u001F]/.test(name)) throw invalid('Envie o modelo no formato .xlsx.');
   if (typeof base64 !== 'string' || !base64.length || base64.length > Math.ceil(XLSX_MAX_BYTES / 3) * 4 || base64.length % 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) throw invalid('Arquivo ausente, inválido ou acima de 512 KB.');
   const bytes = Buffer.from(base64, 'base64');
   if (!bytes.length || bytes.length > XLSX_MAX_BYTES || bytes.toString('base64') !== base64) throw invalid('Arquivo inválido ou acima de 512 KB.');
+  return bytes;
+}
+
+export function decodeXlsx(base64, name, options) {
+  const bytes = decodeXlsxBytes(base64, name);
   validateXlsxArchive(bytes, options);
   return bytes;
 }
