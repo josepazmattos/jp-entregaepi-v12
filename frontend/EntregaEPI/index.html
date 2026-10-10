@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" href="/__APP_PREFIX__/assets/favicon-jp-192.png?v=20261010" sizes="192x192" />
   <link rel="icon" type="image/svg+xml" href="/__APP_PREFIX__/assets/favicon-jp.svg?v=20261010" sizes="any" />
   <script src="/__APP_PREFIX__/config.js?v=1294"></script>
-  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=20261010-perfil-empresa" />
+  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=20261010-avatar" />
 </head>
 <body>
   <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
@@ -110,7 +110,7 @@
         </div>
       </nav>
       <div class="sidebar-support"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg><div><strong>Gestão com responsabilidade</strong><p>Organize os EPIs e acompanhe cada movimentação.</p></div></div>
-      <div class="sidebar-footer"><div class="sidebar-environment"><span class="environment-label"><i aria-hidden="true"></i> Produção</span><small>v12.9.4</small></div><button id="logoutButton" class="btn btn-logout" type="button"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-logout"></use></svg>Sair da conta</button></div>
+      <div class="sidebar-footer"><div class="sidebar-environment"><span class="environment-label"><i aria-hidden="true"></i> Produção</span><small>v12.9.4</small></div></div>
     </aside>
     <button id="sidebarBackdrop" class="sidebar-backdrop" type="button" aria-label="Fechar menu" tabindex="-1"></button>
 
@@ -119,7 +119,7 @@
         <div class="header-context"><button id="menuToggle" class="icon-button menu-toggle" type="button" aria-label="Abrir menu" aria-controls="primarySidebar" aria-expanded="false"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-menu"></use></svg></button><div class="breadcrumb"><span>Gestão de EPI</span><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-chevron"></use></svg><strong id="currentSectionLabel">Dashboard</strong></div></div>
         <div class="header-controls">
           <div class="company-box" data-master-only><label for="empresaAtivaSelect">Empresa em uso</label><select id="empresaAtivaSelect"><option value="">Selecione ou cadastre uma empresa</option></select></div><span id="clientCompanyName" class="client-company-name hidden"></span>
-          <div class="user-menu"><span class="user-avatar"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-user"></use></svg></span><div><small>Usuário</small><strong id="userBadge">Usuário autenticado</strong></div></div>
+          <div class="user-menu"><span id="userAvatar" class="user-avatar"><img id="userAvatarImage" class="hidden" alt="" width="38" height="38"><svg id="userAvatarFallback" class="icon" aria-hidden="true" focusable="false"><use href="#icon-user"></use></svg></span><div class="user-identity"><small>Usuário</small><strong id="userBadge">Usuário autenticado</strong><button id="logoutButton" class="header-logout" type="button" aria-label="Sair da conta"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-logout"></use></svg>Sair</button></div></div>
         </div>
       </header>
       <main id="mainContent" class="main" tabindex="-1">
@@ -321,7 +321,7 @@
   </section>
   <script src="/__APP_PREFIX__/assets/ficha.js?v=20261010-devolucao"></script>
   <script src="/__APP_PREFIX__/assets/biometria.js?v=1294"></script>
-  <script src="/__APP_PREFIX__/assets/app.js?v=20261010-perfil-empresa"></script>
+  <script src="/__APP_PREFIX__/assets/app.js?v=20261010-avatar"></script>
   <script src="/__APP_PREFIX__/assets/operations.js?v=20261010-perfil-empresa"></script>
 </body>
 </html>

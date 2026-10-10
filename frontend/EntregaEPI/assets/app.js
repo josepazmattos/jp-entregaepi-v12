@@ -3,6 +3,7 @@ const $=id=>document.getElementById(id), tokenKey="jp-v12-auth", rememberedUserK
 let sessionGeneration=0,companyGeneration=0,authAttempt=0,importAttempt=0,logoCreateGeneration=0,logoEditGeneration=0;let lastSessionUsername="";let cache={empresas:[],trabalhadores:[],epis:[],fichas:[]};let activeEmpresaId=sessionStorage.getItem(activeCompanyKey)||"";
 let firstAccessChallenge=null,empresaLogoDraft="",empresaLogoEdit=null,empresaRequestId="",importPreview=null,companyLoginAutomatic=true;
 let logoCreateLoading=false,companySaving=false;
+let userAvatarGeneration=0;
 let companyPdfController=null,companyPdfDraft=null,companyPdfLoading=false;
 let workerRegistrationCompany="";
 let workerListPage=1;
@@ -49,8 +50,28 @@ function runStartupChecks(manual=false){
 function currentGroups(){const raw=getAuth()?.payload?.["cognito:groups"];return Array.isArray(raw)?raw:typeof raw==="string"?raw.split(",").map(value=>value.trim()):[];}
 function isMaster(){return currentGroups().includes("MASTER");}
 function saveActiveCompany(id){activeEmpresaId=String(id||"");sessionStorage.setItem(activeCompanyKey,activeEmpresaId);localStorage.removeItem(activeCompanyKey);}
+function resetUserAvatar(){
+  userAvatarGeneration++;
+  const image=$("userAvatarImage");if(!image)return;
+  image.onload=null;image.onerror=null;image.classList.add("hidden");image.removeAttribute("src");image.alt="";
+  $("userAvatarFallback")?.classList.remove("hidden");$("userAvatar")?.classList.remove("has-company-logo");
+}
+function renderUserAvatar(){
+  const image=$("userAvatarImage");if(!image)return;
+  const company=cache.empresas.find(item=>String(item.id)===String(activeEmpresaId));
+  const source=String(company?.logoDataUrl||"");
+  if(!getAuth()||isMaster()||!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(source)){resetUserAvatar();return;}
+  image.alt="Logotipo de "+(company.nome||"sua empresa");
+  if(image.getAttribute("src")===source)return;
+  resetUserAvatar();const generation=userAvatarGeneration;
+  image.alt="Logotipo de "+(company.nome||"sua empresa");
+  image.onload=()=>{if(generation!==userAvatarGeneration)return;image.classList.remove("hidden");$("userAvatarFallback")?.classList.add("hidden");$("userAvatar")?.classList.add("has-company-logo");};
+  image.onerror=()=>{if(generation===userAvatarGeneration)resetUserAvatar();};
+  image.setAttribute("src",source);
+}
 function renderRoleAccess(){
   const master=isMaster();
+  renderUserAvatar();
   $("appShell").classList.toggle("company-profile",!master);
   $("clientCompanyName")?.classList.toggle("hidden",master);
   setText("clientCompanyName",cache.empresas.find(item=>item.id===activeEmpresaId)?.nome||"Minha empresa");
