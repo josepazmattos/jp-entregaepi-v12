@@ -17,7 +17,7 @@ with tempfile.TemporaryDirectory(prefix='jpged-win-test-') as folder:
  path=Path(folder)
  for variant,pfxname in [('leaf','synthetic.pfx'),('pf','pf.pfx'),('chain','chain.pfx')]:
   pfx=str(path/pfxname).replace("'","''")
-  setup=import_script+"\n$store=[Security.Cryptography.X509Certificates.X509Store]::new('My','CurrentUser');$store.Open('ReadWrite');try {$cert=Import-JpCertificate '"+pfx+"' (ConvertTo-SecureString 'synthetic-test-only' -AsPlainText -Force) $store; $cert.Thumbprint}finally{$store.Close()}"
+  setup=import_script+"\n$password=[Security.SecureString]::new();foreach($c in 'synthetic-test-only'.ToCharArray()){$password.AppendChar($c)};$store=[Security.Cryptography.X509Certificates.X509Store]::new('My','CurrentUser');$store.Open('ReadWrite');try {$cert=Import-JpCertificate '"+pfx+"' $password $store; $cert.Thumbprint}finally{$store.Close()}"
   thumbprint=powershell(setup)
   try:
    assert len(thumbprint)==40,thumbprint
@@ -29,7 +29,7 @@ with tempfile.TemporaryDirectory(prefix='jpged-win-test-') as folder:
   finally:
    powershell("$s=New-Object Security.Cryptography.X509Certificates.X509Store('My','CurrentUser');$s.Open('ReadWrite');foreach($c in $s.Certificates){if($c.Thumbprint -eq '"+thumbprint+"'){$s.Remove($c)}};$s.Close();exit 0")
  # These checks use production import and signing paths without opening a GUI.
- wrong_password=import_script+"\n$s=[Security.Cryptography.X509Certificates.X509Store]::new('My','CurrentUser');$s.Open('ReadWrite');try{try{$c=Import-JpCertificate '"+str(path/'pf.pfx').replace("'","''")+"' (ConvertTo-SecureString 'wrong-test-password' -AsPlainText -Force) $s;throw 'UNEXPECTED_SUCCESS'}catch{if($_.Exception.Message -eq 'UNEXPECTED_SUCCESS'){throw};'PASSWORD_REJECTED'}}finally{$s.Close()}"
+ wrong_password=import_script+"\n$password=[Security.SecureString]::new();foreach($c in 'wrong-test-password'.ToCharArray()){$password.AppendChar($c)};$s=[Security.Cryptography.X509Certificates.X509Store]::new('My','CurrentUser');$s.Open('ReadWrite');try{try{$c=Import-JpCertificate '"+str(path/'pf.pfx').replace("'","''")+"' $password $s;throw 'UNEXPECTED_SUCCESS'}catch{if($_.Exception.Message -eq 'UNEXPECTED_SUCCESS'){throw};'PASSWORD_REJECTED'}}finally{$s.Close()}"
  assert powershell(wrong_password)=='PASSWORD_REJECTED'
  missing=json.loads(powershell(script,{'action':'sign','thumbprint':'0'*40,'contentBase64':base64.b64encode(b'test').decode()}))
  assert missing.get('ok') is False

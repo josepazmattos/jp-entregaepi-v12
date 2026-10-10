@@ -33,13 +33,13 @@ try {
     $cert = $null
     if ($request.action -eq 'configure') {
         $message = "Autorizar certificado para: $($request.companyName)`r`n$($request.target.registrationType): $($request.target.registrationNumber)`r`n`r`nO JPGED assinará somente fichas desta empresa confirmadas biometricamente. O certificado e sua senha não serão enviados ao site."
-        if($request.target.representative.active){$message += "`r`n`r`ne-CPF autorizado: $($request.target.representative.name) — CPF $($request.target.representative.cpf). A autorização será conferida pelo servidor."}
+
         if ([Windows.Forms.MessageBox]::Show($message,'JPGED — autorização',[Windows.Forms.MessageBoxButtons]::OKCancel) -ne 'OK') { throw 'Cancelado pelo usuário.' }
         $choice = [Windows.Forms.MessageBox]::Show('O certificado A1 já está instalado neste usuário do Windows?','JPGED',[Windows.Forms.MessageBoxButtons]::YesNoCancel)
         if ($choice -eq 'Cancel') { throw 'Cancelado pelo usuário.' }
         if ($choice -eq 'No') {
             $picker = [Windows.Forms.OpenFileDialog]::new()
-            $picker.Title = 'Selecione o A1 e-CNPJ ou e-CPF autorizado'
+            $picker.Title = 'Selecione o A1 e-CNPJ ou e-CPF'
             $picker.Filter = 'Certificado A1 (*.pfx;*.p12)|*.pfx;*.p12'
             if ($picker.ShowDialog() -ne 'OK') { throw 'Cancelado pelo usuário.' }
             $form = [Windows.Forms.Form]::new(); $form.Text='Senha do certificado — somente neste computador'; $form.Width=440; $form.Height=170; $form.StartPosition='CenterScreen'; $form.TopMost=$true
@@ -54,7 +54,7 @@ try {
         } else {
             $valid=[Security.Cryptography.X509Certificates.X509Certificate2Collection]::new()
             foreach($candidate in $store.Certificates){if($candidate.HasPrivateKey -and $candidate.NotAfter -gt [DateTime]::Now -and $candidate.NotBefore -lt [DateTime]::Now){[void]$valid.Add($candidate)}}
-            $selected=[Security.Cryptography.X509Certificates.X509Certificate2UI]::SelectFromCollection($valid,'JPGED — certificado da empresa',"Selecione o e-CNPJ A1 deste empregador ou o e-CPF previamente autorizado pelo Master",[Security.Cryptography.X509Certificates.X509SelectionFlag]::SingleSelection)
+            $selected=[Security.Cryptography.X509Certificates.X509Certificate2UI]::SelectFromCollection($valid,'JPGED — certificado da empresa',"Selecione o e-CNPJ A1 deste empregador ou um e-CPF A1",[Security.Cryptography.X509Certificates.X509SelectionFlag]::SingleSelection)
             if($selected.Count -ne 1){throw 'Nenhum certificado selecionado.'};$cert=$selected[0]
         }
     } elseif($request.action -eq 'sign') {

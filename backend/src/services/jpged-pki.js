@@ -7,7 +7,7 @@ import ipaddr from 'ipaddr.js';
 import * as asn1 from 'asn1js';
 import * as pki from 'pkijs';
 import { sha256 } from './document-integrity.js';
-import { normalizeCpf, representationActive } from './certificate-identity.js';
+import { normalizeCpf } from './certificate-identity.js';
 import { httpError } from '../middleware/auth.js';
 
 pki.setEngine('node', webcrypto, new pki.CryptoEngine({ name:'node',crypto:webcrypto,subtle:webcrypto.subtle }));
@@ -82,11 +82,9 @@ export async function verifyCompanyCms(cmsBytes, content, companyIdentity, { roo
   const expected=String(target?.registrationNumber||'').replace(/[^A-Za-z0-9]/g,'').toUpperCase();
   if(identity.kind==='e-CNPJ') {
     if(target?.registrationType!=='CNPJ'||identity.cnpj!==expected)reject('O CNPJ do certificado é diferente do cadastro da empresa.','CERTIFICADO_EMPRESA_DIVERGENTE');
-  } else {
-    const representative=target?.representative;
-    if(!representationActive(representative,now.getTime())||representative.companyId!==target.companyId||representative.registrationType!==target.registrationType||representative.registrationNumber!==expected)reject('O Master precisa conferir e autorizar o representante desta empresa antes de usar e-CPF.','CERTIFICADO_REPRESENTACAO_PENDENTE');
-    if(identity.cpf!==representative.cpf)reject('O CPF do certificado não corresponde ao representante autorizado.','CERTIFICADO_REPRESENTANTE_DIVERGENTE');
   }
+  // e-CPF identifies the signer. No corporate-role lookup or administrative
+  // representative approval is required; configuration records local consent.
   if(signer.extensions?.find(x=>x.extnID==='2.5.29.19')?.parsedValue?.cA)reject('Use um certificado de pessoa física ou jurídica.');
   const usage=signer.extensions?.find(x=>x.extnID==='2.5.29.15')?.parsedValue?.valueBlock?.valueHexView;
   if(!usage||!(usage[0]&0xc0))reject('O certificado não permite assinatura de documentos.');

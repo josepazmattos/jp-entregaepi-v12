@@ -76,9 +76,9 @@ export async function buildSigningPdf(ficha, certificate) {
   for (const item of ficha.itens) row([item.quantidade, item.epiNome || item.epiDescricao, item.semCA ? 'Sem CA' : item.ca, item.datasMovimentacao?.entrega || '', item.datasMovimentacao?.devolucao || '', 'Biometria confirmada']);
   y -= 12;
   text(`Certificação digital: ${certificate.subject}\nIdentificador da confirmação biométrica: ${bio.id}\nConteúdo confirmado (SHA-256): ${documentHash(ficha)}`, { size: 8 });
-  if(certificate.kind==='e-CPF'){const rep=certificate.target?.representative;text(`Assinante e-CPF: ${certificate.cpf} · Vínculo: ${rep?.capacity||''}\nRepresentação conferida em ${rep?.checkedAt||''}; revisão até ${rep?.validUntil||''}.`,{size:8});}
+  if(certificate.kind==='e-CPF')text(`Certificado de pessoa física · CPF do assinante: ${certificate.cpf}`,{size:8});
   text('Preserve este arquivo original. Uma impressão em papel ou uma nova impressão em PDF não preserva a assinatura digital incorporada.', { size: 8 });
-  const evidence = { schema: 'JPGED-1', representation: certificate.kind==='e-CPF'?certificate.target?.representative:null, document: documentContent(ficha), documentHash: documentHash(ficha), biometric: { id: bio.id, signedAt: bio.signedAt, finger: bio.dedo, proof: bio.proof, proofSignature: bio.proofSignature, publicKey: bio.publicKey } };
+  const evidence = { schema: 'JPGED-1', document: documentContent(ficha), documentHash: documentHash(ficha), biometric: { id: bio.id, signedAt: bio.signedAt, finger: bio.dedo, proof: bio.proof, proofSignature: bio.proofSignature, publicKey: bio.publicKey } };
   await doc.attach(Buffer.from(JSON.stringify(evidence)), 'evidencias-jpged.json', { mimeType: 'application/json', description: 'Conteúdo confirmado e prova biométrica. Sem template biométrico.' });
   doc.getPages().forEach((p, i, pages) => p.drawText(`JPGED · ${ficha.numero || ficha.id} · Página ${i+1}/${pages.length}`, { x: margin, y: 20, size: 8, font }));
   pdflibAddPlaceholder({ pdfDoc: doc, reason: 'Registro das movimentações de EPI confirmadas biometricamente', contactInfo: '', name: clean(certificate.subject), location: clean(company.localidade || ''), signatureLength: 65536, subFilter: 'ETSI.CAdES.detached', appName: 'JPGED' });
