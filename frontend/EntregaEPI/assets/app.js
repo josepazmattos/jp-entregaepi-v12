@@ -723,6 +723,10 @@ async function captureBiometricImage(){
 }
 function registerBiometricCapture(){handleAppError(new Error('Abra a ficha em Imprimir e use Assinar biometricamente.'));}
 
+function documentLogoUrl(){
+  const brand=document.querySelector('.brand-logo');
+  return brand?.dataset?.documentLogo ? new URL(brand.dataset.documentLogo,document.baseURI).href : brand?.src;
+}
 function imprimirFicha(id){
   let documentUrl="";
   const releaseDocument=()=>{if(documentUrl){URL.revokeObjectURL(documentUrl);documentUrl="";}};
@@ -733,7 +737,7 @@ function imprimirFicha(id){
     const empresa=cache.empresas.find(item=>item.id===(ficha.empresaId||activeEmpresaId))||{};
     const trabalhador=cache.trabalhadores.find(item=>item.id===ficha.trabalhadorId)||{};
     const context=operationContext();
-    const html=window.JP_FICHA.buildDocument(ficha,empresa,trabalhador,cache.epis,{defaultLogo:document.querySelector(".brand-logo")?.src});
+    const html=window.JP_FICHA.buildDocument(ficha,empresa,trabalhador,cache.epis,{defaultLogo:documentLogoUrl()});
     documentUrl=URL.createObjectURL(new Blob([html],{type:"text/html;charset=utf-8"}));
     // Navegar o documento permite ao navegador carregar imagens normalmente.
     const preview=window.open(documentUrl,"_blank","width=900,height=1120");
