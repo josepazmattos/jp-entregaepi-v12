@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#146544" />
   <title>JP EntregaEPI</title>
   <script src="/__APP_PREFIX__/config.js?v=1294"></script>
-  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=20261010-brand" />
+  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=20261010-cadastros" />
 </head>
 <body>
   <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
@@ -151,6 +151,11 @@
           <div id="empresasColumns" class="two-col">
             <form id="empresaForm" class="card form-card hidden" data-master-only>
               <div class="form-heading"><span class="heading-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg></span><div><h2>Nova empresa cliente</h2><p>O Master cadastra a empresa e cria seu acesso.</p></div></div>
+              <div class="company-pdf-box">
+                <div class="field"><label for="empresaPdfFile">Preencher pelo cartão CNPJ</label><input id="empresaPdfFile" type="file" accept=".pdf,application/pdf"><small class="field-help">Opcional · PDF com texto, até 10 MB. Você também pode preencher os campos manualmente.</small></div>
+                <div id="empresaPdfMessage" class="message hidden" role="status" aria-live="polite"></div>
+                <div id="empresaPdfPreview" class="hidden"><dl id="empresaPdfFields" class="pdf-fields"></dl><button id="empresaPdfApply" class="btn btn-secondary" type="button">Usar dados do PDF</button></div>
+              </div>
               <div class="field"><label for="empresaNome">Nome da empresa <span class="required-mark" aria-hidden="true">*</span></label><input name="nome" id="empresaNome" required placeholder="Nome ou razão social"></div>
               <div class="field"><label for="empresaCnpj">CNPJ <span class="required-mark" aria-hidden="true">*</span></label><input name="cnpj" id="empresaCnpj" required placeholder="00.000.000/0000-00" inputmode="text" maxlength="18"></div>
               <div class="field"><label for="empresaLogin">Login da empresa <span class="required-mark" aria-hidden="true">*</span></label><input name="login" id="empresaLogin" required placeholder="CNPJ completo, sem pontuação" autocomplete="off" maxlength="80"><small class="field-help">Preenchido com o CNPJ completo. Você pode definir outro login antes de salvar.</small></div>
@@ -185,6 +190,11 @@
             <div class="section-heading"><div><h2>Importar equipe pelo Excel</h2><p>Baixe o modelo, preencha os trabalhadores e envie para conferir a sincronização.</p></div><span class="product-tag">.xlsx</span></div>
             <div class="import-actions"><button id="trabalhadoresTemplateButton" class="btn btn-secondary" type="button">Baixar planilha modelo</button><div class="field grow"><label for="trabalhadoresImportFile">Enviar planilha preenchida</label><input id="trabalhadoresImportFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div></div>
             <p class="field-help">CPF e matrícula eSocial identificam os cadastros. Confira a prévia antes de sincronizar. Trabalhadores que não estiverem na planilha serão preservados.</p>
+            <details class="soc-import hidden" data-master-only>
+              <summary>Importar lista do SOC · Master</summary>
+              <div class="import-actions"><div class="field"><label for="socMatriculaColumn">Coluna usada como matrícula eSocial</label><select id="socMatriculaColumn"><option value="matricula">Matrícula</option><option value="matriculaRH">Matrícula RH</option></select></div><div class="field grow"><label for="trabalhadoresSocFile">Lista SOC Modelo 1</label><input id="trabalhadoresSocFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div></div>
+              <p class="field-help">Até 500 trabalhadores e 512 KB. O CNPJ da unidade deve corresponder à empresa selecionada. A planilha original não é armazenada.</p>
+            </details>
             <div id="trabalhadoresImportMessage" class="message hidden" role="status" aria-live="polite"></div>
             <section id="trabalhadoresImportPreview" class="import-preview hidden" aria-labelledby="trabalhadoresImportTitle">
               <h3 id="trabalhadoresImportTitle">Prévia da sincronização</h3><p id="trabalhadoresImportContext" class="field-help"></p>
@@ -302,7 +312,7 @@
   </section>
   <script src="/__APP_PREFIX__/assets/ficha.js?v=1294"></script>
   <script src="/__APP_PREFIX__/assets/biometria.js?v=1294"></script>
-  <script src="/__APP_PREFIX__/assets/app.js?v=20261010-login"></script>
+  <script src="/__APP_PREFIX__/assets/app.js?v=20261010-cadastros"></script>
   <script src="/__APP_PREFIX__/assets/operations.js?v=20261010-login"></script>
 </body>
 </html>

@@ -22,16 +22,17 @@ function crc32(buffer) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-export function decodeXlsx(base64, name) {
+export function decodeXlsx(base64, name, options) {
   if (typeof name !== 'string' || name.length > 180 || !/\.xlsx$/i.test(name.trim()) || /[\u0000-\u001F]/.test(name)) throw invalid('Envie o modelo no formato .xlsx.');
   if (typeof base64 !== 'string' || !base64.length || base64.length > Math.ceil(XLSX_MAX_BYTES / 3) * 4 || base64.length % 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) throw invalid('Arquivo ausente, inválido ou acima de 512 KB.');
   const bytes = Buffer.from(base64, 'base64');
   if (!bytes.length || bytes.length > XLSX_MAX_BYTES || bytes.toString('base64') !== base64) throw invalid('Arquivo inválido ou acima de 512 KB.');
-  validateXlsxArchive(bytes);
+  validateXlsxArchive(bytes, options);
   return bytes;
 }
 
-export function validateXlsxArchive(bytes) {
+export function validateXlsxArchive(bytes, { soc = false } = {}) {
+  const maxColumns = soc ? 160 : MAX_SHEET_COLUMNS;
   if (!Buffer.isBuffer(bytes) || bytes.length < 22 || bytes.length > XLSX_MAX_BYTES) throw invalid('Arquivo XLSX inválido ou acima de 512 KB.');
   let end = -1;
   for (let pos = bytes.length - 22; pos >= Math.max(0, bytes.length - 65557); pos--) {
@@ -87,7 +88,7 @@ export function validateXlsxArchive(bytes) {
         for (const match of xml.matchAll(/<(?:\w+:)?c\b[^>]*\br=["']([A-Z]+)(\d+)["']/g)) {
           let column = 0;
           for (const char of match[1]) column = column * 26 + char.charCodeAt(0) - 64;
-          if (++cells > MAX_SHEET_ROWS * MAX_SHEET_COLUMNS || Number(match[2]) > MAX_SHEET_ROWS || column > MAX_SHEET_COLUMNS) throw invalid('Use a área de preenchimento do modelo; a planilha contém células muito distantes ou colunas extras.');
+          if (++cells > MAX_SHEET_ROWS * maxColumns || Number(match[2]) > MAX_SHEET_ROWS || column > maxColumns) throw invalid('Use a área de preenchimento do modelo; a planilha contém células muito distantes ou colunas extras.');
         }
       }
     }
@@ -97,7 +98,7 @@ export function validateXlsxArchive(bytes) {
   if (spans.some((span, i) => i && span[0] < spans[i - 1][1]) || pos !== end || !names.has('[Content_Types].xml') || !names.has('xl/workbook.xml')) throw invalid('Arquivo XLSX inválido.');
 }
 
-function plainCell(cell, key) {
+export function plainCell(cell, key) {
   const value = cell.value;
   if (value == null || value === '') return '';
   if (cell.isMerged) throw invalid('Desfaça as células mescladas da área de trabalhadores.');

@@ -3,9 +3,9 @@
   "version": "12.9.4",
   "private": true,
   "scripts": {
-    "test": "node --test frontend.test.cjs && node frontend-browser.cjs && node ficha-matricula-browser.cjs && node frontend-startup-browser.cjs && node operations-browser.cjs",
+    "test": "node --test frontend.test.cjs && node frontend-browser.cjs && node ficha-matricula-browser.cjs && node frontend-startup-browser.cjs && node operations-browser.cjs && node cadastro-automations-browser.cjs",
     "test:unit": "node --test frontend.test.cjs",
-    "test:browser": "node frontend-browser.cjs && node ficha-matricula-browser.cjs && node frontend-startup-browser.cjs && node operations-browser.cjs",
+    "test:browser": "node frontend-browser.cjs && node ficha-matricula-browser.cjs && node frontend-startup-browser.cjs && node operations-browser.cjs && node cadastro-automations-browser.cjs",
     "install-browser": "playwright install --with-deps chromium"
   },
   "devDependencies": {

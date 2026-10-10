@@ -1,0 +1,9 @@
+PDF.js 5.6.205
+Copyright Mozilla Foundation
+License: Apache-2.0 (see LICENSE and each module header).
+Source: https://github.com/mozilla/pdf.js/tree/v5.6.205
+Official distribution: https://github.com/mozilla/pdf.js/releases/tag/v5.6.205
+
+Unmodified modules, pinned locally for the optional company CNPJ PDF reader:
+pdf.min.mjs sha256 2221020ea508479dcc1221f36f2731656339230097c69ba1f78802832c0ad685
+pdf.worker.min.mjs sha256 51a2fd1ea47f1a9b0814e65e0c336c739c54957795ee774e8f93cb81e8028dd1

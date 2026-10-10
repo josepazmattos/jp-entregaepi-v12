@@ -291,7 +291,7 @@ def merged_environment(config: dict, commit: str) -> dict:
 
 
 def content_type(path: Path) -> str:
-    return {".js": "application/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
+    return {".js": "application/javascript; charset=utf-8", ".mjs": "application/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
             ".html": "text/html; charset=utf-8", ".json": "application/json; charset=utf-8",
             ".exe": "application/octet-stream",
             ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}.get(
