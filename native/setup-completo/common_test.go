@@ -95,3 +95,22 @@ func TestEveryKnownFailureHasAction(t *testing.T) {
 		}
 	}
 }
+
+// Validate the actual generated archive, not only fixtures. build_ci.py creates
+// it before invoking go test, so stale seed versions are rejected before release.
+func TestActualReleasePayload(t *testing.T) {
+	data, err := os.ReadFile("payload.zip")
+	if os.IsNotExist(err) {
+		t.Skip("release archive has not been generated")
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := extract(data, t.TempDir())
+	if err != nil {
+		t.Fatalf("generated release archive is invalid: %v", err)
+	}
+	if m.Version != "12.10.0" {
+		t.Fatal("incorrect release version")
+	}
+}

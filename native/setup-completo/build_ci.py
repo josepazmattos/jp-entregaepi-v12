@@ -30,6 +30,8 @@ def build(agent, output, commit):
             if len(content) != item['size'] or hashlib.sha256(content).hexdigest() != item['sha256']:
                 raise ValueError('Runtime component integrity failed')
     data['agent.exe'] = agent.read_bytes()
+    # Vendor runtime is reused, but the bundle manifest must identify this release.
+    m['version'] = '12.10.0'
     m['files'] = [{'name': n, 'size': len(v), 'sha256': hashlib.sha256(v).hexdigest()} for n, v in sorted(data.items())]
     with zipfile.ZipFile(ROOT / 'payload.zip', 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         for n, v in sorted(data.items()):
