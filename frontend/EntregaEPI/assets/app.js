@@ -942,7 +942,7 @@ async function changeActiveCompany(id){
   if(typeof closeOperations==='function')closeOperations();
   if(!isMaster()){renderEmpresas();return;}
   workerListPage=1;$("trabalhadorSearch").value="";$("workerStatusFilter").value="Ativo";
-  workerRegistrationCompany="";$("workerRegistrationMethod").value="";
+  workerRegistrationCompany="";$("workerRegistrationMethod").value="";renderWorkerRegistration();
   companyGeneration++;clearCompanyPdf();if(biometricCapture)resetBiometricCapture();logoEditGeneration++;clearCredentials();clearImportPreview();resetCompanyLogoEditor();
   clearEntregaDraft();
   ["trabalhadorForm","entregaForm"].forEach(id=>{$(id).reset();const button=$(id).querySelector('button[type="submit"]');if(button)button.disabled=false;});if($("trabalhadorSearch"))$("trabalhadorSearch").value="";
