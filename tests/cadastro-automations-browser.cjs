@@ -83,13 +83,13 @@ let browser, page, claims, holdPreview = false, releasePreview, previewStarted, 
   await page.evaluate(() => goScreen('trabalhadores'));
   assert.equal(await page.locator('#trabalhadoresImportFile').isVisible(),false);
   await page.locator('#workerCompanySelect').selectOption(company.id);await page.locator('#workerRegistrationMethod').selectOption('soc');
-  const xlsx = await socFile(), upload = async buffer => page.locator('#trabalhadoresSocFile').setInputFiles({ name: 'SOC-sintetico.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer });
+  const xlsx = await socFile({ change(sheet) { sheet.getCell('C3').value = 1; } }), upload = async buffer => page.locator('#trabalhadoresSocFile').setInputFiles({ name: 'SOC-sintetico.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer });
   await upload(xlsx);
   await page.waitForSelector('#trabalhadoresImportPreview:not(.hidden)');
   assert.equal((await store.list('trabalhador', company.id)).length, 0);
   assert.ok(await page.locator('#trabalhadoresImportCommit').isEnabled());
   await page.locator('.soc-row-details summary').click();
-  assert.match(await page.locator('.soc-row-details').innerText(), /00001A/);
+  assert.match(await page.locator('.soc-row-details').innerText(), /Matrícula eSocial\s+1/);
   assert.doesNotMatch(await page.locator('#trabalhadoresImportPreview').innerText(), /NAO_ARMAZENAR|Remuneração|Sanguíneo/);
   await page.locator('.import-card').screenshot({ path: path.join(output, '02-previa-soc.png') });
   await page.evaluate(()=>{window.previewRowBeforeSync=document.querySelector('#trabalhadoresImportRows tr');});
@@ -109,9 +109,9 @@ let browser, page, claims, holdPreview = false, releasePreview, previewStarted, 
   assert.equal(await page.locator('.soc-row-details').getAttribute('open'),'');
   pass('Sincronização usa confirmação compacta e mantém a tabela e os detalhes abertos sem reconstruir a prévia');
   const workers = await store.list('trabalhador', company.id);
-  assert.equal(workers.length, 1); assert.equal(workers[0].matriculaESocial, '00001A'); assert.equal(workers[0].localidade, 'CIDADE EXEMPLO/MS');
+  assert.equal(workers.length, 1); assert.equal(workers[0].matriculaESocial, '1'); assert.equal(workers[0].localidade, 'CIDADE EXEMPLO/MS');
   assert.doesNotMatch(JSON.stringify(workers), /NAO_ARMAZENAR/);
-  pass('SOC confere 118 colunas, mostra somente os campos aproveitados e grava apenas após confirmar');
+  pass('SOC confere 118 colunas, aceita matrícula numérica sem reformatação e grava apenas após confirmar');
   await upload(xlsx);
   await page.waitForFunction(() => document.getElementById('trabalhadoresImportMessage').textContent.includes('Nenhuma alteração'));
   assert.ok(await page.locator('#trabalhadoresImportCommit').isDisabled());

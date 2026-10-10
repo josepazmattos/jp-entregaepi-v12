@@ -120,8 +120,17 @@ export function plainCell(cell, key) {
     throw invalid('Use texto simples ou uma data válida neste campo.');
   }
   if (typeof value === 'number') {
+    if (key === 'matriculaESocial') {
+      if (!Number.isFinite(value) || Math.abs(value) > Number.MAX_SAFE_INTEGER) throw invalid('A matrícula numérica excede a precisão de leitura. Informe o identificador original como texto.');
+      // SOC exports ordinary registrations as numeric cells. Convert the stored
+      // value directly; do not require the user to change the workbook format.
+      // Preserve leading zeros explicitly present in an Excel identifier mask.
+      const sections = String(cell.numFmt || '').split(';');
+      const mask = (value === 0 && sections.length > 2 ? sections[2] : sections[0]).trim().replace(/\[(?:Black|Blue|Cyan|Green|Magenta|Red|White|Yellow|Color\d+)\]/gi, '');
+      if (Number.isSafeInteger(value) && value >= 0 && /^0+$/.test(mask)) return String(value).padStart(mask.length, '0');
+      return String(value);
+    }
     if (!Number.isSafeInteger(value) || value < 0) throw invalid('Use texto para preservar o conteúdo deste campo.');
-    if (key === 'matriculaESocial') throw invalid('Formate a matrícula eSocial como Texto e confira os zeros à esquerda.');
     if (key === 'cpf') return String(value).padStart(11, '0');
   }
   if (!['string', 'number'].includes(typeof value)) throw invalid('Use texto simples neste campo.');
