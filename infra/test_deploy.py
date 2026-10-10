@@ -228,6 +228,10 @@ class SimulatedDeployment(deploy.Deployment):
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_pdf_modules_have_javascript_content_type(self):
+        self.assertEqual(deploy.content_type(Path("company-pdf.mjs")), "application/javascript; charset=utf-8")
+        self.assertEqual(deploy.content_type(Path("pdf.worker.min.mjs")), "application/javascript; charset=utf-8")
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

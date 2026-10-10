@@ -201,6 +201,7 @@ export function publicImport(item) {
   return {
     importacaoId: item.id,
     arquivoNome: item.arquivoNome,
+    ...(item.origem === 'soc' ? { origem: 'soc', matriculaColumn: item.matriculaColumn } : {}),
     expiresAt: item.expiresAt,
     status: item.status,
     resumo: item.resumo,

@@ -3,6 +3,7 @@ const $=id=>document.getElementById(id), tokenKey="jp-v12-auth", rememberedUserK
 let sessionGeneration=0,companyGeneration=0,authAttempt=0,importAttempt=0,logoCreateGeneration=0,logoEditGeneration=0;let lastSessionUsername="";let cache={empresas:[],trabalhadores:[],epis:[],fichas:[]};let activeEmpresaId=sessionStorage.getItem(activeCompanyKey)||"";
 let firstAccessChallenge=null,empresaLogoDraft="",empresaLogoEdit=null,empresaRequestId="",importPreview=null,companyLoginAutomatic=true;
 let logoCreateLoading=false,companySaving=false;
+let companyPdfController=null,companyPdfDraft=null,companyPdfLoading=false;
 let biometricClient=null,biometricGeneration=0,biometricBusy=false,biometricCapture=null,biometricAbort=null,biometricStartAt=0;
 let startupCheckSession=-1,startupChecksPromise=null;
 const installationWatchKey='jp-biometria-install-until';
@@ -159,6 +160,7 @@ function ensureSuccess(result, fallback="Não foi possível concluir a operaçã
   return result;
 }
 function clearSessionData(clearDrafts=false) {
+  clearCompanyPdf();
   if(typeof closeOperations==='function')closeOperations();
   sessionGeneration++;companyGeneration++;authAttempt++;logoCreateGeneration++;logoEditGeneration++;
   if(logoCreateLoading&&$("empresaLogoFile"))$("empresaLogoFile").value="";
@@ -293,7 +295,41 @@ function updateEquipmentKind(){
 }
 function normalizedCnpj(value){return String(value||"").replace(/[^a-z0-9]/gi,"").toUpperCase();}
 function createRequestId(){if(window.crypto?.randomUUID)return window.crypto.randomUUID();throw new Error("Este navegador precisa ser atualizado para concluir o cadastro.");}
-function updateCompanySubmitButton(){const button=$("empresaForm")?.querySelector('button[type="submit"]');if(button)button.disabled=logoCreateLoading||companySaving;}
+function updateCompanySubmitButton(){const button=$("empresaForm")?.querySelector('button[type="submit"]');if(button)button.disabled=logoCreateLoading||companySaving||companyPdfLoading;}
+function clearCompanyPdf(){
+  companyPdfController?.abort();companyPdfController=null;companyPdfDraft=null;companyPdfLoading=false;
+  if($("empresaPdfFile")){$("empresaPdfFile").value="";$("empresaPdfFile").disabled=false;}
+  $("empresaPdfPreview")?.classList.add("hidden");$("empresaPdfMessage")?.classList.add("hidden");setText("empresaPdfFields","");setText("empresaPdfMessage","");updateCompanySubmitButton();
+}
+async function previewCompanyPdf(event){
+  const file=event.target.files?.[0];if(!file||!isMaster()||companySaving)return;
+  clearCompanyPdf();const controller=new AbortController();companyPdfController=controller;
+  const generation=sessionGeneration,company=companyGeneration;
+  const current=()=>companyPdfController===controller&&generation===sessionGeneration&&company===companyGeneration&&isMaster();
+  companyPdfLoading=true;updateCompanySubmitButton();$("empresaPdfFile").disabled=true;
+  const message=$("empresaPdfMessage");message.className="message warn";message.textContent="Lendo o cartão CNPJ…";
+  try{
+    const base=(window.JP_CONFIG.appBasePath||"/EntregaEPI/").replace(/\/?$/, "/");
+    const {readCompanyPdf}=await import(base+"assets/company-pdf.mjs?v=20261010");
+    if(!current())return;
+    const result=await readCompanyPdf(file,{signal:controller.signal});if(!current())return;
+    companyPdfDraft=result.fields;
+    const labels={nome:"Empresa",cnpj:"CNPJ",localidade:"Localidade"};
+    $("empresaPdfFields").innerHTML=Object.entries(labels).map(([key,label])=>`<dt>${label}</dt><dd>${escapeHtml(result.fields[key]||"Não identificado")}</dd>`).join("");
+    const applicable=Boolean(result.fields.cnpj&&result.fields.nome);
+    $("empresaPdfPreview").classList.toggle("hidden",!applicable);$("empresaPdfApply").disabled=!applicable;
+    message.className="message "+(result.warnings.length?"warn":"success");
+    message.textContent=[applicable?"Confira os dados e clique em Usar dados do PDF.":"Preencha manualmente ou envie outro cartão.",...result.warnings].join(" ");
+  }catch(error){if(current()){message.className="message error";message.textContent=error.message||"Não foi possível ler o PDF. Preencha os campos manualmente.";}}
+  finally{if(current()){companyPdfLoading=false;$("empresaPdfFile").value="";$("empresaPdfFile").disabled=false;updateCompanySubmitButton();}}
+}
+function applyCompanyPdf(){
+  if(!isMaster()||companySaving||companyPdfLoading||!companyPdfDraft?.cnpj||!companyPdfDraft?.nome)return;
+  $("empresaNome").value=companyPdfDraft.nome;$("empresaCnpj").value=companyPdfDraft.cnpj;$("empresaLocalidade").value=companyPdfDraft.localidade||"";
+  if(companyLoginAutomatic||!$("empresaLogin").value){$("empresaLogin").value=normalizedCnpj(companyPdfDraft.cnpj).toLowerCase();companyLoginAutomatic=true;}
+  empresaRequestId="";companyPdfDraft=null;$("empresaPdfPreview").classList.add("hidden");
+  $("empresaPdfMessage").className="message success";setText("empresaPdfMessage","Dados preenchidos. Confira o formulário, escolha o logo e salve a empresa.");
+}
 function clearCredentials(){
   $("empresaCredentialsPanel")?.classList.add("hidden");
   ["empresaCredentialsLogin","empresaCredentialsPassword"].forEach(id=>{if($(id))$(id).value="";});
@@ -383,7 +419,7 @@ async function submitCompany(event){
     const result=ensureSuccess(await api("/api/empresas",{method:"POST",body:JSON.stringify(body)}),"Não foi possível cadastrar a empresa.");
     if(!result.body?.item?.id)throw new Error("O serviço não confirmou o cadastro da empresa. Tente novamente.");
     companyGeneration++;const selectedGeneration=companyGeneration;clearImportPreview();resetCompanyLogoEditor();saveActiveCompany(result.body.item.id);
-    form.reset();empresaRequestId="";empresaLogoDraft="";companyLoginAutomatic=true;setLogoPreview("empresaLogoPreview","empresaLogoPreviewWrap","");
+    form.reset();clearCompanyPdf();empresaRequestId="";empresaLogoDraft="";companyLoginAutomatic=true;setLogoPreview("empresaLogoPreview","empresaLogoPreviewWrap","");
     await refreshAll();if(generation!==sessionGeneration||selectedGeneration!==companyGeneration)return;showCompanyAccess(result,body.cnpj);
   }catch(error){if(generation===sessionGeneration)handleAppError(error);}finally{if(generation===sessionGeneration){companySaving=false;updateCompanySubmitButton();}}
 }
@@ -426,6 +462,8 @@ function clearImportPreview(){
   setText("trabalhadoresImportRows","");setText("trabalhadoresImportSummary","");setText("trabalhadoresImportContext","");
   setText("trabalhadoresImportMessage","");$("trabalhadoresImportMessage")?.classList.add("hidden");
   if($("trabalhadoresImportFile")){$("trabalhadoresImportFile").value="";$("trabalhadoresImportFile").disabled=false;}
+  if($("trabalhadoresSocFile")){$("trabalhadoresSocFile").value="";$("trabalhadoresSocFile").disabled=false;}
+  if($("socMatriculaColumn"))$("socMatriculaColumn").disabled=false;
   if($("trabalhadoresImportCommit")){$("trabalhadoresImportCommit").disabled=true;$("trabalhadoresImportCommit").textContent="Sincronizar trabalhadores";}
   if($("trabalhadoresImportCancel"))$("trabalhadoresImportCancel").disabled=false;
 }
@@ -435,7 +473,8 @@ function renderImportPreview(report){
   importPreview={...report,empresaId:activeEmpresaId};saveImportReference(report);
   const company=cache.empresas.find(item=>String(item.id)===String(activeEmpresaId));
   const progress=report.status==="em_andamento"?` · ${Number(report.processados)||0} de ${Number(report.total)||0} processados`:"";
-  setText("trabalhadoresImportContext",[company?.nome||"Empresa selecionada",report.arquivoNome||"Planilha enviada"].join(" · ")+progress);
+  const source=report.origem==="soc"?" · SOC: "+(report.matriculaColumn==="matriculaRH"?"Matrícula RH":"Matrícula")+" → matrícula eSocial; Nome Cargo → função; Cidade/Estado da unidade → localidade; S → Ativo, N → Inativo":"";
+  setText("trabalhadoresImportContext",[company?.nome||"Empresa selecionada",report.arquivoNome||"Planilha enviada"].join(" · ")+progress+source);
   const summary=report.resumo||{};
   $("trabalhadoresImportSummary").innerHTML=[["criar","Novos"],["atualizar","Atualizações"],["inalterados","Sem alteração"],["erros","Erros"]].map(([key,label])=>`<div class="import-stat${key==="erros"&&summary[key]>0?" has-errors":""}"><strong>${Number(summary[key])||0}</strong><span>${label}</span></div>`).join("");
   const labels={criar:"Incluir",atualizar:"Atualizar",inalterado:"Manter",erro:"Corrigir"};
@@ -443,7 +482,8 @@ function renderImportPreview(report){
   $("trabalhadoresImportRows").innerHTML=report.linhas.map(row=>{
     const errors=Array.isArray(row.erros)?row.erros:[],changed=Array.isArray(row.camposAlterados)?row.camposAlterados:[];
     const detail=errors.length?errors.join(" "):changed.length?"Atualizar: "+changed.map(key=>fieldLabels[key]||key).join(", "):row.acao==="criar"?"Novo cadastro validado":row.acao==="inalterado"?"Cadastro preservado":"Pronto para sincronizar";
-    return `<tr${row.acao==="erro"?' class="row-error"':""}><td>${escapeHtml(row.linha)}</td><td>${escapeHtml(row.nomeCompleto||"—")}</td><td>${escapeHtml(labels[row.acao]||row.acao||"Conferir")}</td><td>${escapeHtml(detail)}</td></tr>`;
+    const data=report.origem==="soc"&&row.dados?`<details class="soc-row-details"><summary>Conferir dados</summary><dl>${Object.entries(fieldLabels).filter(([key])=>row.dados[key]).map(([key,label])=>`<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(row.dados[key])}</dd>`).join("")}</dl></details>`:"";
+    return `<tr${row.acao==="erro"?' class="row-error"':""}><td>${escapeHtml(row.linha)}</td><td>${escapeHtml(row.nomeCompleto||"—")}</td><td>${escapeHtml(labels[row.acao]||row.acao||"Conferir")}</td><td>${escapeHtml(detail)}${data}</td></tr>`;
   }).join("");
   $("trabalhadoresImportPreview").classList.remove("hidden");$("trabalhadoresImportCommit").disabled=report.podeConfirmar!==true;
   $("trabalhadoresImportCommit").textContent=report.status==="em_andamento"?"Continuar sincronização":"Sincronizar trabalhadores";
@@ -456,23 +496,26 @@ function renderImportPreview(report){
   else setImportMessage("success","Planilha conferida. Revise a prévia e clique em Sincronizar trabalhadores para aplicar as alterações.");
 }
 async function previewWorkersFile(event){
+  const soc=event.target.id==="trabalhadoresSocFile";if(soc&&!isMaster()){event.target.value="";return;}
+  const matriculaColumn=$("socMatriculaColumn")?.value||"matricula";
   const file=event.target.files?.[0];if(!file)return;if(!requireEmpresa()){event.target.value="";return;}
   clearImportPreview();const attempt=importAttempt,generation=sessionGeneration,company=companyGeneration;
-  $("trabalhadoresImportFile").disabled=true;
+  setWorkerImportBusy(true);
   try{
     if(!/\.xlsx$/i.test(file.name))throw new Error("Envie a planilha no formato Excel .xlsx, usando o modelo disponível.");
-    if(file.size>512*1024)throw new Error("A planilha deve ter até 512 KB e 500 trabalhadores. Use o modelo sem imagens ou outras abas de dados.");
+    if(file.size>512*1024)throw new Error("A planilha deve ter até 512 KB e 500 trabalhadores. Divida a relação em arquivos menores.");
     setImportMessage("warn","Lendo e conferindo a planilha. Aguarde a prévia da sincronização.");
     const dataUrl=await fileAsDataUrl(file);
     if(attempt!==importAttempt||generation!==sessionGeneration||company!==companyGeneration)return;
-    const result=ensureSuccess(await api("/api/trabalhadores/importacao/previa",{method:"POST",body:JSON.stringify({arquivoNome:file.name,arquivoBase64:dataUrl.split(",")[1]||""})}),"Não foi possível conferir a planilha.");
+    const result=ensureSuccess(await api(soc?"/api/trabalhadores/importacao/soc/previa":"/api/trabalhadores/importacao/previa",{method:"POST",body:JSON.stringify({arquivoNome:file.name,arquivoBase64:dataUrl.split(",")[1]||"",...(soc?{matriculaColumn}:{})})}),"Não foi possível conferir a planilha.");
     if(attempt!==importAttempt)return;
     renderImportPreview(importReport(result.body));
   }catch(error){
     if(attempt!==importAttempt||generation!==sessionGeneration||company!==companyGeneration||error.code==="SESSION_CHANGED")return;
     if(error.status===401){handleAppError(error);return;}setImportMessage("error",error.message||"Não foi possível conferir a planilha.");
-  }finally{if(attempt===importAttempt&&generation===sessionGeneration&&company===companyGeneration)$("trabalhadoresImportFile").disabled=false;}
+  }finally{if(attempt===importAttempt&&generation===sessionGeneration&&company===companyGeneration){setWorkerImportBusy(false);event.target.value="";}}
 }
+function setWorkerImportBusy(busy){for(const id of ["trabalhadoresImportFile","trabalhadoresSocFile","socMatriculaColumn"])if($(id))$(id).disabled=busy;}
 async function restoreImportPreview(){
   if(importPreview||!activeEmpresaId)return;
   const key=importReferenceKey();if(!key)return;
@@ -489,7 +532,7 @@ async function confirmWorkersImport(){
   if(!importPreview||importPreview.podeConfirmar!==true||String(importPreview.empresaId)!==String(activeEmpresaId))return;
   const button=$("trabalhadoresImportCommit");if(button.disabled)return;
   const attempt=importAttempt,generation=sessionGeneration,company=companyGeneration,id=importPreview.importacaoId;
-  button.disabled=true;$("trabalhadoresImportFile").disabled=true;$("trabalhadoresImportCancel").disabled=true;
+  button.disabled=true;setWorkerImportBusy(true);$("trabalhadoresImportCancel").disabled=true;
   try{
     let count=0;
     while(count++<10){
@@ -516,7 +559,7 @@ async function confirmWorkersImport(){
     }
     if(importPreview?.status==="concluida"||importPreview?.status==="conflito"){await refreshTrabalhadores(false);$("metricTrabalhadores").textContent=cache.trabalhadores.length;renderDashboard();}
   }finally{
-    if(attempt===importAttempt&&generation===sessionGeneration&&company===companyGeneration){button.disabled=importPreview?.podeConfirmar!==true;button.textContent=importPreview?.status==="em_andamento"?"Continuar sincronização":"Sincronizar trabalhadores";$("trabalhadoresImportFile").disabled=false;$("trabalhadoresImportCancel").disabled=false;}
+    if(attempt===importAttempt&&generation===sessionGeneration&&company===companyGeneration){button.disabled=importPreview?.podeConfirmar!==true;button.textContent=importPreview?.status==="em_andamento"?"Continuar sincronização":"Sincronizar trabalhadores";setWorkerImportBusy(false);$("trabalhadoresImportCancel").disabled=false;}
   }
 }
 function downloadWorkersTemplate(){
@@ -768,7 +811,7 @@ function showLogin(clearDrafts=false){clearSessionData(clearDrafts);if(clearDraf
 $("empresaAtivaSelect").addEventListener("change",async e=>{
   if(typeof closeOperations==='function')closeOperations();
   if(!isMaster()){renderEmpresas();return;}
-  companyGeneration++;if(biometricCapture)resetBiometricCapture();logoEditGeneration++;clearCredentials();clearImportPreview();resetCompanyLogoEditor();
+  companyGeneration++;clearCompanyPdf();if(biometricCapture)resetBiometricCapture();logoEditGeneration++;clearCredentials();clearImportPreview();resetCompanyLogoEditor();
   ["trabalhadorForm","entregaForm"].forEach(id=>{$(id).reset();const button=$(id).querySelector('button[type="submit"]');if(button)button.disabled=false;});if($("trabalhadorSearch"))$("trabalhadorSearch").value="";
   cache.trabalhadores=[];cache.fichas=[];$("trabalhadoresList").textContent="Carregando...";$("fichasList").textContent="Carregando...";$("dashboardFichas").textContent="";renderEntregaOptions();
   saveActiveCompany(e.target.value);await refreshAllSafe();
@@ -824,6 +867,8 @@ async function submitCadastro(event, path, empresaRequired=false) {
   }catch(error){if(generation===sessionGeneration&&(!empresaRequired||company===companyGeneration))handleAppError(error);}finally{if(generation===sessionGeneration&&(!empresaRequired||company===companyGeneration))button.disabled=false;}
 }
 $("empresaForm").addEventListener("submit",submitCompany);
+$("empresaPdfFile").addEventListener("change",previewCompanyPdf);
+$("empresaPdfApply").addEventListener("click",applyCompanyPdf);
 $("trabalhadorForm").addEventListener("submit",event=>submitWorker(event));
 $("epiForm").addEventListener("submit",event=>submitCadastro(event,"/api/epis"));
 $("empresaCnpj").addEventListener("input",()=>{if(companyLoginAutomatic)$("empresaLogin").value=normalizedCnpj($("empresaCnpj").value).toLowerCase();});
@@ -841,6 +886,7 @@ $("empresaCredentialsDismiss").addEventListener("click",clearCredentials);
 $("empresaCredentialsToggle").addEventListener("click",()=>{const input=$("empresaCredentialsPassword"),visible=input.type==="password";input.type=visible?"text":"password";setText("empresaCredentialsToggle",visible?"Ocultar":"Mostrar");});
 $("trabalhadoresTemplateButton").addEventListener("click",downloadWorkersTemplate);
 $("trabalhadoresImportFile").addEventListener("change",previewWorkersFile);
+$("trabalhadoresSocFile").addEventListener("change",previewWorkersFile);
 $("trabalhadoresImportCommit").addEventListener("click",()=>confirmWorkersImport().catch(handleAppError));
 $("trabalhadoresImportCancel").addEventListener("click",()=>{clearImportReference();clearImportPreview();});
 $("trabalhadorSearch").addEventListener("input",renderTrabalhadores);

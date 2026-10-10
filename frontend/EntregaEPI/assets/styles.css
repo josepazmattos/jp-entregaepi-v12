@@ -109,6 +109,20 @@ h3 { font-size: 16px; line-height: 1.4; letter-spacing: -.01em; }
 .sidebar-brand { display: flex; min-height: 52px; align-items: center; gap: 12px; padding: 0 8px; margin-bottom: 32px; }
 .sidebar-logo { min-width: 0; flex: 1; }
 .sidebar-logo img { display: block; width: 100%; height: auto; object-fit: contain; }
+
+.company-pdf-box { display: grid; gap: 12px; margin-bottom: 22px; padding: 18px; border: 1px dashed var(--jp-line-strong); border-radius: 10px; background: #f7fbf8; }
+.company-pdf-box .field { margin-bottom: 0; }
+.pdf-fields { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 8px 12px; margin: 0 0 16px; font-size: 13px; }
+.pdf-fields dt { font-weight: 600; }
+.pdf-fields dd { margin: 0; overflow-wrap: anywhere; }
+.soc-import { margin-top: 18px; padding: 16px 0 0; border-top: 1px solid var(--jp-line); }
+.soc-import summary { cursor: pointer; color: var(--jp-green-dark); font-weight: 600; font-size: 13px; }
+.soc-import .import-actions { margin-top: 16px; }
+.soc-row-details { margin-top: 8px; }
+.soc-row-details summary { cursor: pointer; color: var(--jp-green-dark); }
+.soc-row-details dl { display: grid; gap: 6px; margin: 10px 0; white-space: normal; }
+.soc-row-details dt { font-weight: 600; }
+.soc-row-details dd { margin: 0 0 6px; overflow-wrap: anywhere; }
 .nav { display: grid; gap: 24px; }
 .nav-group { display: grid; gap: 4px; }
 .nav-label { padding: 0 12px; margin-bottom: 8px; color: #9bbda9; font-size: 10px; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; }
