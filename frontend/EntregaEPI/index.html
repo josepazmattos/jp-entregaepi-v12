@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#146544" />
-  <title>JP EntregaEPI V12</title>
+  <title>JP EntregaEPI</title>
   <script src="/__APP_PREFIX__/config.js?v=1294"></script>
-  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=1294" />
+  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=20261010-login" />
 </head>
 <body>
   <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
@@ -38,23 +38,28 @@
     <section class="login-layout" aria-label="Acesso ao JP EntregaEPI">
       <aside class="brand-panel">
         <div class="brand-content">
-          <img class="brand-logo" src="/__APP_PREFIX__/assets/logo-jp.png" alt="JP Segurança do Trabalho" />
-          <span class="kicker">Gestão de equipamentos de proteção</span>
-          <h1>Cuidado com as pessoas.<br>Controle em cada entrega.</h1>
-          <p>Empresas, trabalhadores e fichas de EPI em um só lugar, com a organização que a sua operação precisa.</p>
+          <img class="brand-logo" src="/__APP_PREFIX__/assets/logo-entregaepi.svg?v=20261010" alt="JP EntregaEPI" width="520" height="112" fetchpriority="high" />
+          <h1>Cada entrega.<br>Mais proteção.</h1>
+          <p>Empresas, trabalhadores e fichas de EPI em um só lugar.</p>
           <div class="feature-grid">
-            <div class="feature"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg><span>Empresas e equipes</span></div>
-            <div class="feature"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg><span>Consulta de CA</span></div>
-            <div class="feature"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-file"></use></svg><span>Fichas de EPI</span></div>
-            <div class="feature"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-fingerprint"></use></svg><span>Conexão com leitor</span></div>
+            <div class="feature">
+              <svg class="feature-illustration" viewBox="0 0 120 136" aria-hidden="true" focusable="false"><rect x="22" y="10" width="76" height="114" rx="8"/><path d="M42 28h36"/><circle cx="44" cy="49" r="10"/><path d="M38 54c1-7 11-7 12 0M65 43h19M65 53h15M37 75l3 3 6-7M55 75h28M37 93l3 3 6-7M55 93h28M37 111l3 3 6-7M55 111h20"/></svg>
+              <span>Fichas de EPI</span>
+            </div>
+            <div class="feature">
+              <svg class="feature-illustration feature-shield" viewBox="0 0 120 136" aria-hidden="true" focusable="false"><path class="shield-fill" d="M60 13c12 9 23 14 41 18v34c0 28-19 46-41 58-22-12-41-30-41-58V31c18-4 29-9 41-18Z"/><path d="M60 21c11 7 22 12 33 15v29c0 23-15 39-33 50-18-11-33-27-33-50V36c11-3 22-8 33-15Z" opacity=".25"/><path class="shield-check" d="m41 65 13 13 27-30"/></svg>
+              <span>Assinatura biométrica</span>
+            </div>
+            <div class="feature">
+              <svg class="feature-illustration" viewBox="0 0 120 136" aria-hidden="true" focusable="false"><path d="M21 64c1-26 16-41 39-41s38 15 39 41M47 45l3-29h20l3 29M35 31l5 25M85 31l-5 25M17 64h86v13H17zM29 86c-11-1-14 5-12 15l3 16c1 6 8 8 14 5l17-9h18l17 9c6 3 13 1 14-5l3-16c2-10-1-16-12-15Z"/><path d="m27 94 21 1-4 12-18 9-2-17q-1-5 3-5Zm66 0-21 1 4 12 18 9 2-17q1-5-3-5ZM54 97h12M32 102l7-2M81 102l7 3"/></svg>
+              <span>Entrega de EPIs</span>
+            </div>
           </div>
         </div>
-        <div class="brand-signature">JP Segurança do Trabalho <span>EntregaEPI V12</span></div>
       </aside>
       <section class="login-card">
         <div class="login-head">
-          <div class="login-logo"><img src="/__APP_PREFIX__/assets/logo-jp.png" alt="JP" /></div>
-          <div><span class="eyebrow">Bem-vindo ao JP EntregaEPI</span><h2>Acesse sua conta</h2><p>Entre para continuar a gestão dos EPIs.</p></div>
+          <div><h2>Acesse sua conta</h2><p>Entre para continuar a gestão dos EPIs.</p></div>
         </div>
         <form id="loginForm" class="form">
           <div class="field"><label for="username">Usuário</label><input id="username" autocomplete="username" placeholder="Digite seu usuário" required /></div>
@@ -74,8 +79,6 @@
           <button id="newPasswordButton" type="submit" class="btn btn-primary btn-full">Definir senha e entrar</button>
           <button id="newPasswordCancel" type="button" class="text-button">Voltar ao acesso</button>
         </form>
-        <div class="login-help"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-lock"></use></svg><p>Use o acesso fornecido pelo administrador da sua empresa.</p></div>
-        <div class="login-footer"><span>Versão <b>12.9.4</b></span><span class="environment-label"><i aria-hidden="true"></i> Produção</span></div>
       </section>
     </section>
   </main>
