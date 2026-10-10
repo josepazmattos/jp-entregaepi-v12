@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,readFileSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import dns from 'node:dns/promises';import https from 'node:https';import {EventEmitter} from 'node:events';
 import {execFileSync} from 'node:child_process';
 import * as asn1 from 'asn1js';
 import * as pki from 'pkijs';
-import {verifyCompanyCms,publicAddress,trustRoots} from '../src/services/jpged-pki.js';
+import {verifyCompanyCms,publicAddress,trustRoots,fetchCrl} from '../src/services/jpged-pki.js';
 import {buildSigningPdf,embedCms,signingBytes} from '../src/services/jpged-pdf.js';
 const dir=mkdtempSync(join(tmpdir(),'jpged-crypto-'));after(()=>rmSync(dir,{recursive:true,force:true}));
 execFileSync('python3',[new URL('./helpers/jpged-fixture.py',import.meta.url).pathname,dir]);
@@ -21,3 +22,5 @@ test('revogado, LCR vencida e rede indisponível não concluem',async()=>{await 
 test('endereços privados, loopback, metadata e IPv4 mapeado são bloqueados',()=>{for(const ip of ['127.0.0.1','10.0.0.1','169.254.169.254','192.168.1.1','::1','::ffff:127.0.0.1','fc00::1'])assert.equal(publicAddress(ip),false,ip);assert.equal(publicAddress('8.8.8.8'),true);});
 test('raízes de produção são oficiais e excluem CA sintética',()=>{assert.ok(trustRoots().length>=2);for(const cert of trustRoots())assert.notEqual(Buffer.from(cert.toSchema(true).toBER(false)).toString('hex'),readFileSync(join(dir,'root.der')).toString('hex'));});
 test('PDF com entrega e devolução preserva ByteRange e valida CMS incorporado',async()=>{const ficha={id:'synthetic',numero:'TESTE',empresaId:'company',trabalhadorId:'worker',trabalhadorNome:'COLABORADOR SINTÉTICO',tipo:'Mista',data:'10/10/2026',empresaSnapshot:{nome:'EMPRESA SINTÉTICA',cnpj:'12345678000195'},trabalhadorSnapshot:{nomeCompleto:'COLABORADOR SINTÉTICO'},assinaturaBiometrica:{id:'bio',signedAt:new Date().toISOString(),dedo:'R_INDEX'},itens:Array.from({length:60},(_,i)=>({quantidade:i+1,epiNome:'CAPACETE DE SEGURANÇA',ca:'365',datasMovimentacao:i%2?{devolucao:'10/10/2026'}:{entrega:'10/10/2026'}}))};const r=await buildSigningPdf(ficha,{subject:'SYNTHETIC COMPANY'}),signature=sign(r.signedBytes),final=embedCms(r.pdf,r.start,r.end,signature);assert.deepEqual(signingBytes(final,r.start,r.end),r.signedBytes);await verifyCompanyCms(signature,signingBytes(final,r.start,r.end),'12345678000195',options);writeFileSync(join(dir,'signed.pdf'),final);if(process.env.JPGED_PDF_OUTPUT)writeFileSync(process.env.JPGED_PDF_OUTPUT,final);const dump=execFileSync('pdftotext',[join(dir,'signed.pdf'),'-']).toString();assert.match(dump,/CAPACETE/);assert.match(dump,/Devolução/);assert.match(dump,/60/);});
+
+test('busca de LCR fixa o IP público resolvido e recusa destino privado antes do HTTP',async t=>{let sent=0;const request=new EventEmitter();request.destroy=error=>{request.emit('error',error);request.emit('close');};t.mock.method(dns,'lookup',async()=>[{address:'8.8.8.8',family:4}]);t.mock.method(https,'get',(url,options,handle)=>{sent++;assert.equal(options.family,4);assert.equal(options.autoSelectFamily,false);options.lookup('synthetic.invalid',{all:true},(error,values)=>assert.deepEqual(values,[{address:'8.8.8.8',family:4}]));queueMicrotask(()=>{const response=new EventEmitter();response.statusCode=200;handle(response);response.emit('data',Buffer.from('CRL'));response.emit('end');request.emit('close');});return request;});assert.deepEqual(await fetchCrl('https://synthetic.invalid/root.crl'),Buffer.from('CRL'));t.mock.method(dns,'lookup',async()=>[{address:'127.0.0.1',family:4}]);await assert.rejects(fetchCrl('https://synthetic.invalid/root.crl'),{code:'CRL_ADDRESS'});assert.equal(sent,1);});

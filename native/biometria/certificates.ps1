@@ -48,7 +48,17 @@ try {
     $cms=[Security.Cryptography.Pkcs.SignedCms]::new([Security.Cryptography.Pkcs.ContentInfo]::new($content),$true)
     $signer=[Security.Cryptography.Pkcs.CmsSigner]::new([Security.Cryptography.Pkcs.SubjectIdentifierType]::IssuerAndSerialNumber,$cert)
     $signer.DigestAlgorithm=[Security.Cryptography.Oid]::new('2.16.840.1.101.3.4.2.1')
-    $signer.IncludeOption=[Security.Cryptography.X509Certificates.X509IncludeOption]::WholeChain
+    # Collect public chain material without treating the Windows trust store as
+    # the trust authority. The API verifies the complete chain against pinned
+    # official ICP-Brasil roots and fresh signed CRLs before accepting anything.
+    $signer.IncludeOption=[Security.Cryptography.X509Certificates.X509IncludeOption]::EndCertOnly
+    $chain=[Security.Cryptography.X509Certificates.X509Chain]::new()
+    try {
+        $chain.ChainPolicy.RevocationMode=[Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck
+        $chain.ChainPolicy.UrlRetrievalTimeout=[TimeSpan]::FromSeconds(5)
+        [void]$chain.Build($cert)
+        foreach($element in $chain.ChainElements){if($element.Certificate.Thumbprint -ne $cert.Thumbprint){[void]$signer.Certificates.Add([Security.Cryptography.X509Certificates.X509Certificate2]::new($element.Certificate.RawData))}}
+    } finally {$chain.Dispose()}
     # ESS SigningCertificateV2, SHA-256 default, binds this exact certificate.
     $sha=[Security.Cryptography.SHA256]::Create();$certificateHash=$sha.ComputeHash($cert.RawData);$sha.Dispose()
     [byte[]]$ess=@(0x30,0x26,0x30,0x24,0x30,0x22,0x04,0x20)+$certificateHash

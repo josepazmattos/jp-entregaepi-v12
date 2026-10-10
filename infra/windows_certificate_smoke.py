@@ -23,5 +23,5 @@ with tempfile.TemporaryDirectory(prefix='jpged-win-test-') as folder:
   (path/'signed.der').write_bytes(base64.b64decode(answer['cms']))
   subprocess.run(['node',str(ROOT/'backend/test/helpers/verify-windows-cms.js'),folder],check=True)
  finally:
-  powershell("Remove-Item -LiteralPath 'Cert:\\CurrentUser\\My\\"+thumbprint+"' -ErrorAction SilentlyContinue")
+  powershell("$s=New-Object Security.Cryptography.X509Certificates.X509Store('My','CurrentUser');$s.Open('ReadWrite');foreach($c in $s.Certificates){if($c.Thumbprint -eq '"+thumbprint+"'){$s.Remove($c)}};$s.Close();exit 0")
 print('Windows certificate signing verified: synthetic CMS, CNPJ, ESS, chain and revocation; no client certificate used.')
