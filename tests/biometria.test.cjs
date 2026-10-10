@@ -3,7 +3,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const bio=require('../frontend/EntregaEPI/assets/biometria.js');
 const pixel='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
-const ready={ok:true,service:'JP Biometria Local Java',version:'12.9.3',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture'},sdk:true,reader:true,deviceCount:1,deviceName:'NITGEN HFDU06'};
+const ready={ok:true,service:'JP Biometria Local Java',version:'12.9.4',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture'},sdk:true,reader:true,deviceCount:1,deviceName:'NITGEN HFDU06'};
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
 const refused=()=>Promise.reject(new TypeError('Failed to fetch'));
 function client(route,options={}){
@@ -122,7 +122,7 @@ test('biometria: leitura limita resposta e diagnóstico não retém template ou 
 });
 
 
-test('biometria: legado só permite diagnóstico e agente12.9.3 tem preferência na faixa local',async()=>{
+test('biometria: legado só permite diagnóstico e agente12.9.4 tem preferência na faixa local',async()=>{
   const legacy={...ready,version:'11.10.6',capabilities:undefined};
   const onlyLegacy=client(url=>url.port==='8789'?json(legacy):refused()).instance;
   const state=await onlyLegacy.discover();assert.equal(state.readerDetected,true);assert.equal(state.ready,false);assert.equal(state.upgradeRequired,true);
@@ -152,9 +152,9 @@ test('biometria: diagnóstico que não termina permanece indisponível após pra
   await assert.rejects(instance.capture({fingerCode:'R_INDEX'}),error=>error.code==='BIO_CHECKING');
 });
 
-test('biometria: fallback12.9.3 distingue protocolo atualizado de captura indisponível por Java ou SDK',async()=>{
+test('biometria: fallback12.9.4 distingue protocolo atualizado de captura indisponível por Java ou SDK',async()=>{
   for(const errorCode of ['JAVA_NOT_FOUND','JAVA_ARCH_MISMATCH','SDK_NOT_FOUND','SDK_DLL_NOT_FOUND','SDK_ARCH_MISMATCH']){
-    const fallback={ok:false,version:'12.9.3',service:'JP Biometria Local',sdk:false,reader:false,deviceCount:0,runtime:'diagnostic-only',capabilities:{capture:false,captureMethod:'POST',capturePath:'/api/capture'},errorCode,message:'CAMINHO-PRIVADO-TEMPLATE-NAO-MOSTRAR'};
+    const fallback={ok:false,version:'12.9.4',service:'JP Biometria Local',sdk:false,reader:false,deviceCount:0,runtime:'diagnostic-only',capabilities:{capture:false,captureMethod:'POST',capturePath:'/api/capture'},errorCode,message:'CAMINHO-PRIVADO-TEMPLATE-NAO-MOSTRAR'};
     const {instance,requests}=client(url=>url.port==='8789'?json(fallback):refused());
     const status=await instance.discover();assert.equal(status.compatible,true);assert.equal(status.upgradeRequired,false);assert.equal(status.captureAvailable,false);assert.equal(status.ready,false);assert.equal(status.code,errorCode);assert.equal(status.runtimeCode,errorCode);assert.ok(status.runtimeMessage.length>20);assert.ok(!status.runtimeMessage.includes('PRIVADO'));
     await assert.rejects(instance.capture({fingerCode:'R_INDEX'}),error=>error.code==='BIO_RUNTIME'&&!error.message.includes('precisa ser atualizado'));
@@ -166,7 +166,7 @@ test('biometria: fallback12.9.3 distingue protocolo atualizado de captura indisp
 test('verificação automática requer permissão concedida e nunca captura',async()=>{
   for(const permission of ['prompt','denied','unsupported','granted']){
     const requests=[];
-    const client=bio.createClient({queryPermission:async()=>{if(permission==='unsupported')throw new TypeError('PermissionName');return {state:permission};},fetch:async(url,options)=>{requests.push({url,options});return {ok:true,text:async()=>JSON.stringify({ok:true,service:'JP Biometria',version:'12.9.3',reader:true,sdk:true,capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture'}})};}});
+    const client=bio.createClient({queryPermission:async()=>{if(permission==='unsupported')throw new TypeError('PermissionName');return {state:permission};},fetch:async(url,options)=>{requests.push({url,options});return {ok:true,text:async()=>JSON.stringify({ok:true,service:'JP Biometria',version:'12.9.4',reader:true,sdk:true,capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture'}})};}});
     if(permission==='granted'){assert.equal((await client.discover({automatic:true})).ready,true);assert.equal(requests.length,1);assert.equal(requests[0].options.method,'GET');assert.ok(requests[0].url.includes('/status'));}
     else{await assert.rejects(client.discover({automatic:true}),{code:permission==='denied'?'BIO_PERMISSION':'BIO_PERMISSION_REQUIRED'});assert.equal(requests.length,0);}
   }
@@ -189,4 +189,4 @@ test('agente Java: errorCode preserva divergência e erro do SDK sem expor mensa
 
 test('cadastro com imagem exige agente compatível sem impedir assinatura de digitais antigas',()=>{assert.equal(bio.normalizeStatus({...ready,version:'12.9.0',capabilities:{...ready.capabilities,templates:true,verify:true}},8789).enrollmentImageAvailable,false);assert.equal(bio.normalizeStatus({...ready,version:'12.9.1',capabilities:{...ready.capabilities,templates:true,verify:true}},8789).enrollmentImageAvailable,true);});
 
-test('recadastro encontra agente com imagem mesmo quando versão antiga responde primeiro',async()=>{const {instance}=client(url=>json({...ready,version:url.port==='8789'?'12.9.0':'12.9.3',capabilities:{...ready.capabilities,templates:true,verify:true}}));assert.equal((await instance.discover({requireEnrollmentImage:true})).port,8790);});
+test('recadastro encontra agente com imagem mesmo quando versão antiga responde primeiro',async()=>{const {instance}=client(url=>json({...ready,version:url.port==='8789'?'12.9.0':'12.9.4',capabilities:{...ready.capabilities,templates:true,verify:true}}));assert.equal((await instance.discover({requireEnrollmentImage:true})).port,8790);});

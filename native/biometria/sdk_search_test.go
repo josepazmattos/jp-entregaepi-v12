@@ -73,3 +73,17 @@ func TestOnlyRuntimeFailuresPermitRediscovery(t *testing.T) {
 		}
 	}
 }
+
+func TestManagedSDKIsFoundWithoutEnvironmentConfiguration(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("LOCALAPPDATA", base)
+	for _, key := range []string{"ProgramFiles", "ProgramW6432", "ProgramFiles(x86)", "SystemDrive", "JP_BIOMETRIA_SDK"} {
+		t.Setenv(key, "")
+	}
+	want := filepath.Join(base, "JP", "Biometria", "sdk-5.2.0.6")
+	createSearchSDK(t, want, true)
+	got, problem := discoverInstalledSDK()
+	if problem != "" || len(got) != 1 || got[0].Root != want {
+		t.Fatalf("managed SDK must be found automatically: %#v %s", got, problem)
+	}
+}

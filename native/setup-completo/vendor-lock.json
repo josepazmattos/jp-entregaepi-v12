@@ -1,0 +1,22 @@
+{
+  "sdk/Bin/x64/ACamSDK.dll": "f6c7886bfb9e5a328990984e1001da57992e7907d17f749ad2d3b3b9a3f2ba4a",
+  "sdk/Bin/x64/FPLib.dll": "e9a2f74b124d5206629e879a3e3147e4381e5174c2f61458cf492f274b404a11",
+  "sdk/Bin/x64/NBioBSP.dll": "21239165979328223abea3e9d64e35e08969faf786ef97740226e7e65d5901a8",
+  "sdk/Bin/x64/NBioBSPCOM.dll": "b3606d1d43ca14e3e063790a33796071880031bdacf0dc9249f188b560ca2a64",
+  "sdk/Bin/x64/NBioBSPJNI.dll": "d3909124c28be5fe13260ad0239f0bf69ae1a959c77c42c118e32fba3edd0c37",
+  "sdk/Bin/x64/NScan.dll": "1968ed5f385c35904f477d90c885db9527c2097627d691584bcfbc97808900ba",
+  "sdk/Bin/x64/VHMLib.dll": "a8b07aca58739f3c0adc483cd961e7d0caaf2466d0c0fbecb2c3fbacd1fc57c1",
+  "sdk/Bin/x64/mfc100.dll": "ef2e0df287af95855b6b13173259df847a2cb8a1872ba3d4573e82abd4fb9699",
+  "sdk/Bin/x64/msvcp100.dll": "934d882efd3c0f3f1efbc238ef87708f3879f5bb456d30af62f3368d58b6aa4c",
+  "sdk/Bin/x64/msvcr100.dll": "ae3cb6c6afba9a4aa5c85f66023c35338ca579b30326dd02918f9d55259503d5",
+  "sdk/Bin/x64/NBSP2Eng.dll": "8f3feb23d5ecc654a18953326a235e36a96318dd1c24eeb002538b5bc830d5bd",
+  "sdk/Bin/x64/NBSP2Jpn.dll": "67a32748bac89a47abbcedf3a9ffe12420c65dab6fdaf90de16431130f6bdff1",
+  "sdk/Bin/x64/NBSP2Kor.dll": "e721bd941dc52c2406307aec3128545ab6515b7bd7ddd3a18ae2789380be6572",
+  "sdk/Lib/NBioBSPJNI.jar": "4d03b6eea2ff806f990129c2f28d8e03508e48faab5b313574834694bcbabe8e",
+  "sdk/LICENSE.txt": "62a4123bd58a75aac3d5b24798831cd6dc7088a8882467459beed8744b88300f",
+  "driver/Venus.dll": "b9e3af06af57397b6343e0580e6995d7fe35f3f855e35457fabe473d1975d6dd",
+  "driver/fdu01.cat": "e838488553984f9b8e145cef90049a695ece2a2dc8e893cf22f2a5d6cd13416d",
+  "driver/VenusDrv.sys": "947bb5edf166a84f5b9945101ade8c7c79b6d35efd0f621fc9250bb9437ec157",
+  "driver/FpUSB.inf": "3053af34a48ae2d2d536dea52779b36b996127250ebb1cdbe7dfd02d8018e4ea",
+  "jre.zip": "82e2cdc6693737c5998445b31f69668fa0da77c7705121053f6508ac84961123"
+}
