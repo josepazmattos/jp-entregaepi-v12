@@ -9,11 +9,11 @@
   ].map(Object.freeze));
   const MAX_IMAGE_BYTES=150*1024;
   const RUNTIME_DIAGNOSTICS=Object.freeze({
-    JAVA_NOT_FOUND:Object.freeze({title:'Java não localizado',message:'O JP Biometria está atualizado, mas não localizou Java 8 ou posterior. Instale ou selecione o Java com a mesma arquitetura do SDK NITGEN e execute o reparador novamente.'}),
-    JAVA_ARCH_MISMATCH:Object.freeze({title:'Java e SDK com arquiteturas diferentes',message:'O JP Biometria está atualizado. Selecione um Java de 32 ou 64 bits que corresponda à arquitetura do SDK NITGEN instalado e execute o reparador novamente.'}),
-    SDK_NOT_FOUND:Object.freeze({title:'SDK NITGEN não localizado',message:'O JP Biometria está atualizado, mas não localizou o SDK eNBioBSP com o componente Java. Confira a instalação desse componente; o driver do leitor, sozinho, não disponibiliza esta integração.'}),
-    SDK_DLL_NOT_FOUND:Object.freeze({title:'Bibliotecas do SDK NITGEN ausentes',message:'O componente Java do SDK foi localizado, mas faltam as bibliotecas NBioBSP.dll ou NBioBSPJNI.dll. Confira a instalação do SDK e execute o reparador novamente.'}),
-    SDK_ARCH_MISMATCH:Object.freeze({title:'Bibliotecas NITGEN incompatíveis entre si',message:'As bibliotecas do SDK NITGEN têm arquiteturas diferentes. Use as bibliotecas da mesma instalação e arquitetura, de 32 ou 64 bits, e execute o reparador novamente.'})
+    JAVA_NOT_FOUND:Object.freeze({title:'Java não localizado',message:'O Java necessário não foi localizado. Em Biometria, use Baixar instalador completo e execute o arquivo. O pacote prepara o Java automaticamente, sem configurações manuais.'}),
+    JAVA_ARCH_MISMATCH:Object.freeze({title:'Java e SDK com arquiteturas diferentes',message:'O Java e o SDK instalados não combinam. Em Biometria, execute o instalador completo para preparar os componentes compatíveis automaticamente.'}),
+    SDK_NOT_FOUND:Object.freeze({title:'SDK NITGEN não localizado',message:'O SDK eNBioBSP com o componente Java não foi localizado. Em Biometria, use Baixar instalador completo e execute o arquivo. Não é necessário informar serial nem localizar arquivos.'}),
+    SDK_DLL_NOT_FOUND:Object.freeze({title:'Bibliotecas do SDK NITGEN ausentes',message:'Faltam componentes do SDK NITGEN. Em Biometria, execute o instalador completo para preparar os arquivos necessários automaticamente.'}),
+    SDK_ARCH_MISMATCH:Object.freeze({title:'Bibliotecas NITGEN incompatíveis entre si',message:'Os componentes NITGEN instalados não combinam. Em Biometria, execute o instalador completo para preparar a versão compatível com o Hamster DX.'})
   });
   const MESSAGES={
     BIO_BUSY:'Já existe uma operação com o leitor em andamento. Aguarde sua conclusão.',
@@ -24,7 +24,7 @@
     BIO_PERMISSION_REQUIRED:'Clique em Permitir e verificar leitor e autorize o acesso local, se o navegador solicitar. Com a permissão concedida, a verificação será automática nos próximos acessos.',
     BIO_PROTOCOL:'Um serviço respondeu, mas não confirmou o protocolo do JP Biometria. Confira se o agente correto está aberto.',
     BIO_NOT_READY:'O agente respondeu, mas não confirmou um leitor pronto. Feche o diagnóstico NITGEN se ele estiver usando o leitor e verifique novamente.',
-    BIO_AGENT_UPDATE:'O componente local precisa ser atualizado. Use Instalar / reparar JP Biometria, execute o instalador e depois verifique o leitor novamente.',
+    BIO_AGENT_UPDATE:'O componente local precisa ser atualizado. Em Biometria, use Baixar instalador completo e execute o arquivo. Ao voltar ao site, o indicador será atualizado automaticamente.',
     BIO_CHECKING:'O agente ainda está verificando o leitor. Aguarde alguns segundos e clique em Verificar leitor novamente.',
     BIO_RUNTIME:'O componente local está atualizado, mas a configuração de Java ou SDK impede a captura.',
     BIO_HTTP:'O agente local respondeu com erro. Confira o agente neste computador antes de repetir a operação.',

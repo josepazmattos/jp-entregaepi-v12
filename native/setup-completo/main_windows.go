@@ -189,6 +189,9 @@ func run() (string, error) {
 	if e != nil {
 		return "SECURITY_UNKNOWN", e
 	}
+	if h.Count == 0 {
+		return "USB_ABSENT", errors.New("connect reader before preparing the driver")
+	}
 	if h.Working {
 		if code == "" {
 			code = "READER_NOT_FOUND"
