@@ -26,7 +26,7 @@ import (
 	"time"
 )
 
-const version = "12.9.3"
+const version = "12.9.4"
 const firstPort, lastPort = 8789, 8799
 const installedName, jarName = "JPBiometria.exe", "JPBiometriaAgent.jar"
 
@@ -94,7 +94,7 @@ func main() {
 			_, err = startAgent(dir, key)
 		}
 		if err != nil {
-			failMain("Não foi possível iniciar a ponte JP Biometria. Execute o reparador 12.9.3.\n\n"+err.Error(), quiet)
+			failMain("Não foi possível iniciar a ponte JP Biometria. Execute o reparador 12.9.4.\n\n"+err.Error(), quiet)
 		}
 		return
 	}
@@ -453,7 +453,7 @@ func uniquePaths(paths []string) []string {
 	return result
 }
 func sdkRoots() []string {
-	roots := []string{os.Getenv("JP_BIOMETRIA_SDK")}
+	roots := []string{os.Getenv("JP_BIOMETRIA_SDK"), filepath.Join(os.Getenv("LOCALAPPDATA"), "JP", "Biometria", "sdk-5.2.0.6")}
 	for _, base := range []string{os.Getenv("ProgramFiles(x86)"), os.Getenv("ProgramFiles"), os.Getenv("ProgramW6432"), os.Getenv("SystemDrive") + string(os.PathSeparator)} {
 		if base == "" || base == string(os.PathSeparator) {
 			continue
@@ -510,7 +510,7 @@ func peArchitecture(path string) (string, error) {
 	return "", errors.New("unsupported architecture")
 }
 func javaCandidates() []string {
-	var candidates []string
+	candidates := []string{filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "Eclipse Adoptium", "jp-biometria-jre8u504b01", "bin", "java.exe")}
 	for _, home := range []string{os.Getenv("JAVA_HOME"), os.Getenv("JRE_HOME")} {
 		if home != "" {
 			candidates = append(candidates, filepath.Join(home, "bin", "java.exe"))

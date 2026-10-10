@@ -30,7 +30,7 @@ func requireWindows() error         { return nil }
 func configureHidden(cmd *exec.Cmd) { cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true} }
 func notifyUser(message string, failed bool) {
 	text, _ := syscall.UTF16PtrFromString(message)
-	title, _ := syscall.UTF16PtrFromString("JP Biometria 12.9.3")
+	title, _ := syscall.UTF16PtrFromString("JP Biometria 12.9.4")
 	flags := uintptr(0x40)
 	if failed {
 		flags = 0x10

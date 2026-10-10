@@ -26,8 +26,9 @@ import zipfile
 
 from fetch_ca_snapshot import read_source, verify_installed
 from biometria_release import verify_release, ReleaseError, EXECUTABLE, MANIFEST
+from complete_release import verify as verify_complete, FILENAME as COMPLETE_EXECUTABLE, MANIFEST as COMPLETE_MANIFEST
 
-VERSION = "12.9.3"
+VERSION = "12.9.4"
 REPOSITORY = "josepazmattos/jp-entregaepi-v12"
 ACCOUNT = "003020057405"
 REGION = "sa-east-1"
@@ -313,7 +314,7 @@ def prepare_frontend(root: Path, stage: Path, commit: str, run_id: str) -> list[
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(path.read_bytes())
         files.append(PublicFile(f"{PREFIX}/{relative.as_posix()}", target, content_type(path)))
-    required = {f"{PREFIX}/assets/{name}" for name in ("app.js", "operations.js", "ficha.js", "biometria.js", "styles.css", EXECUTABLE, MANIFEST)}
+    required = {f"{PREFIX}/assets/{name}" for name in ("app.js", "operations.js", "ficha.js", "biometria.js", "styles.css", EXECUTABLE, MANIFEST, COMPLETE_EXECUTABLE, COMPLETE_MANIFEST)}
     if not required.issubset({item.key for item in files}):
         raise DeployError("Arquivos obrigatórios do frontend estão ausentes.")
     cfg = {"version": VERSION, "buildSha": commit, "appBasePath": f"/{PREFIX}/", "apiBaseUrl": API_URL,
@@ -337,6 +338,7 @@ def prepare_frontend(root: Path, stage: Path, commit: str, run_id: str) -> list[
     release = verify_release(stage / "assets", commit)
     manifest["biometria"] = {field: release[field] for field in (
         "version", "buildSha", "filename", "sha256", "sizeBytes")}
+    manifest["biometriaCompleta"] = verify_complete(stage / "assets", commit)
     save_json(version_file, manifest, private=False)
     files.append(PublicFile(f"{PREFIX}/version.json", version_file, content_type(version_file)))
     return files + tail
@@ -402,6 +404,11 @@ class Deployment:
         self.report["biometriaRelease"] = {field: release[field] for field in (
             "version", "buildSha", "filename", "sha256", "sizeBytes")}
         self.check("biometria-windows-tested-artifact-version-commit-pe64-and-sha256-verified")
+        try:
+            self.report["biometriaCompleteRelease"] = verify_complete(self.root / "frontend/EntregaEPI/assets", self.commit)
+        except (ValueError, OSError):
+            raise DeployError("O instalador completo está ausente ou diverge do hash e commit aprovados.") from None
+        self.check("biometria-complete-installer-commit-and-sha256-verified")
         if isinstance(self.aws, AwsCli):
             self.aws.check_support()
         verify_installed(self.root / "backend/src/data/caepi", self.ca_source)
