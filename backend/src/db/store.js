@@ -271,6 +271,7 @@ export function createStore({ tableName = '', client = null, allowMemory = false
     const login = String(data.login || '').trim().toLowerCase();
     if (!cnpj || !login) throw storageError('Informe CNPJ e login para criar o acesso.', 'CADASTRO_INVALIDO', 400);
     const fields = ['nome', 'cnpj', 'login', 'localidade', 'uf', 'responsavel', 'email', 'telefone', 'logoDataUrl'];
+    if(data.inscricaoTipo==='CAEPF')fields.push('inscricaoTipo');
     const immutableRequest = Object.fromEntries(fields.map(key => [key, key === 'cnpj' ? cnpj : key === 'login' ? login : data[key] || '']));
     const requestHash = digest(JSON.stringify(canonical({ empresaId, data: immutableRequest })));
     for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -282,7 +283,7 @@ export function createStore({ tableName = '', client = null, allowMemory = false
         return { item, created: false };
       }
       const { items, revision } = await listWithRevision('empresa', null, 'company-registrations');
-      if (items.some(item => item.id !== empresaId && normalizedCnpj(item.cnpj) === cnpj)) throw storageError('Este CNPJ já está cadastrado.', 'CNPJ_DUPLICADO');
+      if (items.some(item => item.id !== empresaId && normalizedCnpj(item.cnpj) === cnpj && (item.inscricaoTipo||'CNPJ')===(data.inscricaoTipo||'CNPJ'))) throw storageError('Este CNPJ já está cadastrado.', 'CNPJ_DUPLICADO');
       if (items.some(item => item.id !== empresaId && String(item.login || '').toLowerCase() === login)) throw storageError('Este login já está cadastrado.', 'LOGIN_DUPLICADO');
       const existing = empresaId ? await get('empresa', empresaId) : null;
       if (empresaId && !existing) throw storageError('Empresa não encontrada.', 'REGISTRO_NAO_ENCONTRADO', 404);
@@ -293,7 +294,7 @@ export function createStore({ tableName = '', client = null, allowMemory = false
         _accessRegistration: { requestId, startedBy: actorSub }, acessoStatus: 'pendente' };
       const operations = [
         { type: existing ? 'update' : 'create', entity: 'empresa', id, data: company, ...(existing ? { expectedVersion: existing._version || 1 } : {}) },
-        { type: 'create', entity: '__company_cnpj', id: cnpj, data: { empresaId: id } },
+        { type: 'create', entity: '__company_cnpj', id: data.inscricaoTipo==='CAEPF'?'CAEPF-'+cnpj:cnpj, data: { empresaId: id } },
         { type: 'create', entity: '__company_login', id: digest(login), data: { empresaId: id } },
         { type: 'create', entity: '__company_registration', id: registrationId, data: { empresaId: id, requestHash } }
       ];

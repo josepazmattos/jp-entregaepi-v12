@@ -14,7 +14,7 @@ const record = { id: 'FICHA-SINTETICA-MATRICULA', ...globalThis.JP_FICHA.createS
 const report = { syntheticData: true, realApiUsed: false, matriculaLength: matricula.length, passed: false };
 
 (async () => {
-  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  const browser = await chromium.launch({...(process.env.JP_TEST_CHROMIUM?{executablePath:process.env.JP_TEST_CHROMIUM}:{}), headless: true, args: ['--no-sandbox'] });
   try {
     const page = await browser.newPage({ viewport: { width: 1100, height: 900 }, locale: 'pt-BR' });
     await page.route('**/*', route => route.abort());

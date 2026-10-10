@@ -14,7 +14,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 /** Loopback-only bridge. A local private control key is never exposed to browser responses. */
 public final class JPBiometriaAgent implements AutoCloseable {
-    static final String VERSION = "12.9.4", SERVICE = "JP Biometria Local Java";
+    static final String VERSION = "12.10.0", SERVICE = "JP Biometria Local Java";
     static final int FIRST_PORT = 8789, LAST_PORT = 8799, MAX_BODY = 16384;
     static final Set<String> WEB_ORIGINS = new HashSet<>(Arrays.asList("https://www.jptreinamentos.com.br", "https://jptreinamentos.com.br"));
     private final HttpServer server;
@@ -61,7 +61,7 @@ public final class JPBiometriaAgent implements AutoCloseable {
         Map<String, Object> out = new LinkedHashMap<>(deviceStatus);
         out.putAll(map("version", VERSION, "service", SERVICE, "agent", "JPBiometria", "buildSha", buildSha,
             "instanceId", instance, "port", port(), "busy", capturing, "checking", probeQueued.get(),
-            "capabilities", map("capture", true, "captureMethod", "POST", "capturePath", "/api/capture", "templates", true, "verify", true)));
+            "capabilities", map("capture", true, "captureMethod", "POST", "capturePath", "/api/capture", "templates", true, "verify", true,"documentHash",true,"certificates",true)));
         if (capturing) { out.put("message", "Captura em andamento. Aguarde a conclusão."); }
         return out;
     }
@@ -77,11 +77,12 @@ public final class JPBiometriaAgent implements AutoCloseable {
             boolean debugPath = path.equals("/debug/capture") || path.equals("/");
             boolean capturePath = path.equals("/api/capture") || path.equals("/capture");
             boolean verifyPath = path.equals("/api/signature") || path.equals("/verify") || path.equals("/api/enroll");
-            if (!statusPath && !debugPath && !capturePath && !verifyPath) { error(exchange, 404, "NOT_FOUND", "Rota não disponível."); return; }
+            boolean certPath = path.equals("/api/certificate/configure") || path.equals("/api/certificate/sign");
+            if (!statusPath && !debugPath && !capturePath && !verifyPath && !certPath) { error(exchange, 404, "NOT_FOUND", "Rota não disponível."); return; }
             if (method.equals("OPTIONS")) {
                 if (origin == null) { error(exchange, 403, "ORIGIN_REQUIRED", "Origem necessária."); return; }
                 String requested = exchange.getRequestHeaders().getFirst("Access-Control-Request-Method");
-                if (requested == null || !(requested.equals("GET") && (statusPath || debugPath) || requested.equals("POST") && (capturePath || verifyPath))) {
+                if (requested == null || !(requested.equals("GET") && (statusPath || debugPath) || requested.equals("POST") && (capturePath || verifyPath || certPath))) {
                     error(exchange, 405, "METHOD_NOT_ALLOWED", "Método não permitido."); return;
                 }
                 String headers = exchange.getRequestHeaders().getFirst("Access-Control-Request-Headers");
@@ -102,6 +103,12 @@ public final class JPBiometriaAgent implements AutoCloseable {
             // Side effects require an explicitly allowed Origin and POST. No image-tag/navigation capture.
             if (!method.equals("POST")) { error(exchange, 405, "METHOD_NOT_ALLOWED", "Use POST para a captura."); return; }
             if (origin == null) { error(exchange, 403, "ORIGIN_REQUIRED", "Abra o teste no aplicativo JP ou no diagnóstico local."); return; }
+            if(certPath){
+                if(!WEB_ORIGINS.contains(origin)){error(exchange,403,"ORIGIN_NOT_ALLOWED","Abra a configuração no aplicativo autenticado.");return;}
+                String contentType=exchange.getRequestHeaders().getFirst("Content-Type");
+                if(contentType==null||!contentType.toLowerCase(Locale.ROOT).startsWith("application/json")){error(exchange,415,"CONTENT_TYPE_REQUIRED","Envie JSON.");return;}
+                json(exchange,200,CertificateBridge.execute(path.endsWith("configure")?"configure":"sign",Json.object(readBody(exchange))));return;
+            }
             if (verifyPath) { biometric(exchange, path.equals("/api/enroll")?"enroll":"verify"); return; }
             capture(exchange);
         } catch (IllegalArgumentException e) { error(exchange, 400, "INVALID_REQUEST", "Os parâmetros da solicitação são inválidos."); }
@@ -140,8 +147,9 @@ public final class JPBiometriaAgent implements AutoCloseable {
         String type=exchange.getRequestHeaders().getFirst("Content-Type");
         if(type==null||!Arrays.asList("text/plain","application/json").contains(type.split(";",2)[0].trim().toLowerCase(Locale.ROOT)))throw new BioFailure("CONTENT_TYPE_REQUIRED","Envie JSON.",415);
         Map<String,Object> body=Json.object(readBody(exchange));
-        Set<String> keys=new HashSet<>(Arrays.asList("kind","challengeId","workerId","fichaId","fingerCode","template","publicKey"));
+        Set<String> keys=new HashSet<>(Arrays.asList("kind","challengeId","workerId","fichaId","fingerCode","template","publicKey","documentHash"));
         for(String key:body.keySet())if(!keys.contains(key))throw new IllegalArgumentException();
+        if(body.containsKey("documentHash") && !text(body,"documentHash","").matches("[a-f0-9]{64}"))throw new IllegalArgumentException();
         if(!kind.equals(body.get("kind")))throw new IllegalArgumentException();
         for(String key:Arrays.asList("challengeId","workerId"))if(!(body.get(key) instanceof String)||!((String)body.get(key)).matches("[A-Za-z0-9_-]{1,128}"))throw new IllegalArgumentException();
         String finger=text(body,"fingerCode","");if(!finger.matches("(R|L)_(THUMB|INDEX|MIDDLE|RING|LITTLE)"))throw new IllegalArgumentException();
@@ -218,7 +226,7 @@ public final class JPBiometriaAgent implements AutoCloseable {
         exchange.getResponseHeaders().set("Content-Security-Policy", "default-src 'none'; script-src 'nonce-" + nonce + "'; style-src 'unsafe-inline'; connect-src 'self'; img-src data:; frame-ancestors 'none'; base-uri 'none'");
         String html = "<!doctype html><html lang='pt-BR'><meta charset='utf-8'><meta name='viewport' content='width=device-width'><title>JP Biometria</title>"
             + "<style>body{font:16px system-ui;max-width:760px;margin:40px auto;padding:20px;color:#15382c}button{padding:12px;margin:5px}pre{white-space:pre-wrap}img{max-width:250px}</style>"
-            + "<h1>JP Biometria 12.9.4</h1><p>Teste local de conexão e captura. A imagem aparece apenas nesta janela e não é salva.</p>"
+            + "<h1>JP Biometria 12.10.0</h1><p>Teste local de conexão e captura. A imagem aparece apenas nesta janela e não é salva.</p>"
             + "<button id='status'>Verificar leitor</button><button id='capture'>Testar captura</button><pre id='result'>Clique em Verificar leitor.</pre><img id='image' alt='Captura do leitor' hidden>"
             + "<script nonce='" + nonce + "'>const out=document.getElementById('result'),img=document.getElementById('image');"
             + "document.getElementById('status').onclick=async()=>{try{const r=await fetch('/status',{cache:'no-store'}),j=await r.json();out.textContent=j.message+'\\nVersão: '+j.version+'\\nSDK: '+j.sdk+' | Leitor: '+j.reader;}catch(e){out.textContent='Não foi possível consultar o serviço.'}};"

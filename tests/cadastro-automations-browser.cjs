@@ -16,6 +16,7 @@ const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', ({ '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml' })[ext] || 'application/octet-stream');
   res.end(ext === '.html' ? data.toString().replaceAll('__APP_PREFIX__', 'EntregaEPI') : data);
 });
+let holdCompanyRead=false,releaseCompanyRead;
 let browser, page, claims, holdPreview = false, releasePreview, previewStarted, holdConfirmation = false, releaseConfirmation;
 (async () => {
   const store = await import('../backend/src/db/store.js'), { handler } = await import('../backend/src/lambda.js');
@@ -25,19 +26,20 @@ let browser, page, claims, holdPreview = false, releasePreview, previewStarted, 
   claims = { ...baseClaims, sub: 'MASTER-SINTETICO', 'cognito:groups': ['MASTER'] };
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
-  browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  browser = await chromium.launch({...(process.env.JP_TEST_CHROMIUM?{executablePath:process.env.JP_TEST_CHROMIUM}:{}), headless: true, args: ['--no-sandbox'] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'pt-BR' });
   context.on('page', p => p.on('pageerror', error => errors.push(error.message)));
   await context.route(url => url.origin !== origin, async route => {
     const req = route.request(), url = new URL(req.url());
     const json = (status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (url.hostname.startsWith('cognito-idp.')) return json(200, { AuthenticationResult: { IdToken: 'header.' + Buffer.from(JSON.stringify(claims)).toString('base64url') + '.synthetic', AccessToken: 'synthetic', ExpiresIn: 3600 } });
-    if (url.hostname === '127.0.0.1') return json(200, { ok: true, service: 'JP Biometria', version: '12.9.4', sdk: true, reader: true, deviceCount: 1, capabilities: { capture: true, verify: true, templates: true } });
+    if (url.hostname === '127.0.0.1') return json(200, { ok: true, service: 'JP Biometria', version: '12.10.0', sdk: true, reader: true, deviceCount: 1, capabilities: { capture: true, verify: true, templates: true } });
     assert.ok(url.hostname.endsWith('.execute-api.sa-east-1.amazonaws.com'));
     if (url.pathname === '/health') return json(200, { ok: true, durable: true, storageReady: true });
     if (url.pathname.startsWith('/api/caepi/')) return json(200, { ok: true, item: { ca: '365', name: 'EPI SINTÉTICO', found: true, officialSnapshot: true, downloadedAt: '2026-10-10T00:00:00Z', autofillAllowed: true } });
     apiCalls.push({ path: url.pathname, method: req.method(), body: req.postData() || '' });
     const requestClaims = { ...claims };
+    if(holdCompanyRead&&url.pathname==='/api/trabalhadores'&&req.method()==='GET')await new Promise(resolve=>{releaseCompanyRead=resolve;});
     if (holdConfirmation && url.pathname.endsWith('/confirmar')) await new Promise(resolve=>{releaseConfirmation=resolve;});
     if (holdPreview && url.pathname.endsWith('/soc/previa')) { previewStarted(); await new Promise(resolve => { releasePreview = resolve; }); }
     const response = await handler({ version: '2.0', routeKey: 'ANY /{proxy+}', rawPath: url.pathname, rawQueryString: url.search.slice(1), headers: { ...req.headers(), host: 'synthetic.invalid' }, requestContext: { requestId: randomUUID(), stage: '$default', http: { method: req.method(), path: url.pathname, protocol: 'HTTP/1.1', sourceIp: '127.0.0.1' }, authorizer: { jwt: { claims: requestClaims } } }, isBase64Encoded: false, ...(req.postData() ? { body: req.postData() } : {}) }, {});
@@ -117,7 +119,14 @@ let browser, page, claims, holdPreview = false, releasePreview, previewStarted, 
   assert.ok(await page.locator('#trabalhadoresImportCommit').isDisabled());
   assert.equal((await store.list('trabalhador', company.id)).length, 1);
   pass('Reenvio da mesma planilha não duplica trabalhadores');
-  await page.locator('#workerCompanySelect').selectOption(other.id);await page.locator('#workerRegistrationMethod').selectOption('soc');
+  holdCompanyRead=true;
+  await page.locator('#workerCompanySelect').selectOption(other.id);
+  await page.waitForFunction(()=>document.getElementById('workerRegistrationMethod').disabled);
+  assert.equal(await page.locator('#trabalhadoresSocFile').isVisible(),false);
+  await new Promise((resolve,reject)=>{let attempts=0;const check=()=>{if(typeof releaseCompanyRead==='function')return resolve();if(++attempts>500)return reject(new Error('Company read did not start'));setTimeout(check,10);};check();});
+  holdCompanyRead=false;releaseCompanyRead();
+  await page.locator('#workerRegistrationMethod').selectOption('soc');
+  pass('Troca de empresa bloqueia cadastro e upload até concluir o carregamento');
   await upload(xlsx); await page.waitForSelector('#trabalhadoresImportPreview:not(.hidden)');
   assert.match(await page.locator('#trabalhadoresImportRows').innerText(), /CNPJ da unidade diferente/);
   assert.ok(await page.locator('#trabalhadoresImportCommit').isDisabled());

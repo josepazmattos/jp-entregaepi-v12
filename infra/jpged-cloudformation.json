@@ -1,0 +1,472 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "JPGED: arquivos privados, copia independente, indice por empresa e recuperacao por 35 dias.",
+  "Resources": {
+    "Database": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "TableName": "JPGED",
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": true,
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "pk",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "sk",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "pk",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "sk",
+            "KeyType": "RANGE"
+          }
+        ],
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS"
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true,
+          "RecoveryPeriodInDays": 35
+        },
+        "TimeToLiveSpecification": {
+          "AttributeName": "expiresAtEpoch",
+          "Enabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "JPGED"
+          }
+        ]
+      }
+    },
+    "Backup": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "BucketName": "jpged-backup-003020057405",
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "IgnorePublicAcls": true,
+          "BlockPublicPolicy": true,
+          "RestrictPublicBuckets": true
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "IncompleteUploads",
+              "Status": "Enabled",
+              "AbortIncompleteMultipartUpload": {
+                "DaysAfterInitiation": 1
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "JPGED"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "IndependentBackup"
+          }
+        ]
+      }
+    },
+    "ReplicationRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "jpged-replication-role",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "s3.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": "003020057405"
+                },
+                "ArnEquals": {
+                  "aws:SourceArn": "arn:aws:s3:::jpged-documentos-003020057405"
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "JPGEDReplicationOnly",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetReplicationConfiguration",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": "arn:aws:s3:::jpged-documentos-003020057405"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObjectVersionForReplication",
+                    "s3:GetObjectVersionAcl",
+                    "s3:GetObjectVersionTagging"
+                  ],
+                  "Resource": [
+                    "arn:aws:s3:::jpged-documentos-003020057405/documents/*",
+                    "arn:aws:s3:::jpged-documentos-003020057405/evidence/*",
+                    "arn:aws:s3:::jpged-documentos-003020057405/validation/*"
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ReplicateObject",
+                    "s3:ReplicateTags"
+                  ],
+                  "Resource": "arn:aws:s3:::jpged-backup-003020057405/*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "Documents": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "BucketName": "jpged-documentos-003020057405",
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "IgnorePublicAcls": true,
+          "BlockPublicPolicy": true,
+          "RestrictPublicBuckets": true
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "TemporarySigningPackages",
+              "Status": "Enabled",
+              "Prefix": "staging/",
+              "ExpirationInDays": 7,
+              "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 7
+              }
+            },
+            {
+              "Id": "IncompleteUploads",
+              "Status": "Enabled",
+              "AbortIncompleteMultipartUpload": {
+                "DaysAfterInitiation": 1
+              }
+            }
+          ]
+        },
+        "ReplicationConfiguration": {
+          "Role": {
+            "Fn::GetAtt": [
+              "ReplicationRole",
+              "Arn"
+            ]
+          },
+          "Rules": [
+            {
+              "Id": "OriginalDocuments",
+              "Priority": 1,
+              "Status": "Enabled",
+              "Filter": {
+                "Prefix": "documents/"
+              },
+              "DeleteMarkerReplication": {
+                "Status": "Disabled"
+              },
+              "Destination": {
+                "Bucket": {
+                  "Fn::GetAtt": [
+                    "Backup",
+                    "Arn"
+                  ]
+                }
+              }
+            },
+            {
+              "Id": "Evidence",
+              "Priority": 2,
+              "Status": "Enabled",
+              "Filter": {
+                "Prefix": "evidence/"
+              },
+              "DeleteMarkerReplication": {
+                "Status": "Disabled"
+              },
+              "Destination": {
+                "Bucket": {
+                  "Fn::GetAtt": [
+                    "Backup",
+                    "Arn"
+                  ]
+                }
+              }
+            },
+            {
+              "Id": "Validation",
+              "Priority": 3,
+              "Status": "Enabled",
+              "Filter": {
+                "Prefix": "validation/"
+              },
+              "DeleteMarkerReplication": {
+                "Status": "Disabled"
+              },
+              "Destination": {
+                "Bucket": {
+                  "Fn::GetAtt": [
+                    "Backup",
+                    "Arn"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "JPGED"
+          }
+        ]
+      }
+    },
+    "DocumentsPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "Documents"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "TLSOnly",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "Documents",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${Documents.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            },
+            {
+              "Sid": "ImmutableWrites",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${Documents.Arn}/*"
+              },
+              "Condition": {
+                "Null": {
+                  "s3:if-none-match": "true"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "BackupPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "Backup"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "TLSOnly",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "Backup",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${Backup.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            },
+            {
+              "Sid": "ApplicationCannotAlterBackup",
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "arn:aws:iam::003020057405:role/jp-entregaepi-v12-lambda-role"
+              },
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "Backup",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${Backup.Arn}/*"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "ApplicationPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "JPGEDPrivateDocuments",
+        "Roles": [
+          "jp-entregaepi-v12-lambda-role"
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:GetItem",
+                "dynamodb:PutItem",
+                "dynamodb:Query"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "Database",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject",
+                "s3:PutObject"
+              ],
+              "Resource": {
+                "Fn::Sub": "${Documents.Arn}/*"
+              }
+            },
+            {
+              "Sid": "ApplicationCannotAdministerGedDatabase",
+              "Effect": "Deny",
+              "NotAction": [
+                "dynamodb:GetItem",
+                "dynamodb:PutItem",
+                "dynamodb:Query"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "Database",
+                  "Arn"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "Table": {
+      "Value": {
+        "Ref": "Database"
+      }
+    },
+    "Documents": {
+      "Value": {
+        "Ref": "Documents"
+      }
+    },
+    "Backup": {
+      "Value": {
+        "Ref": "Backup"
+      }
+    }
+  }
+}

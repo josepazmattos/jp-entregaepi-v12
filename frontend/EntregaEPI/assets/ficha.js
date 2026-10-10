@@ -57,7 +57,7 @@
   function createSnapshot(empresa = {}, trabalhador = {}) {
     return {
       empresaSnapshot: {
-        nome: first(empresa.nome, empresa.name), cnpj: first(empresa.cnpj),
+        nome: first(empresa.nome, empresa.name), cnpj: first(empresa.cnpj), ...(empresa.inscricaoTipo==='CAEPF'?{inscricaoTipo:'CAEPF'}:{}),
         localidade: first(empresa.localidade, empresa.city), uf: first(empresa.uf, empresa.UF),
         logoDataUrl: imageSource(first(empresa.logoDataUrl, empresa.logoUrl, empresa.logo), true)
       },
@@ -157,7 +157,7 @@ function equipmentName(item = {}) {
     const content = `<main class="sheet docx-template-a4" data-template="JP-DOCX-11.10.6">
       <div class="docx-top"><div class="docx-logo">${logo ? `<img src="${esc(logo)}" alt="Logo da empresa">` : ""}</div><div class="docx-title">FICHA DE FORNECIMENTO DE EQUIPAMENTO DE PROTEÇÃO<br>INDIVIDUAL (EPI)</div></div>
       <table class="docx-meta"><tbody>
-        <tr><td><b>Empresa:</b> ${esc(first(company.nome, company.name))}</td><td><b>CNPJ:</b> ${esc(company.cnpj)}</td></tr>
+        <tr><td><b>Empresa:</b> ${esc(first(company.nome, company.name))}</td><td><b>${company.inscricaoTipo==='CAEPF'?'CAEPF':'CNPJ'}:</b> ${esc(company.cnpj)}</td></tr>
         <tr><td><b>Nome do Trabalhador:</b> ${esc(workerName)}</td><td><b>CPF:</b> ${esc(worker.cpf)}</td></tr>
         <tr><td><b>Função:</b> ${esc(first(worker.funcao, worker.job))}</td><td><b>Matrícula eSocial:</b> ${esc(first(worker.matriculaESocial, worker.matriculaEsocial, worker.esocial))}</td></tr>
         <tr><td><b>Tipo da movimentação:</b> ${esc(type)}</td><td><b>Ficha:</b> ${esc(number)}</td></tr>

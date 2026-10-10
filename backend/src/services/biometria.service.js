@@ -2,6 +2,7 @@ import { createHash, createPublicKey, verify, randomUUID } from 'node:crypto';
 import { httpError } from '../middleware/auth.js';
 import { validateCaptureImage } from './capture-image.js';
 import { workerScope } from './trabalhadores-import.service.js';
+import { documentHash } from './document-integrity.js';
 
 export const hash = value => createHash('sha256').update(value).digest('hex');
 export const fingerValid = value => typeof value === 'string' && /^(R|L)_(THUMB|INDEX|MIDDLE|RING|LITTLE)$/.test(value);
@@ -23,6 +24,7 @@ function readProof(body, challenge, publicKey) {
     if (key.asymmetricKeyType !== 'ec' || key.asymmetricKeyDetails?.namedCurve !== 'prime256v1' || !verify('sha256', Buffer.from(body.proof), key, Buffer.from(body.proofSignature, 'base64'))) throw new Error();
   } catch { bad('A confirmação do leitor não pôde ser validada.', 'BIOMETRIA_PROVA_INVALIDA'); }
   if (proof.v !== 1 || proof.kind !== challenge.kind || proof.challengeId !== challenge.id || proof.workerId !== challenge.trabalhadorId || proof.fichaId !== challenge.fichaId || proof.fingerCode !== challenge.fingerCode) bad('A captura não corresponde ao trabalhador, dedo e ficha selecionados.', 'BIOMETRIA_DESTINO_DIVERGENTE');
+  if (challenge.documentHash && proof.documentHash !== challenge.documentHash) bad('Atualize o JP Biometria para vincular a assinatura ao conteúdo completo da ficha.', 'BIOMETRIA_DOCUMENTO_DIVERGENTE', 428);
   return proof;
 }
 
@@ -39,10 +41,12 @@ export function createBiometricsService(store) {
     const item = await store.create('biometria_desafio', {
       empresaId: worker.empresaId, trabalhadorId: worker.id, workerVersion: worker._version || 1,
       fichaId: ficha?.id || '', fichaVersion: ficha?._version || 0,
+      ...(ficha ? { documentHash: documentHash(ficha) } : {}),
       fingerCode, kind, actor, expiresAtEpoch: Math.floor(Date.now()/1000)+300,
       enrollmentVersion: enrollment?._version || 0, enrollmentId: enrollment?.id || '', used: false
     });
     return { challengeId: item.id, workerId: worker.id, fichaId: item.fichaId, fingerCode, kind,
+      ...(item.documentHash ? { documentHash: item.documentHash } : {}),
       ...(enrollment ? { template: enrollment.template, publicKey: enrollment.publicKey } : {}) };
   }
   async function complete({ body, worker, ficha = null, actor, kind }) {

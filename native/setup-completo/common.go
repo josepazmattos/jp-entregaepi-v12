@@ -55,7 +55,7 @@ func extract(data []byte, destination string) (manifest, error) {
 	if e != nil {
 		return m, e
 	}
-	if json.Unmarshal(b, &m) != nil || m.Version != "12.9.4" || len(m.Files) != len(files)-1 {
+	if json.Unmarshal(b, &m) != nil || m.Version != "12.10.0" || len(m.Files) != len(files)-1 {
 		return m, errors.New("PACKAGE_MANIFEST_INVALID")
 	}
 	seen := map[string]bool{}

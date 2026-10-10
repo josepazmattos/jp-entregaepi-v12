@@ -1,8 +1,8 @@
 import { httpError } from '../middleware/auth.js';
 import { textField } from '../routes/_helpers.js';
-import { companyEditableFields, normalizeCnpj, normalizeCompanyLogin, suggestCompanyLogin } from './empresa-validation.js';
+import { companyEditableFields, normalizeEmployerRegistration, normalizeCompanyLogin, suggestCompanyLogin } from './empresa-validation.js';
 
-const publicFields = ['id', 'nome', 'cnpj', 'login', 'localidade', 'uf', 'responsavel', 'email', 'telefone', 'logoDataUrl', 'logoUrl', 'logo', 'status', 'acessoStatus', 'createdAt', 'updatedAt', '_version'];
+const publicFields = ['id', 'nome', 'cnpj', 'inscricaoTipo', 'login', 'localidade', 'uf', 'responsavel', 'email', 'telefone', 'logoDataUrl', 'logoUrl', 'logo', 'status', 'acessoStatus', 'createdAt', 'updatedAt', '_version'];
 export function publicCompany(item) {
   if (!item) return null;
   return Object.fromEntries(publicFields.filter(key => item[key] != null).map(key => [key, item[key]]));
@@ -38,7 +38,7 @@ export function createCompanyService({ storage, accounts }) {
     if (!item._accessRegistration?.requestId || !item._accessRegistration?.startedBy || !item.login || !item.cnpj) {
       throw httpError(409, 'Informe o CNPJ e o login para criar o acesso desta empresa.', 'ACESSO_CADASTRO_NECESSARIO');
     }
-    if (normalizeCnpj(item.cnpj) !== item.cnpj || normalizeCompanyLogin(item.login) !== item.login) {
+    if (normalizeEmployerRegistration(item.cnpj,item.inscricaoTipo) !== item.cnpj || normalizeCompanyLogin(item.login) !== item.login) {
       throw httpError(409, 'O cadastro de acesso precisa de revisão administrativa.', 'ACESSO_REQUER_REVISAO');
     }
   }
@@ -66,7 +66,7 @@ export function createCompanyService({ storage, accounts }) {
     accounts.assertReady();
     let account;
     try {
-      account = await accounts.ensureCompanyAccess({ companyId: item.id, login: item.login, cnpj: item.cnpj, expectedSub: item.cognitoSub || '' });
+      account = await accounts.ensureCompanyAccess({ companyId: item.id, login: item.login, cnpj: item.cnpj, inscricaoTipo:item.inscricaoTipo, expectedSub: item.cognitoSub || '' });
     } catch (error) {
       const changes = { acessoStatus: 'pendente', acessoErro: pendingCode(error) };
       if (error.accountIdentity?.sub && (!item.cognitoSub || item.cognitoSub === error.accountIdentity.sub)) changes.cognitoSub = error.accountIdentity.sub;
@@ -92,7 +92,8 @@ export function createCompanyService({ storage, accounts }) {
   async function prepare(body, actorSub, existing = null) {
     accounts.assertReady();
     const requestId = registrationKey(body.requestId);
-    const cnpj = normalizeCnpj(body.cnpj || existing?.cnpj);
+    const inscricaoTipo=existing?.inscricaoTipo||body.inscricaoTipo||'CNPJ';
+    const cnpj = normalizeEmployerRegistration(body.cnpj || existing?.cnpj,inscricaoTipo);
     const login = normalizeCompanyLogin(body.login, suggestCompanyLogin(body.nome || existing?.nome));
     const profile = existing ? {} : companyEditableFields(body, { requireName: true });
     const prior = await storage.getCompanyRegistration(requestId, actorSub);
@@ -105,7 +106,7 @@ export function createCompanyService({ storage, accounts }) {
     }
     const data = {
       ...profile,
-      cnpj, login,
+      cnpj, login, ...(inscricaoTipo==='CAEPF'?{inscricaoTipo}:{}),
       status: existing?.status || 'Ativa',
       acessoStatus: 'pendente',
       _accessRegistration: { requestId, startedBy: actorSub }
@@ -122,7 +123,7 @@ export function createCompanyService({ storage, accounts }) {
   async function resume(id, body, actorSub) {
     const item = await company(id);
     if (item._accessRegistration) {
-      if ('cnpj' in body && normalizeCnpj(body.cnpj) !== normalizeCnpj(item.cnpj) || 'login' in body && normalizeCompanyLogin(body.login) !== item.login) {
+      if ('cnpj' in body && normalizeEmployerRegistration(body.cnpj,item.inscricaoTipo) !== normalizeEmployerRegistration(item.cnpj,item.inscricaoTipo) || 'login' in body && normalizeCompanyLogin(body.login) !== item.login) {
         throw httpError(409, 'O CNPJ e o login do acesso já foram definidos. Retome o cadastro sem alterar sua identidade.', 'ACESSO_IDENTIDADE_IMUTAVEL');
       }
       return provision(item);
@@ -132,9 +133,10 @@ export function createCompanyService({ storage, accounts }) {
   async function edit(id, body, { expectedVersion, master = false, actor = '' } = {}) {
     const item = await company(id);
     if (item._passwordReset?.status === 'processando' && Date.now() - Date.parse(item._passwordReset.startedAt) < 60000) throw httpError(409, 'Aguarde a restauração da senha para editar o cadastro.', 'ACESSO_EM_ANDAMENTO');
-    if ('cnpj' in body && normalizeCnpj(body.cnpj) !== normalizeCnpj(item.cnpj)) {
+    if ('cnpj' in body && normalizeEmployerRegistration(body.cnpj,item.inscricaoTipo) !== normalizeEmployerRegistration(item.cnpj,item.inscricaoTipo)) {
       throw httpError(409, 'O CNPJ identifica o acesso da empresa e deve ser preservado.', 'ACESSO_IDENTIDADE_IMUTAVEL');
     }
+    if('inscricaoTipo' in body&&body.inscricaoTipo!==(item.inscricaoTipo||'CNPJ'))throw httpError(409,'O tipo de inscrição identifica o empregador e deve ser preservado.','ACESSO_IDENTIDADE_IMUTAVEL');
     const fields = companyEditableFields(body);
     if ('login' in body && normalizeCompanyLogin(body.login) !== item.login) {
       if (!master) throw httpError(403, 'Somente o Master pode alterar o login.', 'PERFIL_NAO_AUTORIZADO');
@@ -165,7 +167,7 @@ export function createCompanyService({ storage, accounts }) {
     if (item._passwordReset?.status === 'processando' && Date.now() - Date.parse(item._passwordReset.startedAt) < 60000) throw httpError(409, 'Uma restauração de senha já está em andamento. Aguarde.', 'ACESSO_EM_ANDAMENTO');
     const reserved = await storage.update('empresa', id, { _passwordReset: { requestId: body.requestId, actor, status: 'processando', startedAt: new Date().toISOString() } }, { expectedVersion: item._version });
     try {
-      await accounts.resetCompanyPassword({ companyId: id, username: item.cognitoUsername || item.login, expectedSub: item.cognitoSub, cnpj: item.cnpj });
+      await accounts.resetCompanyPassword({ companyId: id, username: item.cognitoUsername || item.login, expectedSub: item.cognitoSub, cnpj: item.cnpj, inscricaoTipo:item.inscricaoTipo });
     } catch (error) {
       await storage.update('empresa', id, { _passwordReset: { requestId: body.requestId, actor, status: 'falhou' } }, { expectedVersion: reserved._version }).catch(() => {});
       throw error;

@@ -5,14 +5,14 @@ import json
 from pathlib import Path
 import shutil
 
-FILENAME = 'JP-Biometria-Completo-12.9.4.exe'
+FILENAME = 'JP-Biometria-Completo-12.10.0.exe'
 MANIFEST = 'biometria-complete-release.json'
 
 
 def verify(source, commit, destination=None):
     m = json.loads((source / MANIFEST).read_text())
     b = (source / FILENAME).read_bytes()
-    if not (m.get('buildSha') == commit and m.get('version') == '12.9.4' and m.get('filename') == FILENAME
+    if not (m.get('buildSha') == commit and m.get('version') == '12.10.0' and m.get('filename') == FILENAME
             and m.get('sizeBytes') == len(b) and 1024 < len(b) < 100 * 1024 * 1024 and b[:2] == b'MZ'
             and m.get('sha256') == hashlib.sha256(b).hexdigest()):
         raise ValueError('Complete installer does not match the tested commit/artifact')

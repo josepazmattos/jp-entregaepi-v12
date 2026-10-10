@@ -77,7 +77,7 @@ func status(port int) (map[string]any, error) {
 	if e != nil {
 		return nil, e
 	}
-	if s["version"] != "12.9.4" {
+	if s["version"] != "12.10.0" {
 		return nil, errors.New("AGENT_VERSION_INVALID")
 	}
 	return s, nil
@@ -236,12 +236,12 @@ func run() (string, error) {
 }
 func main() {
 	code, e := run()
-	text := "JP Biometria 12.9.4\n\n" + solution(code)
+	text := "JP Biometria 12.10.0\n\n" + solution(code)
 	if e != nil {
 		text += "\n\nCódigo para o suporte: " + code
 	}
 	if len(os.Args) == 2 && os.Args[1] == "--install-quiet" {
-		json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": e == nil, "code": code, "version": "12.9.4"})
+		json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": e == nil, "code": code, "version": "12.10.0"})
 	} else {
 		message(text, e != nil)
 	}

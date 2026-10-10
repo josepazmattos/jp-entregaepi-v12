@@ -1,4 +1,4 @@
-(function ensureConfig(){if(!window.JP_CONFIG||!window.JP_CONFIG.apiBaseUrl){window.JP_CONFIG={version:"12.9.4",appBasePath:"/EntregaEPI/",apiBaseUrl:"https://g4pdu3t1va.execute-api.sa-east-1.amazonaws.com",cognitoRegion:"sa-east-1",userPoolId:"sa-east-1_3FNCoTvr0",clientId:"2q2inha617oeer4vb0m0hjoja0",ambiente:"producao"}}})();
+(function ensureConfig(){if(!window.JP_CONFIG||!window.JP_CONFIG.apiBaseUrl){window.JP_CONFIG={version:"12.10.0",appBasePath:"/EntregaEPI/",apiBaseUrl:"https://g4pdu3t1va.execute-api.sa-east-1.amazonaws.com",cognitoRegion:"sa-east-1",userPoolId:"sa-east-1_3FNCoTvr0",clientId:"2q2inha617oeer4vb0m0hjoja0",ambiente:"producao"}}})();
 const $=id=>document.getElementById(id), tokenKey="jp-v12-auth", rememberedUserKey="jp-v12-remembered-user", activeCompanyKey="jp-v12-active-company";
 let sessionGeneration=0,companyGeneration=0,authAttempt=0,importAttempt=0,logoCreateGeneration=0,logoEditGeneration=0;let lastSessionUsername="";let cache={empresas:[],trabalhadores:[],epis:[],fichas:[]};let activeEmpresaId=sessionStorage.getItem(activeCompanyKey)||"";
 let firstAccessChallenge=null,empresaLogoDraft="",empresaLogoEdit=null,empresaRequestId="",importPreview=null,companyLoginAutomatic=true;
@@ -15,7 +15,7 @@ const installationWatchKey='jp-biometria-install-until';
 let installationWatchTimer=null,installationWatchRunning=false,installationWatchEpoch=0;
 const diagnosticRequests=new Set();
 const startupMirrors={apiStatusBadge:'startupApiBadge',caStatusBadge:'startupCaBadge',bioStatusBadge:'startupBioBadge',apiStatusText:'startupApiText',caStatusText:'startupCaText',bioStatusText:'startupBioText'};
-const screenLabels={dashboard:"Dashboard",empresas:"Empresas","empresas-cadastradas":"Empresas Cadastradas",trabalhadores:"Trabalhadores",epis:"EPIs e CA",entrega:"Entrega de EPI",fichas:"Fichas de EPI",biometria:"Biometria",config:"Configurações"};
+const screenLabels={dashboard:"Dashboard",empresas:"Empresas","empresas-cadastradas":"Empresas Cadastradas",trabalhadores:"Trabalhadores",epis:"EPIs e CA",entrega:"Entrega de EPI",fichas:"Fichas de EPI",jpged:"JPGED",biometria:"Biometria",config:"Configurações"};
 const navigationMedia=typeof window.matchMedia==="function"?window.matchMedia("(max-width: 1024px)"):null;
 function setText(id,value){const node=$(id);if(node)node.textContent=value;const mirror=$(startupMirrors[id]);if(mirror)mirror.textContent=value;}
 function setStatusBadge(id,label,state){const node=$(id);if(node){node.textContent=label;node.dataset.state=state;}const mirror=$(startupMirrors[id]);if(mirror){mirror.textContent=label;mirror.dataset.state=state;renderStartupProgress();}}
@@ -158,6 +158,8 @@ function activateScreen(screen,focusContent=true){
   });
   document.querySelectorAll(".screen").forEach(section=>section.classList.toggle("active",section.id==="screen-"+screen));
   setText("currentSectionLabel",screenLabels[screen]);setSidebarOpen(false);
+  if(screen==="jpged"&&typeof loadJpged==="function")loadJpged();
+  if(screen==="biometria"&&typeof loadCompanyCertificate==="function")loadCompanyCertificate();
   if(focusContent)$("mainContent")?.focus({preventScroll:true});
 }
 function setMsg(type,text){const el=$("loginMessage");el.className="message "+type;el.textContent=text}function hideMsg(){$("loginMessage").className="message hidden";$("loginMessage").textContent=""}
@@ -205,7 +207,7 @@ function finishLogin(authentication,username){
   if(!authentication?.IdToken)throw new Error("O serviço não confirmou a autenticação. Entre novamente.");
   saveAuth(authentication,username);rememberLogin(username);resetFirstAccess();$("password").value="";showApp();
 }
-async function api(path,opts={}){const requestSession=sessionGeneration,requestCompany=companyGeneration;const scoped=/^\/api\/(trabalhadores|fichas)(\/|$)|^\/api\/empresas\//.test(path);const cfg=window.JP_CONFIG;const auth=getAuth();const headers=Object.assign({},opts.headers||{});if(auth&&auth.idToken)headers.Authorization="Bearer "+auth.idToken;if(activeEmpresaId)headers["x-empresa-id"]=activeEmpresaId;if(opts.body&&!headers["content-type"])headers["content-type"]="application/json";let res;try{res=await fetch(cfg.apiBaseUrl+path,Object.assign({},opts,{headers}));}catch(error){if(requestSession!==sessionGeneration||(scoped&&requestCompany!==companyGeneration))error.code="SESSION_CHANGED";throw error;}const text=await res.text();let body=text;try{body=JSON.parse(text)}catch(e){}if(requestSession!==sessionGeneration||(scoped&&requestCompany!==companyGeneration)){const error=new Error("A sessão ou a empresa mudou durante a consulta.");error.code="SESSION_CHANGED";throw error;}return {status:res.status,body}}
+async function api(path,opts={}){const requestSession=sessionGeneration,requestCompany=companyGeneration;const scoped=/^\/api\/(trabalhadores|fichas|jpged)(\/|$)|^\/api\/empresas\//.test(path);const cfg=window.JP_CONFIG;const auth=getAuth();const headers=Object.assign({},opts.headers||{});if(auth&&auth.idToken)headers.Authorization="Bearer "+auth.idToken;if(activeEmpresaId)headers["x-empresa-id"]=activeEmpresaId;if(opts.body&&!headers["content-type"])headers["content-type"]="application/json";let res;try{res=await fetch(cfg.apiBaseUrl+path,Object.assign({},opts,{headers}));}catch(error){if(requestSession!==sessionGeneration||(scoped&&requestCompany!==companyGeneration))error.code="SESSION_CHANGED";throw error;}const text=await res.text();let body=text;try{body=JSON.parse(text)}catch(e){}if(requestSession!==sessionGeneration||(scoped&&requestCompany!==companyGeneration)){const error=new Error("A sessão ou a empresa mudou durante a consulta.");error.code="SESSION_CHANGED";throw error;}return {status:res.status,body}}
 function write(data){$("apiOutput").textContent=typeof data==="string"?data:JSON.stringify(data,null,2)}function asArray(resp){return resp&&resp.body&&Array.isArray(resp.body.items)?resp.body.items:[]}function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
 function ensureSuccess(result, fallback="Não foi possível concluir a operação.") {
   if (result.status < 200 || result.status >= 300 || result.body?.ok === false) {
@@ -438,8 +440,10 @@ async function previewCompanyPdf(event){
   }catch(error){if(current()){message.className="message error";message.textContent=error.message||"Não foi possível ler o PDF. Preencha os campos manualmente.";}}
   finally{if(current()){companyPdfLoading=false;$("empresaPdfFile").value="";$("empresaPdfFile").disabled=false;updateCompanySubmitButton();}}
 }
+function updateEmployerRegistration(){const caepf=$('empresaInscricaoTipo')?.value==='CAEPF';setText('empresaInscricaoLabel',caepf?'CAEPF':'CNPJ');$('empresaCnpj').placeholder=caepf?'14 dígitos do CAEPF':'00.000.000/0000-00';}
 function applyCompanyPdf(){
   if(!isMaster()||companySaving||companyPdfLoading||!companyPdfDraft?.cnpj||!companyPdfDraft?.nome)return;
+  $("empresaInscricaoTipo").value="CNPJ";updateEmployerRegistration();
   $("empresaNome").value=companyPdfDraft.nome;$("empresaCnpj").value=companyPdfDraft.cnpj;$("empresaLocalidade").value=companyPdfDraft.localidade||"";
   for(const [key,id] of [["telefone","empresaTelefone"],["email","empresaEmail"]])if(companyPdfDraft[key])$(id).value=companyPdfDraft[key];
   if(companyLoginAutomatic||!$("empresaLogin").value){$("empresaLogin").value=suggestedCompanyLogin(companyPdfDraft.nome);companyLoginAutomatic=true;}
@@ -536,7 +540,7 @@ async function submitCompany(event){
     const result=ensureSuccess(await api("/api/empresas",{method:"POST",body:JSON.stringify(body)}),"Não foi possível cadastrar a empresa.");
     if(!result.body?.item?.id)throw new Error("O serviço não confirmou o cadastro da empresa. Tente novamente.");
     companyGeneration++;const selectedGeneration=companyGeneration;clearImportPreview();resetCompanyLogoEditor();saveActiveCompany(result.body.item.id);
-    form.reset();clearCompanyPdf();empresaRequestId="";empresaLogoDraft="";companyLoginAutomatic=true;setLogoPreview("empresaLogoPreview","empresaLogoPreviewWrap","");
+    form.reset();updateEmployerRegistration();clearCompanyPdf();empresaRequestId="";empresaLogoDraft="";companyLoginAutomatic=true;setLogoPreview("empresaLogoPreview","empresaLogoPreviewWrap","");
     await refreshAll();if(generation!==sessionGeneration||selectedGeneration!==companyGeneration)return;showCompanyAccess(result,body.cnpj);
   }catch(error){if(generation===sessionGeneration)handleAppError(error);}finally{if(generation===sessionGeneration){companySaving=false;updateCompanySubmitButton();}}
 }
@@ -938,12 +942,14 @@ async function changeActiveCompany(id){
   if(typeof closeOperations==='function')closeOperations();
   if(!isMaster()){renderEmpresas();return;}
   workerListPage=1;$("trabalhadorSearch").value="";$("workerStatusFilter").value="Ativo";
-  workerRegistrationCompany="";$("workerRegistrationMethod").value="";
+  workerRegistrationCompany="";$("workerRegistrationMethod").value="";renderWorkerRegistration();
   companyGeneration++;clearCompanyPdf();if(biometricCapture)resetBiometricCapture();logoEditGeneration++;clearCredentials();clearImportPreview();resetCompanyLogoEditor();
   clearEntregaDraft();
   ["trabalhadorForm","entregaForm"].forEach(id=>{$(id).reset();const button=$(id).querySelector('button[type="submit"]');if(button)button.disabled=false;});if($("trabalhadorSearch"))$("trabalhadorSearch").value="";
   saveActiveCompany(id);cache.trabalhadores=[];cache.fichas=[];$("trabalhadoresList").textContent="Carregando...";$("fichasList").textContent="Carregando...";$("dashboardFichas").textContent="";renderEntregaOptions();
   await refreshAllSafe();
+  if(document.querySelector("#screen-jpged.active"))loadJpged();
+  if(document.querySelector("#screen-biometria.active"))loadCompanyCertificate();
 }
 $("empresaAtivaSelect").addEventListener("change",event=>changeActiveCompany(event.target.value));
 $("entregaEmpresa").addEventListener("change",event=>{const id=event.target.value;if(!isMaster()||!cache.empresas.some(item=>String(item.id)===String(id))){renderEntregaOptions();return;}if(id!==activeEmpresaId)changeActiveCompany(id);});

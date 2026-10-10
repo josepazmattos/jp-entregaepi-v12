@@ -22,6 +22,7 @@ module.exports=async function runBiometricBrowser({browser,origin,output}){
   await context.route(url=>url.origin!==origin,async route=>{
     const request=route.request(),url=new URL(request.url());
     const json=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+    if(url.pathname==='/api/jpged/certificado')return json({ok:true,certificate:null});
     if(url.hostname==='127.0.0.1'&&Number(url.port)>=8789&&Number(url.port)<=8799){
       assert.equal(request.headers().authorization,undefined);assert.equal(request.headers()['x-empresa-id'],undefined);
       requests.push({port:Number(url.port),path:url.pathname,query:Object.fromEntries(url.searchParams)});
@@ -29,7 +30,7 @@ module.exports=async function runBiometricBrowser({browser,origin,output}){
         if(statusMode==='wrong')return json({ok:true,service:'SERVICO-SINTETICO-DIFERENTE',template:'TEMPLATE-SINTETICO-PRIVADO',image:pixel});
         if(statusMode==='alternative'&&url.port!=='8790')return route.abort();
         if(statusMode!=='alternative'&&url.port!=='8789')return route.abort();
-        return json({ok:statusMode!=='missing',service:'JP Biometria Local Java',version:'12.9.4',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture'},sdk:true,reader:statusMode!=='missing',deviceCount:statusMode==='missing'?0:1,deviceName:'NITGEN HFDU06',log:'NAO-EXIBIR-LOG'});
+        return json({ok:statusMode!=='missing',service:'JP Biometria Local Java',version:'12.10.0',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture'},sdk:true,reader:statusMode!=='missing',deviceCount:statusMode==='missing'?0:1,deviceName:'NITGEN HFDU06',log:'NAO-EXIBIR-LOG'});
       }
       if(url.pathname==='/api/capture'||url.pathname==='/capture'){
         assert.equal(request.method(),'POST');assert.match(request.headers()['content-type'],/^text\/plain/);const command=request.postDataJSON();assert.equal(command.requireTemplate,false);assert.equal(command.requireRealImage,true);assert.equal(command.workerId,undefined);

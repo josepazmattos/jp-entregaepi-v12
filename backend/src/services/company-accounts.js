@@ -2,13 +2,13 @@ import {
   CognitoIdentityProviderClient, AdminGetUserCommand, AdminCreateUserCommand, AdminAddUserToGroupCommand, AdminSetUserPasswordCommand
 } from '@aws-sdk/client-cognito-identity-provider';
 import { httpError } from '../middleware/auth.js';
-import { normalizeCnpj, normalizeCompanyLogin } from './empresa-validation.js';
+import { normalizeEmployerRegistration, normalizeCompanyLogin } from './empresa-validation.js';
 
 // Public sign-in convention, not a secret. The user enters the eight CNPJ characters;
 // the application maps an initial-password attempt to this policy-compliant value.
 export const INITIAL_PASSWORD_PREFIX = 'JpEpi1-Inicial-';
-export function companyTemporaryPassword(cnpj) {
-  return INITIAL_PASSWORD_PREFIX + normalizeCnpj(cnpj).slice(0, 8);
+export function companyTemporaryPassword(cnpj, inscricaoTipo='CNPJ') {
+  return INITIAL_PASSWORD_PREFIX + normalizeEmployerRegistration(cnpj, inscricaoTipo).slice(0, 8);
 }
 
 function identity(user, companyClaim) {
@@ -44,7 +44,7 @@ export function createCognitoAccounts({ client, userPoolId, companyClaim = 'cust
       throw httpError(409, 'A conta vinculada precisa de revisão administrativa antes de liberar o acesso.', 'ACESSO_REQUER_REVISAO');
     }
   }
-  async function ensureCompanyAccess({ companyId, login, cnpj, expectedSub = '' }) {
+  async function ensureCompanyAccess({ companyId, login, cnpj, inscricaoTipo='CNPJ', expectedSub = '' }) {
     assertReady();
     login = normalizeCompanyLogin(login);
     let account = await inspect(login);
@@ -54,7 +54,7 @@ export function createCognitoAccounts({ client, userPoolId, companyClaim = 'cust
         const response = await client.send(new AdminCreateUserCommand({
           UserPoolId: userPoolId,
           Username: login,
-          TemporaryPassword: companyTemporaryPassword(cnpj),
+          TemporaryPassword: companyTemporaryPassword(cnpj, inscricaoTipo),
           UserAttributes: [{ Name: companyClaim, Value: companyId }],
           MessageAction: 'SUPPRESS',
           ForceAliasCreation: false
@@ -82,9 +82,9 @@ export function createCognitoAccounts({ client, userPoolId, companyClaim = 'cust
     assertBinding(account, { companyId, login: username, expectedSub }, { resetting });
     return account;
   }
-  async function resetCompanyPassword({ companyId, username, expectedSub, cnpj }) {
+  async function resetCompanyPassword({ companyId, username, expectedSub, cnpj, inscricaoTipo='CNPJ' }) {
     await verifyCompanyAccount({ companyId, username, expectedSub, resetting: true });
-    await client.send(new AdminSetUserPasswordCommand({ UserPoolId: userPoolId, Username: username, Password: companyTemporaryPassword(cnpj), Permanent: false }));
+    await client.send(new AdminSetUserPasswordCommand({ UserPoolId: userPoolId, Username: username, Password: companyTemporaryPassword(cnpj, inscricaoTipo), Permanent: false }));
     return { trocaObrigatoria: true };
   }
   return { assertReady, inspect, ensureCompanyAccess, verifyCompanyAccount, resetCompanyPassword };
