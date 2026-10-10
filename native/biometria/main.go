@@ -510,7 +510,7 @@ func peArchitecture(path string) (string, error) {
 	return "", errors.New("unsupported architecture")
 }
 func javaCandidates() []string {
-	var candidates []string
+	candidates := []string{filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "Eclipse Adoptium", "jp-biometria-jre8u504b01", "bin", "java.exe")}
 	for _, home := range []string{os.Getenv("JAVA_HOME"), os.Getenv("JRE_HOME")} {
 		if home != "" {
 			candidates = append(candidates, filepath.Join(home, "bin", "java.exe"))

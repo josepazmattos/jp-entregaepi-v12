@@ -177,6 +177,11 @@ def make_project(root):
     (root / "frontend/EntregaEPI/assets" / deploy.MANIFEST).write_text(json.dumps({
         "version": "12.9.4", "buildSha": COMMIT, "filename": deploy.EXECUTABLE,
         "sha256": hashlib.sha256(binary).hexdigest(), "sizeBytes": len(binary)}))
+    complete_binary = binary + bytes(1024)
+    (root / "frontend/EntregaEPI/assets" / deploy.COMPLETE_EXECUTABLE).write_bytes(complete_binary)
+    (root / "frontend/EntregaEPI/assets" / deploy.COMPLETE_MANIFEST).write_text(json.dumps({
+        "version": "12.9.4", "buildSha": COMMIT, "filename": deploy.COMPLETE_EXECUTABLE,
+        "sha256": hashlib.sha256(complete_binary).hexdigest(), "sizeBytes": len(complete_binary)}))
     ca = root / "backend/src/data/caepi"
     shard_bytes = gzip.compress(json.dumps({"items": [{"ca": "365", "name": "EPI SINTÉTICO"}]}).encode())
     (ca / "ca-000.json.gz").write_bytes(shard_bytes)
@@ -321,6 +326,7 @@ class DeploymentTests(unittest.TestCase):
         deleted = {c[2]["Key"] for c in self.aws.calls if c[0:2] == ("s3api", "delete-object")}
         self.assertEqual(deleted, {"EntregaEPI/assets/operations.js", "EntregaEPI/assets/ficha.js", "EntregaEPI/assets/biometria.js",
             "EntregaEPI/assets/" + deploy.EXECUTABLE, "EntregaEPI/assets/" + deploy.MANIFEST,
+            "EntregaEPI/assets/" + deploy.COMPLETE_EXECUTABLE, "EntregaEPI/assets/" + deploy.COMPLETE_MANIFEST,
             "EntregaEPI/version.json"})
 
     def test_corrupt_installer_aborts_before_aws_calls(self):
@@ -333,6 +339,13 @@ class DeploymentTests(unittest.TestCase):
     def test_missing_installer_aborts_before_aws_calls(self):
         (self.root / "frontend/EntregaEPI/assets" / deploy.EXECUTABLE).unlink()
         with self.assertRaisesRegex(deploy.DeployError, "ausente"):
+            self.operation.run()
+        self.assertEqual(self.aws.calls, [])
+
+    def test_complete_installer_corruption_aborts_before_aws_calls(self):
+        asset = self.root / "frontend/EntregaEPI/assets" / deploy.COMPLETE_EXECUTABLE
+        asset.write_bytes(asset.read_bytes()[:-1] + b"X")
+        with self.assertRaisesRegex(deploy.DeployError, "instalador completo"):
             self.operation.run()
         self.assertEqual(self.aws.calls, [])
 

@@ -17,7 +17,7 @@ let browser,origin;
 const pass=name=>{report.checks.push({name,passed:true});console.log('PASSOU: '+name);};
 const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
 async function scenario(options={}){
-  const state={permission:'granted',bio:'ready',health:'ready',ca:'ready',...options,requests:[],starts:0,errors:[]};
+  const state={permission:'granted',bio:'ready',version:'12.8.2',health:'ready',ca:'ready',...options,requests:[],starts:0,errors:[]};
   const context=await browser.newContext({viewport:{width:1366,height:1000},locale:'pt-BR',timezoneId:'America/Cuiaba',userAgent:'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151.0.0.0 Safari/537.36'});
   await context.exposeBinding('__protocolStart',()=>{state.starts++;if(state.bio==='recover')setTimeout(()=>state.bio='ready',state.startDelay||0);});
   await context.addInitScript(permission=>{
@@ -42,7 +42,7 @@ async function scenario(options={}){
       if(state.holdBio){state.holdBio=false;await new Promise(resolve=>state.releaseBio=resolve);return json({ok:true,service:'JP Biometria',version:'12.8.2',reader:true,sdk:true,deviceCount:1,capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture',verify:true,templates:true}});}
       if(url.port!=='8789'||['offline','recover'].includes(state.bio))return route.abort();
       const sdk=state.bio!=='sdk';
-      return json({ok:sdk,service:'JP Biometria',version:'12.8.2',reader:sdk,sdk,deviceCount:sdk?1:0,errorCode:sdk?'':'SDK_NOT_FOUND',capabilities:{capture:sdk,captureMethod:'POST',capturePath:'/api/capture',verify:true,templates:true}});
+      return json({ok:sdk,service:'JP Biometria',version:state.version,reader:sdk,sdk,deviceCount:sdk?1:0,errorCode:sdk?'':'SDK_NOT_FOUND',capabilities:{capture:sdk,captureMethod:'POST',capturePath:'/api/capture',verify:true,templates:true}});
     }
     assert.ok(url.hostname.endsWith('.execute-api.sa-east-1.amazonaws.com'));
     assert.equal(request.method(),'GET','login verification does not mutate records');
@@ -106,6 +106,32 @@ async function main(){
   }
   {
     const s=await scenario({holdHealth:true});await s.login();await s.done();assert.equal(await s.page.locator('#startupApiBadge').getAttribute('data-state'),'error');assert.equal(await s.page.locator('#startupBioBadge').getAttribute('data-state'),'success');pass('serviço sem resposta termina em 12 segundos; CA e biometria concluem independentemente');await s.close();
+  }
+  {
+    const s=await scenario({version:'12.9.3'});await s.login();await s.done();
+    await s.page.evaluate(()=>goScreen('biometria'));
+    assert.match(await s.page.locator('#bioRepairLink').getAttribute('href'),/JP-Biometria-Completo-12\.9\.4\.exe$/);
+    assert.equal(await s.page.locator('#bioRepairLink').innerText(),'Baixar instalador completo');
+    // Preserve the real click listener but avoid downloading the 55 MB installer in a UI test.
+    await s.page.locator('#bioRepairLink').evaluate(node=>node.addEventListener('click',event=>event.preventDefault(),{once:true}));
+    await s.page.locator('#bioRepairLink').click();
+    await s.page.evaluate(()=>resumeInstallationWatch());
+    assert.ok(await s.page.evaluate(()=>sessionStorage.getItem('jp-biometria-install-until')),'old working agent must not stop monitoring');
+    s.state.version='12.9.4';
+    await s.page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+    await s.page.waitForFunction(()=>!sessionStorage.getItem('jp-biometria-install-until'));
+    assert.equal(await s.page.locator('#startupBioBadge').getAttribute('data-state'),'success');
+    assert.equal(s.state.starts,0,'post-install verification must not repeatedly open the protocol');
+    pass('instalador completo: retorno ao site detecta a nova versão e atualiza o indicador sem captura');
+    await s.page.locator('#bioRepairLink').evaluate(node=>node.addEventListener('click',event=>event.preventDefault(),{once:true}));
+    await s.page.locator('#bioRepairLink').click();
+    await s.page.locator('#logoutButton').click();
+    const requests=s.state.requests.length;
+    await s.page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+    await s.page.waitForTimeout(100);
+    assert.equal(s.state.requests.length,requests);
+    assert.equal(await s.page.evaluate(()=>sessionStorage.getItem('jp-biometria-install-until')),null);
+    pass('logout encerra o acompanhamento da instalação');await s.close();
   }
   report.passed=true;
 }

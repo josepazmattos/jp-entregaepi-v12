@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - instalador-completo-12.9.4
       - v12-teste
       - install-v12-7-recovery-20261006
   workflow_dispatch:
@@ -67,6 +68,10 @@ jobs:
         run: python3 native/biometria/test_native.py
       - name: Compilar o reparador Windows do commit testado
         run: python3 native/biometria/build.py --output native/biometria/dist --build-sha "$GITHUB_SHA"
+      - name: Compilar e testar o instalador completo com os componentes fixados
+        run: python3 native/setup-completo/build_ci.py --agent native/biometria/dist/JP-Biometria-Setup-12.9.4.exe --output native/setup-completo/dist --commit "$GITHUB_SHA"
+      - name: Preparar o download completo para os testes do site
+        run: python3 infra/complete_release.py --source native/setup-completo/dist --destination frontend/EntregaEPI/assets --commit "$GITHUB_SHA"
       - name: Conferir e preparar o download do componente local
         run: python3 infra/biometria_release.py --source native/biometria/dist --destination frontend/EntregaEPI/assets --commit "$GITHUB_SHA"
       - name: Instalar dependências do backend pelo lockfile
@@ -98,6 +103,13 @@ jobs:
           path: |
             native/biometria/dist/JP-Biometria-Setup-12.9.4.exe
             native/biometria/dist/biometria-release.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Guardar o instalador completo
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: jp-biometria-completo-${{ github.sha }}
+          path: native/setup-completo/dist/*
           if-no-files-found: error
           retention-days: 14
       - name: Guardar somente evidências sintéticas
@@ -133,6 +145,21 @@ jobs:
       - name: Conferir instalação e reparo no Windows sem leitor físico
         shell: pwsh
         run: python infra/windows_biometria_smoke.py --source native/biometria/dist --commit "$env:GITHUB_SHA"
+      - name: Baixar instalador completo do mesmo commit
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: jp-biometria-completo-${{ github.sha }}
+          path: native/setup-completo/dist
+      - name: Instalar SDK, Java privado e reparar com o EXE completo no Windows
+        shell: pwsh
+        run: python infra/windows_complete_smoke.py --source native/setup-completo/dist --commit "$env:GITHUB_SHA"
+      - name: Guardar o resultado da instalação completa
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: verificacao-windows-completa-${{ github.sha }}
+          path: .deploy/windows-complete-report.json
+          if-no-files-found: ignore
       - name: Guardar o resultado sintético do teste Windows
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -176,6 +203,13 @@ jobs:
         with:
           name: jp-biometria-windows-${{ github.sha }}
           path: native/biometria/dist
+      - name: Baixar instalador completo aprovado no Windows
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: jp-biometria-completo-${{ github.sha }}
+          path: native/setup-completo/dist
+      - name: Validar o instalador completo aprovado antes de publicar
+        run: python3 infra/complete_release.py --source native/setup-completo/dist --destination frontend/EntregaEPI/assets --commit "$GITHUB_SHA"
       - name: Validar o mesmo artefato antes de qualquer alteração na AWS
         run: python3 infra/biometria_release.py --source native/biometria/dist --destination frontend/EntregaEPI/assets --commit "$GITHUB_SHA"
       - name: Autenticar na conta AWS verificada

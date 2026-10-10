@@ -5,6 +5,8 @@ let firstAccessChallenge=null,empresaLogoDraft="",empresaLogoEdit=null,empresaRe
 let logoCreateLoading=false,companySaving=false;
 let biometricClient=null,biometricGeneration=0,biometricBusy=false,biometricCapture=null,biometricAbort=null,biometricStartAt=0;
 let startupCheckSession=-1,startupChecksPromise=null;
+const installationWatchKey='jp-biometria-install-until';
+let installationWatchTimer=null,installationWatchRunning=false,installationWatchEpoch=0;
 const diagnosticRequests=new Set();
 const startupMirrors={apiStatusBadge:'startupApiBadge',caStatusBadge:'startupCaBadge',bioStatusBadge:'startupBioBadge',apiStatusText:'startupApiText',caStatusText:'startupCaText',bioStatusText:'startupBioText'};
 const screenLabels={dashboard:"Dashboard",empresas:"Empresas",trabalhadores:"Trabalhadores",epis:"EPIs e CA",entrega:"Entrega de EPI",fichas:"Fichas de EPI",biometria:"Biometria",config:"Configurações"};
@@ -36,7 +38,7 @@ function runStartupChecks(manual=false){
   startupChecksPromise=Promise.allSettled([testHealth(),testCA(),testBiometriaLocal({automatic:!manual})]).finally(()=>{
     if(generation!==sessionGeneration)return;
     startupChecksPromise=null;if($('startupRetryButton'))$('startupRetryButton').disabled=false;
-    setText('startupCheckedAt','Última rotina: '+new Date().toLocaleString('pt-BR'));renderStartupProgress();
+    setText('startupCheckedAt','Última rotina: '+new Date().toLocaleString('pt-BR'));renderStartupProgress();resumeInstallationWatch();
   });
   return startupChecksPromise;
 }
@@ -66,6 +68,7 @@ function renderConfigSummary(){
   setText("configOutput",JSON.stringify(cfg,null,2));
 }
 function resetDiagnostics(){
+  stopInstallationWatch();
   diagnosticRequests.forEach(controller=>controller.abort());diagnosticRequests.clear();
   startupCheckSession=-1;startupChecksPromise=null;biometricStartAt=0;
   if($('startupRetryButton'))$('startupRetryButton').disabled=false;
@@ -635,7 +638,7 @@ function startBiometriaLocal(){
   requestBiometricStart();
   return testBiometriaLocal({started:true});
 }
-async function testBiometriaLocal({automatic=false,started=false}={}){
+async function testBiometriaLocal({automatic=false,started=false,afterInstall=false}={}){
   if(biometricBusy)return;
   const generation=biometricGeneration,session=sessionGeneration,controller=new AbortController();biometricAbort=controller;
   setBiometricControls(true);setStatusBadge('bioStatusBadge','Verificando','loading');
@@ -664,12 +667,12 @@ async function testBiometriaLocal({automatic=false,started=false}={}){
     if(!current())return;
     // One bounded start/recovery attempt. Never captures a fingerprint or bypasses permission.
     const recover=!status||['SDK_NOT_FOUND','JAVA_NOT_FOUND','JAVA_ARCH_MISMATCH','SDK_INCOMPLETE'].includes(status.runtimeCode);
-    if(!started&&recover&&/Windows/i.test(window.navigator?.userAgent||'')&&requestBiometricStart()){
+    if(!afterInstall&&!started&&recover&&/Windows/i.test(window.navigator?.userAgent||'')&&requestBiometricStart()){
       opening();status=await afterStart();
     }
     if(!current())return;
     if(!status)throw window.JP_BIOMETRIA.failure('BIO_NETWORK');
-    showBiometricStatus(status);
+    showBiometricStatus(status);return status;
   }catch(error){if(!current()||error.code==='BIO_CANCELLED')return;showBiometricFailure(error);}
   finally{if(generation===biometricGeneration&&session===sessionGeneration){biometricAbort=null;setBiometricControls(false);setText('bioCheckedAt','Última verificação: '+new Date().toLocaleString('pt-BR'));}}
 }
@@ -886,3 +889,40 @@ const remembered=localStorage.getItem(rememberedUserKey);if(remembered){$("usern
 
 $("bioFingerSelect").addEventListener("change",()=>{if(biometricCapture&&!biometricBusy&&!biometricCapture.confirmationStarted){clearBiometricImage();biometricCapture.fingerCode=$("bioFingerSelect").value;setBiometricControls(false);}});
 window.addEventListener("pagehide",()=>resetBiometricCapture(true));
+
+// A bounded, read-only check after downloading the installer. No biometric capture.
+function stopInstallationWatch(){
+  installationWatchEpoch++;clearTimeout(installationWatchTimer);installationWatchTimer=null;
+  sessionStorage.removeItem(installationWatchKey);
+}
+function installedVersionReady(status){
+  const parts=String(status?.version||'').split('.').map(Number);
+  const recent=parts[0]>12||(parts[0]===12&&(parts[1]>9||(parts[1]===9&&parts[2]>=4)));
+  return recent&&status?.ready&&status?.verificationAvailable;
+}
+async function resumeInstallationWatch(){
+  clearTimeout(installationWatchTimer);installationWatchTimer=null;
+  const until=Number(sessionStorage.getItem(installationWatchKey));
+  if(!until||!getAuth())return;
+  if(Date.now()>until){stopInstallationWatch();return;}
+  const epoch=installationWatchEpoch,session=sessionGeneration;
+  if(installationWatchRunning)return;
+  if(document.visibilityState==='hidden'||biometricBusy||document.querySelector('dialog[open]')){
+    installationWatchTimer=setTimeout(resumeInstallationWatch,5000);return;
+  }
+  installationWatchRunning=true;
+  try{
+    const status=await testBiometriaLocal({automatic:true,afterInstall:true});
+    if(epoch!==installationWatchEpoch||session!==sessionGeneration)return;
+    if(installedVersionReady(status)){stopInstallationWatch();return;}
+  }finally{
+    installationWatchRunning=false;
+    if(epoch===installationWatchEpoch&&session===sessionGeneration&&sessionStorage.getItem(installationWatchKey))installationWatchTimer=setTimeout(resumeInstallationWatch,5000);
+  }
+}
+$('bioRepairLink')?.addEventListener('click',()=>{
+  sessionStorage.setItem(installationWatchKey,String(Date.now()+15*60*1000));
+  clearTimeout(installationWatchTimer);installationWatchTimer=setTimeout(resumeInstallationWatch,5000);
+});
+window.addEventListener('focus',resumeInstallationWatch);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resumeInstallationWatch();});

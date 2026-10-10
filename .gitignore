@@ -11,3 +11,6 @@ backend/src/data/caepi/
 *.log
 frontend/EntregaEPI/assets/JP-Biometria-Setup-*.exe
 frontend/EntregaEPI/assets/biometria-release.json
+
+frontend/EntregaEPI/assets/JP-Biometria-Completo-*.exe
+frontend/EntregaEPI/assets/biometria-complete-release.json

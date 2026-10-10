@@ -148,12 +148,9 @@ func run() (string, error) {
 		return "PACKAGE_INVALID", e
 	}
 	agent := filepath.Join(temp, "agent.exe")
-	// The existing authenticated installer refuses to interrupt a biometric capture.
+	// Install the private runtime first: a clean client need not have Java installed.
+	// Existing identical files are reused; loaded or unexpected files are never replaced.
 	fmt.Println("2/4 Preparando o JP Biometria...")
-	_, e = agentInstall(agent)
-	if e != nil {
-		return "AGENT_INSTALL_FAILED", e
-	}
 	for _, f := range m.Files {
 		var target string
 		if strings.HasPrefix(f.Name, "sdk/") {
@@ -168,6 +165,7 @@ func run() (string, error) {
 			}
 		}
 	}
+	// The authenticated installer refuses to interrupt a biometric capture.
 	port, e := agentInstall(agent)
 	if e != nil {
 		return "AGENT_INSTALL_FAILED", e
@@ -239,7 +237,11 @@ func main() {
 	if e != nil {
 		text += "\n\nCódigo para o suporte: " + code
 	}
-	message(text, e != nil)
+	if len(os.Args) == 2 && os.Args[1] == "--install-quiet" {
+		json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": e == nil, "code": code, "version": "12.9.4"})
+	} else {
+		message(text, e != nil)
+	}
 	if e != nil {
 		os.Exit(1)
 	}

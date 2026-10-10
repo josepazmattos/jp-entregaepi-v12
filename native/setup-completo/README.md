@@ -34,6 +34,19 @@ pronto encerra o processo com sucesso sem instalar novamente o driver.
 agente compilado da mesma revisão e caminho de saída. `vendor-lock.json` fixa
 os hashes aprovados. Nenhum binário de fornecedor ou serial pertence ao Git.
 
+No GitHub Actions, `build_ci.py` baixa a base de execução fixada por SHA-256,
+confere cada componente e substitui o agente pelo executável do commit atual.
+O job Windows executa esse EXE, confere o SDK real sem leitor USB e reinstala
+para verificar a preservação da chave e a existência de uma única instância.
+A publicação exige os jobs Linux e Windows aprovados, verifica novamente os
+hashes e confere os bytes publicados. `version.json` identifica o pacote completo.
+
+O botão de download na tela Biometria acompanha a instalação por até 15 minutos
+com consultas de estado, sem capturar digitais. Ao voltar ao site, confere a nova
+versão e atualiza o Dashboard. O acompanhamento respeita a permissão de rede
+local do navegador e termina ao sair da conta. O cliente executa o arquivo baixado;
+o site não executa programas nem aceita a autorização de administrador por ele.
+
 Os testes cobrem travessia de diretórios, checksum adulterado, reinstalação,
 preservação de arquivos divergentes e critérios de prontidão. A ponte mantém
 os testes de cadastro, imagem e comparação. A descoberta inclui o SDK privado
