@@ -24,6 +24,20 @@ Registros biométricos anteriores à versão 12.10.0 não possuem o hash do cont
 - CPF é lido do atributo ICP-Brasil otherName 2.16.76.1.3.1 (posições 9–19) ou serialNumber 2.5.4.5. Identificadores conflitantes são recusados. Não se extrai CPF por aproximação do nome do certificado.
 - MEI e ME não são tipos de certificado. O uso de e-CPF depende da identidade e dos poderes do titular para aquele empregador.
 
+## Formas de uso do A1
+
+| Forma | Atendimento nesta versão |
+|---|---|
+| Arquivo PKCS#12 `.pfx` / `.p12` | Importação pela janela local; senha fora do site |
+| A1 instalado para o usuário Windows | Seleção pelo repositório CurrentUser/My |
+| A1 instalado para o computador Windows | Leitura de LocalMachine/My; exige permissão de uso da chave já concedida ao usuário. O aplicativo não altera permissões da chave |
+| A1 disponibilizado por conector CSP/KSP de nuvem | Usa a interface de assinatura do Windows se o fornecedor a disponibilizar. Compatibilidade depende do fornecedor e precisa ser homologada com ele; não há teste real de serviço de nuvem nesta entrega |
+| Certificado oferecido somente por API/web/celular | Exige integração específica com fornecedor, autenticação e documentação da API. Ainda não implementado |
+| Cópia `.pfx` guardada em Drive/OneDrive | É um arquivo A1: baixar/importar localmente. Armazenar uma cópia na nuvem não é assinatura remota |
+| Arquivo público `.cer` / `.crt` / `.p7b` sem chave | Não permite assinar sozinho |
+
+O filtro criptográfico continua A1. Um serviço comercial de nuvem pode oferecer A3: o local onde está hospedado não altera o tipo do certificado. PIN, MFA e consentimento exigidos pelo provedor são preservados, sem promessa de uso silencioso universal. A autenticação do aplicativo e a única confirmação biométrica da ficha continuam iguais.
+
 ## Testes sem expor um certificado real
 
 Não envie PFX/P12 e senha por chat, e-mail ou repositório. Certificados sintéticos e suas chaves são gerados temporariamente nos testes, nunca aceitos pela confiança de produção. Um `.cer`/`.crt` público pode ser analisado, mas não testa a posse da chave privada nem substitui o teste local.
@@ -40,7 +54,7 @@ Homologação final: no Windows do cliente, configurar localmente um A1 autoriza
 | PDFs originais e evidências | S3 privado em São Paulo | Arquivos separados do banco, acesso temporário autenticado |
 | Cadastro do documento, metadados públicos do certificado e auditoria | DynamoDB JPGED | Índice pequeno, cobrança por consumo, isolamento por empresa |
 | Cópia dos PDFs/evidências | Outro bucket privado | Replicação automática; aplicação sem acesso ao backup |
-| Chave privada e senha do certificado | Computador da empresa | A chave fica no repositório do usuário Windows; a senha não é salva no aplicativo |
+| Chave privada e senha do certificado | Computador da empresa | A chave importada fica protegida no Windows; em assinatura remota, permanece no fornecedor; a senha não é salva no aplicativo |
 
 O certificado importado não é marcado como exportável. Certificados já instalados mantêm as proteções que receberam na instalação original. A proteção do computador e da conta Windows continua necessária. Não existe garantia de imunidade a invasões.
 

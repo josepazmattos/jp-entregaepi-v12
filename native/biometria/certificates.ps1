@@ -6,7 +6,11 @@ Add-Type -AssemblyName System.Windows.Forms
 function Import-JpCertificate($path,$password,$store) {
     $collection=[Security.Cryptography.X509Certificates.X509Certificate2Collection]::new()
     $flags=[Security.Cryptography.X509Certificates.X509KeyStorageFlags]::UserKeySet -bor [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::PersistKeySet
-    $collection.Import($path,$password,$flags)
+    # .NET Framework collection import accepts String, not SecureString.
+    # Keep conversion in this local process only; clear native memory afterwards.
+    $pointer=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($password)
+    try {$plainPassword=[Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer);$collection.Import([string]$path,[string]$plainPassword,$flags)}
+    finally {$plainPassword=$null;[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)}
     $private=@($collection | Where-Object {$_.HasPrivateKey})
     if($private.Count -ne 1){throw 'O arquivo deve conter exatamente uma chave de assinatura.'}
     $certificate=$private[0]
@@ -26,6 +30,16 @@ function Import-JpCertificate($path,$password,$store) {
     } finally {$intermediates.Close();foreach($item in $collection){if($item.Thumbprint -ne $certificate.Thumbprint){$item.Dispose()}}}
     return $certificate
 }
+function Get-JpCertificates($userStore) {
+    $available=[Security.Cryptography.X509Certificates.X509Certificate2Collection]::new()
+    $seen=@{}
+    foreach($candidate in $userStore.Certificates){if($candidate.HasPrivateKey){[void]$available.Add($candidate);$seen[$candidate.Thumbprint]=$true}}
+    $machine=[Security.Cryptography.X509Certificates.X509Store]::new('My','LocalMachine')
+    try {$machine.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly);foreach($candidate in $machine.Certificates){if($candidate.HasPrivateKey -and !$seen.ContainsKey($candidate.Thumbprint)){[void]$available.Add($candidate);$seen[$candidate.Thumbprint]=$true}}}
+    finally {$machine.Close()}
+    # Do not export keys or bypass provider PIN/MFA; SignedCms uses the installed CSP/KSP.
+    return ,$available
+}
 try {
     $request = [Console]::In.ReadLine() | ConvertFrom-Json
     $store = [Security.Cryptography.X509Certificates.X509Store]::new('My','CurrentUser')
@@ -35,7 +49,7 @@ try {
         $message = "Autorizar certificado para: $($request.companyName)`r`n$($request.target.registrationType): $($request.target.registrationNumber)`r`n`r`nO JPGED assinará somente fichas desta empresa confirmadas biometricamente. O certificado e sua senha não serão enviados ao site."
 
         if ([Windows.Forms.MessageBox]::Show($message,'JPGED — autorização',[Windows.Forms.MessageBoxButtons]::OKCancel) -ne 'OK') { throw 'Cancelado pelo usuário.' }
-        $choice = [Windows.Forms.MessageBox]::Show('O certificado A1 já está instalado neste usuário do Windows?','JPGED',[Windows.Forms.MessageBoxButtons]::YesNoCancel)
+        $choice = [Windows.Forms.MessageBox]::Show('O A1 já está disponível no Windows, instalado localmente ou pelo conector do seu fornecedor de nuvem?','JPGED',[Windows.Forms.MessageBoxButtons]::YesNoCancel)
         if ($choice -eq 'Cancel') { throw 'Cancelado pelo usuário.' }
         if ($choice -eq 'No') {
             $picker = [Windows.Forms.OpenFileDialog]::new()
@@ -53,13 +67,13 @@ try {
             } finally {$password.Dispose();$picker.Dispose()}
         } else {
             $valid=[Security.Cryptography.X509Certificates.X509Certificate2Collection]::new()
-            foreach($candidate in $store.Certificates){if($candidate.HasPrivateKey -and $candidate.NotAfter -gt [DateTime]::Now -and $candidate.NotBefore -lt [DateTime]::Now){[void]$valid.Add($candidate)}}
+            foreach($candidate in (Get-JpCertificates $store)){if($candidate.HasPrivateKey -and $candidate.NotAfter -gt [DateTime]::Now -and $candidate.NotBefore -lt [DateTime]::Now){[void]$valid.Add($candidate)}}
             $selected=[Security.Cryptography.X509Certificates.X509Certificate2UI]::SelectFromCollection($valid,'JPGED — certificado da empresa',"Selecione o e-CNPJ A1 deste empregador ou um e-CPF A1",[Security.Cryptography.X509Certificates.X509SelectionFlag]::SingleSelection)
             if($selected.Count -ne 1){throw 'Nenhum certificado selecionado.'};$cert=$selected[0]
         }
     } elseif($request.action -eq 'sign') {
-        $found=$store.Certificates.Find([Security.Cryptography.X509Certificates.X509FindType]::FindByThumbprint,[string]$request.thumbprint,$false)
-        if($found.Count -ne 1){throw 'Certificado não encontrado neste usuário do Windows. Configure-o novamente.'};$cert=$found[0]
+        $found=(Get-JpCertificates $store).Find([Security.Cryptography.X509Certificates.X509FindType]::FindByThumbprint,[string]$request.thumbprint,$false)
+        if($found.Count -ne 1){throw 'Certificado não encontrado. Confira a instalação ou conexão do fornecedor e configure-o novamente.'};$cert=$found[0]
     } else {throw 'Operação não permitida.'}
     if(!$cert.HasPrivateKey -or $cert.NotAfter -le [DateTime]::Now -or $cert.NotBefore -gt [DateTime]::Now){throw 'Certificado vencido ou sem chave privada disponível.'}
     $content=[Convert]::FromBase64String($request.contentBase64)
@@ -87,5 +101,5 @@ try {
     @{ok=$true;cms=[Convert]::ToBase64String($cms.Encode())} | ConvertTo-Json -Compress
 } catch {
     # Never return paths, raw exception details, passwords, keys or certificate bytes.
-    @{ok=$false;message='Configuração ou assinatura não concluída. Confira o arquivo A1, a senha na janela local e a validade do certificado; tente novamente.'} | ConvertTo-Json -Compress
+    @{ok=$false;message='Configuração ou assinatura não concluída. Confira o A1, a senha local, a validade e, se usar nuvem, a conexão e autorização do fornecedor; tente novamente.'} | ConvertTo-Json -Compress
 } finally {if($store){$store.Close()};if($cert){$cert.Dispose()}}
