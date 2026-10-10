@@ -17,10 +17,11 @@ test('cadastro de empresa: CNPJ normaliza pontuação e preserva zeros, recusand
 });
 
 test('login da empresa é canônico e não aceita espaços, controles ou caracteres de marcação', () => {
+  assert.equal(normalizeCompanyLogin('JP'), 'jp');
   assert.equal(normalizeCompanyLogin(' Empresa.Teste '), 'empresa.teste');
   assert.equal(normalizeCompanyLogin('', '04252011000110'), '04252011000110');
   assert.equal(normalizeCompanyLogin('EMPRESA@EXEMPLO.TEST'), 'empresa@exemplo.test');
-  for (const invalid of ['a', 'Empresa Teste', '<empresa>', 'emp\nresa', 'çompanhia']) assert.throws(() => normalizeCompanyLogin(invalid), error => error.status === 400);
+  for (const invalid of ['', 'Empresa Teste', '<empresa>', 'emp\nresa', 'çompanhia']) assert.throws(() => normalizeCompanyLogin(invalid), error => error.status === 400);
 });
 
 test('logo aceita raster PNG, JPEG e WebP e permite remoção explícita', () => {

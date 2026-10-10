@@ -40,6 +40,7 @@ module.exports=async function runBiometricBrowser({browser,origin,output}){
       }
       throw new Error('Rota local não prevista: '+url.pathname);
     }
+    if(url.pathname==='/auth/resolver')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,username:request.postDataJSON().login})});
     if(url.hostname.startsWith('cognito-idp.'))return json({AuthenticationResult:{IdToken:token,AccessToken:'ACCESS-SINTETICO',ExpiresIn:3600}});
     if(!url.hostname.endsWith('.execute-api.sa-east-1.amazonaws.com'))throw new Error('Conexão externa não prevista no teste biométrico');
     assert.equal(request.headers().authorization,'Bearer '+token);

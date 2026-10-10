@@ -311,6 +311,22 @@ export function createStore({ tableName = '', client = null, allowMemory = false
       }
     }
   }
+  async function getCompanyByLogin(login) {
+    const link = await get('__company_login', digest(login));
+    return link ? get('empresa', link.empresaId) : null;
+  }
+  async function changeCompanyLogin(item, login, fields, actorSub, expectedVersion) {
+    const { items, revision } = await listWithRevision('empresa', null, 'company-registrations');
+    const claim = await get('__company_login', digest(login));
+    if (claim && claim.empresaId !== item.id || items.some(row => row.id !== item.id && String(row.login || '').toLowerCase() === login)) throw storageError('Este login já está em uso. Escolha outro.', 'LOGIN_DUPLICADO');
+    const operations = [{ type: 'update', entity: 'empresa', id: item.id, expectedVersion, data: { ...fields, login, cognitoUsername: item.cognitoUsername || item.login, loginAlteradoPor: actorSub, loginAlteradoEm: new Date().toISOString() } }];
+    if (!claim) operations.push({ type: 'create', entity: '__company_login', id: digest(login), data: { empresaId: item.id } });
+    // Previous aliases stay reserved: an old login cannot be reassigned to a different company.
+    const previousClaim = await get('__company_login', digest(item.login));
+    if (!previousClaim && item.login !== login) operations.push({ type: 'create', entity: '__company_login', id: digest(item.login), data: { empresaId: item.id } });
+    await transact({ scope: 'company-registrations', expectedRevision: revision, mutationId: randomUUID(), operations, result: { empresaId: item.id } });
+    return get('empresa', item.id);
+  }
   async function probe() {
     const state = status();
     if (!state.configured) return { ...state, ready: false };
@@ -323,7 +339,7 @@ export function createStore({ tableName = '', client = null, allowMemory = false
       return { ...state, ready: false };
     }
   }
-  return { status, probe, list, get, create, update, remove, readScope, listWithRevision, getReceipt, transact, getCompanyRegistration, reserveCompanyRegistration };
+  return { status, probe, list, get, create, update, remove, readScope, listWithRevision, getReceipt, transact, getCompanyRegistration, reserveCompanyRegistration, getCompanyByLogin, changeCompanyLogin };
 }
 
 const tableName = (process.env.TABLE_NAME || '').trim();
@@ -334,4 +350,4 @@ const store = createStore({
   client,
   allowMemory: process.env.DATA_MODE === 'memory' && process.env.NODE_ENV !== 'production' && !process.env.AWS_LAMBDA_FUNCTION_NAME
 });
-export const { list, create, get, update, remove, readScope, listWithRevision, getReceipt, transact, getCompanyRegistration, reserveCompanyRegistration, status: storageStatus, probe: probeStorage } = store;
+export const { list, create, get, update, remove, readScope, listWithRevision, getReceipt, transact, getCompanyRegistration, reserveCompanyRegistration, getCompanyByLogin, changeCompanyLogin, status: storageStatus, probe: probeStorage } = store;

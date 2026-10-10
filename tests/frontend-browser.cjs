@@ -208,6 +208,7 @@ async function main(){
     const request=route.request(),url=new URL(request.url());
     if(url.origin===origin){await route.continue();return;}
     const json=async(status,body)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+    if(url.pathname==='/auth/resolver')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,username:request.postDataJSON().login})});
     if(url.hostname.startsWith('cognito-idp.')&&url.hostname.endsWith('.amazonaws.com')){
       const body=request.postDataJSON();
       assert.equal(body.AuthParameters.USERNAME,'USUARIO-TESTE');

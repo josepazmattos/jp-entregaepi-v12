@@ -45,3 +45,18 @@ test('consulta pontual da assinatura retorna dados atuais e mantém autorizaçã
  await store.update('trabalhador',f.worker.id,{nomeCompleto:'NOME ATUAL'});assert.equal((await request('GET',path,null,f.company.id)).body.worker.nomeCompleto,'NOME ATUAL');
  await store.update('ficha',f.ficha.id,{trabalhadorSnapshot:{cpf:'11111111111'}});assert.equal((await request('GET',path,null,f.company.id)).status,409);
 });
+
+test('devolução de ativo ou inativo permite assinatura conferida e preserva a entrega anterior, com ou sem CA',async()=>{
+  const f=await fixture();await enroll(f);const previous=await store.get('ficha',f.ficha.id);
+  await store.update('trabalhador',f.worker.id,{status:'Inativo'});
+  assert.equal((await request('POST',`/api/trabalhadores/${f.worker.id}/biometria/desafio`,{fingerCode:'R_INDEX'},f.company.id)).status,409);
+  assert.equal((await request('POST',`/api/fichas/${f.ficha.id}/biometria/desafio`,{fingerCode:'R_INDEX'},f.company.id)).status,409);
+  for(const semCA of [false,true]){
+    const epi=await store.create('epi',{nomeCurto:'EQUIPAMENTO SINTÉTICO',tipo:semCA?'sem_ca':'epi_ca',semCA,ca:semCA?'':'365'});
+    const payload={trabalhadorId:f.worker.id,tipo:'Devolução',data:'10/10/2026',itens:[{epiId:epi.id,quantidade:1}]};
+    assert.equal((await request('POST','/api/fichas',{...payload,tipo:'Entrega'},f.company.id)).status,409);
+    const created=await request('POST','/api/fichas',payload,f.company.id);assert.equal(created.status,200);assert.deepEqual(created.body.item.datasMovimentacao,{entrega:'',devolucao:'10/10/2026'});assert.equal(created.body.item.itens[0].semCA,semCA);
+    const current={...f,ficha:created.body.item};const signed=await finish(current,await verification(current));assert.equal(signed.status,200);assert.equal(signed.body.item.assinaturaBiometrica.verificada,true);
+  }
+  assert.deepEqual(await store.get('ficha',f.ficha.id),previous);
+});

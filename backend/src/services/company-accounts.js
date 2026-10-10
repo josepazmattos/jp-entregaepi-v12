@@ -1,5 +1,5 @@
 import {
-  CognitoIdentityProviderClient, AdminGetUserCommand, AdminCreateUserCommand, AdminAddUserToGroupCommand
+  CognitoIdentityProviderClient, AdminGetUserCommand, AdminCreateUserCommand, AdminAddUserToGroupCommand, AdminSetUserPasswordCommand
 } from '@aws-sdk/client-cognito-identity-provider';
 import { httpError } from '../middleware/auth.js';
 import { normalizeCnpj, normalizeCompanyLogin } from './empresa-validation.js';
@@ -35,12 +35,12 @@ export function createCognitoAccounts({ client, userPoolId, companyClaim = 'cust
       throw error;
     }
   }
-  function assertBinding(account, { companyId, login, expectedSub }) {
+  function assertBinding(account, { companyId, login, expectedSub }, { resetting = false } = {}) {
     // Never adopt a pre-existing username based on login, CNPJ, e-mail or group alone.
     if (!account || account.companyId !== companyId || account.username !== login || !account.sub || expectedSub && account.sub !== expectedSub) {
       throw httpError(409, 'Este login já está vinculado a outro cadastro. O acesso existente foi preservado.', 'LOGIN_JA_UTILIZADO');
     }
-    if (account.enabled !== true || !['FORCE_CHANGE_PASSWORD', 'CONFIRMED'].includes(account.status)) {
+    if (account.enabled !== true || !(resetting ? ['FORCE_CHANGE_PASSWORD', 'CONFIRMED', 'RESET_REQUIRED'] : ['FORCE_CHANGE_PASSWORD', 'CONFIRMED']).includes(account.status)) {
       throw httpError(409, 'A conta vinculada precisa de revisão administrativa antes de liberar o acesso.', 'ACESSO_REQUER_REVISAO');
     }
   }
@@ -76,7 +76,18 @@ export function createCognitoAccounts({ client, userPoolId, companyClaim = 'cust
     }
     return { sub: account.sub, status: account.status, username: account.username };
   }
-  return { assertReady, inspect, ensureCompanyAccess };
+  async function verifyCompanyAccount({ companyId, username, expectedSub, resetting = false }) {
+    if (!expectedSub) throw httpError(409, 'Conclua a criação do acesso antes de alterar a conta.', 'ACESSO_REQUER_REVISAO');
+    const account = await inspect(username);
+    assertBinding(account, { companyId, login: username, expectedSub }, { resetting });
+    return account;
+  }
+  async function resetCompanyPassword({ companyId, username, expectedSub, cnpj }) {
+    await verifyCompanyAccount({ companyId, username, expectedSub, resetting: true });
+    await client.send(new AdminSetUserPasswordCommand({ UserPoolId: userPoolId, Username: username, Password: companyTemporaryPassword(cnpj), Permanent: false }));
+    return { trocaObrigatoria: true };
+  }
+  return { assertReady, inspect, ensureCompanyAccess, verifyCompanyAccount, resetCompanyPassword };
 }
 
 const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'sa-east-1';

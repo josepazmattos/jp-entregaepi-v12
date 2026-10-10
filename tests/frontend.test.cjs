@@ -153,11 +153,11 @@ function appHarness(route){
   const storage=()=>{const data=new Map();return {getItem:key=>data.get(key)||null,setItem:(key,value)=>data.set(key,String(value)),removeItem:key=>data.delete(key)}};
   const requests=[];
   const context=vm.createContext({console,Date,JSON,Promise,Number,String,Array,Object,Error,RegExp,Boolean,decodeURIComponent,escape,
-    atob:value=>Buffer.from(value,'base64').toString('binary'),localStorage:storage(),sessionStorage:storage(),alert:()=>{},setTimeout,clearTimeout,AbortController,URL,URLSearchParams,Uint8Array,crypto:require('node:crypto').webcrypto,
+    atob:value=>Buffer.from(value,'base64').toString('binary'),localStorage:storage(),sessionStorage:storage(),alert:()=>{},setTimeout,clearTimeout,AbortController,URL,URLSearchParams,Uint8Array,TextEncoder,crypto:require('node:crypto').webcrypto,
     addEventListener(event,listener){(windowListeners[event]||=[]).push(listener)},
     FormData:class {constructor(form){this.form=form}entries(){return Object.entries(this.form.fields||{})}},
     document,
-    fetch:async(url,options={})=>{requests.push({url,options});const answer=await route(url,options);return {status:answer.status||200,ok:(answer.status||200)<400,text:async()=>JSON.stringify(answer.body),json:async()=>answer.body}}
+    fetch:async(url,options={})=>{requests.push({url,options});const answer=url.endsWith("/auth/resolver")?{body:{ok:true,username:JSON.parse(options.body).login}}:await route(url,options);return {status:answer.status||200,ok:(answer.status||200)<400,text:async()=>JSON.stringify(answer.body),json:async()=>answer.body}}
   });
   context.window=context;
   context.JP_CONFIG={apiBaseUrl:'https://api.example.test',version:'12.9.4'};
@@ -492,7 +492,7 @@ test('primeiro acesso limita a tentativa da senha inicial e guarda o desafio som
   assert.equal(attempts,2);assert.equal(app.elements.password.value,'');
   assert.equal(app.elements.newPasswordForm.classList.contains('hidden'),false);
   assert.equal(app.context.sessionStorage.getItem('jp-v12-auth'),null);
-  assert.equal(app.run('Object.keys(firstAccessChallenge).sort().join(",")'),'cognitoUsername,session,username');
+  assert.equal(app.run('Object.keys(firstAccessChallenge).sort().join(",")'),'cognitoUsername,initialHash,session,username');
   app.elements.newPasswordCancel.click();
   assert.equal(app.run('firstAccessChallenge'),null);
   assert.equal(app.elements.newPasswordForm.classList.contains('hidden'),true);
@@ -503,18 +503,19 @@ test('falha de rede ou credencial definitiva não dispara tentativa extra de sen
     const app=appHarness(()=>{if(failure==='network')throw new Error('FALHA DE REDE SINTÉTICA');return {status:400,body:{__type:'NotAuthorizedException'}};});
     app.elements.username.value='conta-sintetica';app.elements.password.value=failure==='network'?'12345678':'Senha-Definitiva-Sintetica';
     await app.elements.loginForm.listeners.submit[0]({preventDefault(){}});
-    assert.equal(app.requests.length,1,failure);
+    assert.equal(app.requests.filter(r=>!r.url.endsWith('/auth/resolver')).length,1,failure);
     assert.equal(app.context.sessionStorage.getItem('jp-v12-auth'),null);
   }
 });
 
 test('resposta de troca de senha cancelada não autentica uma sessão antiga',async()=>{
-  let finish;
-  const app=appHarness(()=>new Promise(resolve=>{finish=resolve}));
-  app.run('beginFirstAccess({Session:"DESAFIO-SINTETICO",ChallengeParameters:{requiredAttributes:"[]"}},"conta-sintetica")');
+  let finish,started;const called=new Promise(resolve=>{started=resolve;});
+  const app=appHarness(()=>new Promise(resolve=>{finish=resolve;started();}));
+  await app.run('beginFirstAccess({Session:"DESAFIO-SINTETICO",ChallengeParameters:{requiredAttributes:"[]"}},"conta-sintetica","12345678")');
+  app.elements.initialPasswordConfirm.value="12345678";
   app.elements.newPassword.value='NovaSenhaSintetica8';app.elements.newPasswordConfirm.value='NovaSenhaSintetica8';
   const pending=app.elements.newPasswordForm.listeners.submit[0]({preventDefault(){}});
-  app.elements.newPasswordCancel.click();finish({body:{AuthenticationResult:{IdToken:'TOKEN-SINTETICO',ExpiresIn:3600}}});await pending;
+  await called;app.elements.newPasswordCancel.click();finish({body:{AuthenticationResult:{IdToken:'TOKEN-SINTETICO',ExpiresIn:3600}}});await pending;
   assert.equal(app.context.sessionStorage.getItem('jp-v12-auth'),null);
   assert.equal(app.elements.newPassword.value,'');assert.equal(app.elements.newPasswordConfirm.value,'');
 });
@@ -647,4 +648,15 @@ test('diagnóstico12.9.4 sem Java ou SDK mostra o motivo seguro sem pedir atuali
     const app=appHarness(()=>({body:{ok:false,service:'JP Biometria Local',version:'12.9.4',runtime:'diagnostic-only',sdk:false,reader:false,deviceCount:0,capabilities:{capture:false,captureMethod:'POST',capturePath:'/api/capture'},errorCode,message:'TEMPLATE-PRIVADO-NÃO-EXIBIR'}}));
     await app.run('testBiometriaLocal()');assert.equal(app.elements.bioStatusBadge.dataset.state,'warning');assert.equal(app.elements.bioStatusBadge.textContent,'Requer atenção');assert.match(app.elements.bioStatusTitle.textContent,title);assert.ok(!app.elements.bioStatusText.textContent.includes('precisa ser atualizado'));assert.ok(!app.elements.bioStatusText.textContent.includes('PRIVADO'));assert.ok(app.elements.bioOutput.textContent.includes(errorCode));assert.equal(app.elements.bioRegisterButton.disabled,true);
   }
+});
+
+test('nova devolução preenche só data de devolução; entrega e documentos anteriores mantêm o formato',()=>{
+  const record={...ficha,tipo:'Devolução',datasMovimentacao:{entrega:'',devolucao:'06/10/2026'}};
+  for(const semCA of [false,true]){
+    const html=makeDocument({...record,itens:[{...record.itens[0],semCA}]});
+    assert.ok(html.includes('Devolução</td><td></td><td class="docx-sign-cell">'));assert.ok(html.includes('06/10/2026</td></tr>'));assert.ok(html.includes('Data da Devolução:'));assert.ok(!html.includes('Data da Entrega:'));
+    if(semCA)assert.ok(html.includes('Sem CA</td>'));
+  }
+  const legacy=makeDocument({...ficha,tipo:'Devolução',dataDevolucao:'06/10/2026'});assert.ok(legacy.includes('Devolução</td><td>06/10/2026'));assert.ok(legacy.includes('Data da Entrega:'));
+  const delivery=makeDocument();assert.ok(delivery.includes('Entrega</td><td>06/10/2026'));assert.ok(delivery.includes('Data da Entrega:'));
 });

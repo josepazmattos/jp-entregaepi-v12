@@ -32,8 +32,12 @@ export function normalizeCnpj(value) {
 
 export function normalizeCompanyLogin(value, fallback = '') {
   const login = textField(value || fallback, { required: true, field: 'Login da empresa', max: 80 }).toLowerCase();
-  if (!/^[a-z0-9][a-z0-9._@-]{2,79}$/.test(login)) invalid('Login', 'Use de 3 a 80 caracteres no login: letras sem acentos, números, ponto, hífen, sublinhado ou @.');
+  if (!/^[a-z0-9][a-z0-9._@-]{0,79}$/.test(login)) invalid('Login', 'Use até 80 caracteres no login: letras sem acentos, números, ponto, hífen, sublinhado ou @.');
   return login;
+}
+
+export function suggestCompanyLogin(name) {
+  return String(name || '').trim().split(/\s+/)[0].normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9._-]/g, '').replace(/^[^a-z0-9]+/, '').slice(0, 80);
 }
 
 function dimensions(buffer, mime) {

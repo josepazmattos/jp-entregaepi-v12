@@ -40,6 +40,7 @@ function setup() {
       groups.add(`${input.Username}:${input.GroupName}`);
       return {};
     }
+    if (type === 'AdminSetUserPasswordCommand') { if (hooks.beforeReset) await hooks.beforeReset(input); const user=users.get(input.Username); if(!user)throw awsError('UserNotFoundException'); user.UserStatus='FORCE_CHANGE_PASSWORD'; return {}; }
     throw new Error(`Unexpected AWS command: ${type}`);
   } };
   const accounts = createCognitoAccounts({ client, userPoolId: 'sa-east-1_synthetic', companyClaim: 'custom:empresa_id' });
@@ -211,7 +212,7 @@ test('edição mantém identidade imutável e dados internos fora da resposta', 
   const state = setup();
   const ready = await state.service.register(registration(), actor);
   await assert.rejects(state.service.edit(ready.item.id, { cnpj: '11222333000181' }), error => error.code === 'ACESSO_IDENTIDADE_IMUTAVEL');
-  await assert.rejects(state.service.edit(ready.item.id, { login: 'outro.login' }), error => error.code === 'ACESSO_IDENTIDADE_IMUTAVEL');
+  await assert.rejects(state.service.edit(ready.item.id, { login: 'outro.login' }), error => error.status === 403);
   const updated = await state.service.edit(ready.item.id, { responsavel: 'NOVO RESPONSÁVEL', cognitoSub: 'injected', acessoStatus: 'injected' });
   assert.equal(updated.responsavel, 'NOVO RESPONSÁVEL');
   assert.equal(updated.acessoStatus, 'ativo');
@@ -240,4 +241,46 @@ test('conflito final de versão não declara acesso ativo quando o registro foi 
   assert.equal(result.item.acessoStatus, 'pendente');
   assert.ok(result.warning);
   assert.equal((await state.storage.get('empresa', result.item.id)).cognitoSub, 'different-sub');
+});
+
+
+test('Master troca login preservando conta, senha, trabalhadores e fichas; alias antigo fica reservado', async () => {
+  const state=setup(),ready=await state.service.register(registration(),actor),before=await state.storage.get('empresa',ready.item.id);
+  const worker=await state.storage.create('trabalhador',{empresaId:before.id,nomeCompleto:'SINTETICO'}),ficha=await state.storage.create('ficha',{empresaId:before.id,status:'assinada'});
+  const changed=await state.service.edit(before.id,{login:'ivr',telefone:'67999990000'},{master:true,actor,expectedVersion:before._version});
+  assert.equal(changed.login,'ivr');assert.equal(state.created,1);assert.equal(state.users.size,1);
+  const after=await state.storage.get('empresa',before.id);assert.equal(after.cognitoSub,before.cognitoSub);assert.equal(after.cognitoUsername,before.login);
+  assert.equal((await state.storage.getCompanyByLogin('ivr')).id,before.id);assert.equal((await state.storage.getCompanyByLogin(before.login)).id,before.id);
+  assert.equal(state.calls.filter(c=>c.type==='AdminSetUserPasswordCommand').length,0);
+  assert.deepEqual(await state.storage.get('trabalhador',worker.id),worker);assert.deepEqual(await state.storage.get('ficha',ficha.id),ficha);
+  assertNoCredentials(changed);
+  await assert.rejects(state.service.edit(before.id,{login:'novo'},{master:true,actor,expectedVersion:before._version}),error=>error.code==='REGISTRO_ALTERADO');
+});
+test('primeira palavra sugere login e duas empresas não conseguem reservar o mesmo login', async () => {
+  const state=setup(),one=await state.service.register(registration({login:'',nome:'IVR SERVICOS LTDA'}),actor);
+  assert.equal(one.item.login,'ivr');
+  const two=await state.service.register(registration({requestId:'synthetic-request-0002',cnpj:'11222333000181',login:'segunda'}),actor);
+  const changes=await Promise.allSettled([one,two].map(r=>state.service.edit(r.item.id,{login:'disputado'},{master:true,actor,expectedVersion:r.item._version})));
+  assert.equal(changes.filter(r=>r.status==='fulfilled').length,1);assert.equal((await state.storage.list('empresa')).filter(r=>r.login==='disputado').length,1);
+});
+test('restauração após troca de login usa conta original e senha temporária; repetição não executa novo reset', async () => {
+  const state=setup(),ready=await state.service.register(registration(),actor);
+  const item=await state.service.edit(ready.item.id,{login:'ivr'},{master:true,actor,expectedVersion:ready.item._version});
+  state.users.get('empresa.sintetica').UserStatus='CONFIRMED';
+  const body={confirmacao:item.nome,_version:item._version,requestId:'reset-sintetico-0001'};
+  const result=await state.service.resetPassword(item.id,body,actor);await state.service.resetPassword(item.id,body,actor);
+  const calls=state.calls.filter(c=>c.type==='AdminSetUserPasswordCommand');assert.equal(calls.length,1);
+  assert.equal(calls[0].input.Username,'empresa.sintetica');assert.equal(calls[0].input.Password,'JpEpi1-Inicial-04252011');assert.equal(calls[0].input.Permanent,false);
+  assertNoCredentials(result);assert.equal(result.acesso.trocaObrigatoria,true);assert.equal(state.users.size,1);
+});
+test('restauração recusa confirmação errada, vínculo adulterado e bloqueia edição durante reset', async () => {
+  const state=setup(),ready=await state.service.register(registration(),actor),item=ready.item;
+  const body={confirmacao:item.nome,_version:item._version,requestId:'reset-sintetico-0002'};
+  await assert.rejects(state.service.resetPassword(item.id,{...body,confirmacao:'ERRADO'},actor),error=>error.status===400);
+  state.hooks.beforeReset=async()=>{await assert.rejects(state.service.edit(item.id,{nome:'NAO ALTERAR'},{master:true,actor}),error=>error.code==='ACESSO_EM_ANDAMENTO');};
+  await state.service.resetPassword(item.id,body,actor);
+  const current=await state.storage.get('empresa',item.id);await state.storage.update('empresa',item.id,{cognitoSub:'CONTA-ERRADA'});
+  const tampered=await state.storage.get('empresa',item.id);
+  await assert.rejects(state.service.resetPassword(item.id,{...body,_version:tampered._version,requestId:'reset-sintetico-0003'},actor),error=>error.code==='LOGIN_JA_UTILIZADO');
+  assert.equal(state.calls.filter(c=>c.type==='AdminSetUserPasswordCommand').length,1);assert.equal(current.nome,item.nome);
 });

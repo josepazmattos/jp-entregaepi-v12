@@ -123,6 +123,8 @@ function equipmentName(item = {}) {
     if (!workerName) throw new Error("O nome do trabalhador não está disponível para esta ficha. Confira o cadastro antes de imprimir.");
     const date = formatDate(first(ficha.data, ficha.date));
     const type = first(ficha.tipo, ficha.type, "Entrega");
+    // Only newly issued returns carry this date. Preserve the rendering of historical documents.
+    const returnOnly = type === 'Devolução' && Boolean(ficha.datasMovimentacao?.devolucao);
     const number = first(ficha.numero, ficha.id);
     const title = `Ficha de EPI - ${workerName} - ${date.replace(/\//g, "-") || "sem-data"}`;
     const locality = first(company.localidade, company.city, ficha.localidade, ficha.locality, worker.localidade);
@@ -139,10 +141,11 @@ function equipmentName(item = {}) {
       const requestedType=first(item.tipo,item.type);
       const itemType=['Entrega','Troca','Devolução'].includes(requestedType)?requestedType:type;
       const itemDate = formatDate(first(item.data, item.date, date));
-      const returnDate = formatDate(first(item.dataDevolucao, item.returnDate, itemType === "Devolução" ? itemDate : ""));
+      const returnDate = formatDate(first(item.dataDevolucao, item.returnDate, returnOnly ? ficha.datasMovimentacao.devolucao : '', itemType === "Devolução" ? itemDate : ""));
+      const deliveryDate = returnOnly ? '' : itemDate;
       const signText = item.signed === false && signature.verified ? "Pendente" : signature.rowText;
       const caLabel = item.semCA === true ? "Sem CA" : first(item.ca, epi.ca);
-      return `<tr><td>${esc(first(item.quantidade, item.qty, 1))}</td><td>${esc(equipmentName({...epi,...item}))}</td><td>${esc(caLabel)}</td><td>${esc(itemType)}</td><td>${esc(itemDate)}</td><td class="docx-sign-cell">${esc(signText)}</td><td>${esc(returnDate)}</td></tr>`;
+      return `<tr><td>${esc(first(item.quantidade, item.qty, 1))}</td><td>${esc(equipmentName({...epi,...item}))}</td><td>${esc(caLabel)}</td><td>${esc(itemType)}</td><td>${esc(deliveryDate)}</td><td class="docx-sign-cell">${esc(signText)}</td><td>${esc(returnDate)}</td></tr>`;
     }).join("");
     const fingerprint = signature.image ? `<div class="docx-fingerprint"><img src="${esc(signature.image)}" alt="Imagem da captura biométrica registrada"></div>` : '<div class="docx-sign-space"></div>';
     const signatureNote = signature.note ? `<p class="docx-sign-note">${esc(signature.note)}</p>` : "";
@@ -157,7 +160,7 @@ function equipmentName(item = {}) {
       </tbody></table>
       ${cancelled ? `<div class="docx-cancelled">FICHA CANCELADA${ficha.motivoCancelamento ? ` - ${esc(ficha.motivoCancelamento)}` : ""}</div>` : ""}
       <section class="docx-term"><h1 class="docx-term-title">TERMO DE RESPONSABILIDADE</h1>${text(term).split(/\n\s*\n/).map(paragraph => `<p>${esc(paragraph)}</p>`).join("")}
-        <p class="docx-local"><strong>Localidade da Empresa:</strong> ${esc(localityWithUf)} <span class="docx-date-spacer"></span> <strong>Data da Entrega:</strong> ${esc(date)}.</p>
+        <p class="docx-local"><strong>Localidade da Empresa:</strong> ${esc(localityWithUf)} <span class="docx-date-spacer"></span> <strong>${returnOnly?'Data da Devolução:':'Data da Entrega:'}</strong> ${esc(returnOnly?formatDate(ficha.datasMovimentacao.devolucao):date)}.</p>
         <div class="docx-sign-area">${fingerprint}${signatureNote}<div class="docx-sign-line"></div><div class="docx-worker-name">${esc(workerName)}</div></div>
       </section>
       <table class="docx-epi-table" aria-label="Relação dos EPIs"><colgroup><col style="width:6%"><col style="width:26%"><col style="width:9%"><col style="width:10.5%"><col style="width:13.5%"><col style="width:20%"><col style="width:15%"></colgroup><thead><tr><th>QTD</th><th>EPI</th><th>CA</th><th>STATUS</th><th>DATA</th><th>ASSINATURA</th><th>DATA DEVOLUÇÃO</th></tr></thead><tbody>${rows}</tbody></table>${footer}

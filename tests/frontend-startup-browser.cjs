@@ -30,6 +30,7 @@ async function scenario(options={}){
     const request=route.request(),url=new URL(request.url());
     const json=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)}).catch(()=>{});
     state.requests.push({path:url.pathname,host:url.hostname,port:url.port,method:request.method(),headers:request.headers()});
+    if(url.pathname==='/auth/resolver')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,username:request.postDataJSON().login})});
     if(url.hostname.startsWith('cognito-idp.')){
       const input=request.postDataJSON();state.username=input.AuthParameters?.USERNAME||input.ChallengeResponses?.USERNAME;
       if(state.challenge&&input.AuthFlow)return json({ChallengeName:'NEW_PASSWORD_REQUIRED',Session:'SYNTHETIC',ChallengeParameters:{requiredAttributes:'[]'}});
@@ -95,7 +96,7 @@ async function main(){
   }
   {
     const s=await scenario({challenge:true});await s.login('CLIENTE-TESTE');await s.page.locator('#newPasswordForm').waitFor({state:'visible'});assert.equal(s.state.requests.filter(r=>['/health','/api/caepi/365','/status'].includes(r.path)).length,0);
-    await s.page.locator('#newPassword').fill('SenhaSintetica42');await s.page.locator('#newPasswordConfirm').fill('SenhaSintetica42');await s.page.locator('#newPasswordButton').click();await s.done();pass('primeiro acesso só verifica após concluir a troca de senha e a autenticação');await s.close();
+    await s.page.locator('#initialPasswordConfirm').fill('SENHA-SINTETICA');await s.page.locator('#newPassword').fill('SenhaSintetica42');await s.page.locator('#newPasswordConfirm').fill('SenhaSintetica42');await s.page.locator('#newPasswordButton').click();await s.done();pass('primeiro acesso só verifica após concluir a troca de senha e a autenticação');await s.close();
   }
   {
     const s=await scenario({holdHealth:true,holdBio:true});await s.login();await s.page.waitForFunction(()=>document.getElementById('metricEmpresas').textContent==='2');
