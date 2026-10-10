@@ -207,3 +207,34 @@ test('cadastro manual e importação do modelo real preservam matrícula alfanum
   assert.equal(synchronized.status, 'sem_alteracoes');
   assert.equal(synchronized.resumo.inalterados, 2);
 });
+
+
+test('progresso compacto evita reler a prévia em cada lote e mantém retomada e isolamento', async () => {
+  const store = createStore({ allowMemory: true });
+  let chunkReads = 0;
+  const importer = createWorkerImportService({ ...store, async get(entity, id) {
+    if (entity === 'trabalhador_importacao_lote') chunkReads++;
+    return store.get(entity, id);
+  } });
+  const preview = await importer.preview(await upload(Array.from({ length: 102 }, (_, i) => worker(i + 1))));
+  assert.equal(preview.linhas.length, 102);
+  assert.equal(chunkReads, 0, 'prévia já validada não precisa ser relida após a transação');
+  const args = selection(preview.importacaoId, { compact: true });
+  const first = await importer.confirm(args);
+  assert.equal(first.processados, 80);
+  assert.equal(first.linhas, undefined);
+  assert.equal(chunkReads, 1, 'lê somente o lote que será aplicado');
+  assert.ok(JSON.stringify(first).length < JSON.stringify(preview).length / 10);
+  await assert.rejects(importer.confirm({ ...args, empresaId: 'outra-empresa' }), error => error.status === 404);
+  await assert.rejects(importer.confirm({ ...args, actor: 'outro-usuario' }), error => error.status === 404);
+  const restored = await importer.getProgress(args);
+  assert.equal(restored.linhas.length, 102);
+  assert.equal(restored.processados, 80);
+  const finished = await importer.confirm(args);
+  assert.equal(finished.status, 'concluida');
+  assert.equal(finished.processados, 102);
+  assert.equal(finished.linhas, undefined);
+  assert.equal((await importer.confirm(args)).processados, 102);
+  assert.equal((await store.list('trabalhador', company)).length, 102);
+  assert.equal((await importer.getProgress(args)).linhas.length, 102);
+});

@@ -576,16 +576,17 @@ class Deployment:
                       extra=["--zip-file", f"fileb://{self.new_zip}"])
         cfg = self.wait_lambda(expected_hash)
         if (cfg.get("Environment", {}).get("Variables", {}) != self.snapshot["config"].get("Environment", {}).get("Variables", {})
-                or cfg.get("Runtime") != self.snapshot["config"]["Runtime"]):
+                or cfg.get("Runtime") != self.snapshot["config"]["Runtime"]
+                or cfg.get("MemorySize") != self.snapshot["config"]["MemorySize"]):
             raise DeployError("A configuração da Lambda mudou entre a cópia de segurança e a atualização.")
         self.aws.call("lambda", "update-function-configuration", {"FunctionName": FUNCTION,
-                      "RevisionId": cfg["RevisionId"], "Runtime": "nodejs22.x",
+                      "RevisionId": cfg["RevisionId"], "Runtime": "nodejs22.x", "MemorySize": 1024,
                       "Environment": merged_environment(self.snapshot["config"], self.commit)})
         cfg = self.wait_lambda(expected_hash)
-        if cfg.get("Runtime") != "nodejs22.x" or cfg.get("Environment", {}).get("Variables", {}) != merged_environment(self.snapshot["config"], self.commit)["Variables"]:
+        if cfg.get("Runtime") != "nodejs22.x" or cfg.get("MemorySize") != 1024 or cfg.get("Environment", {}).get("Variables", {}) != merged_environment(self.snapshot["config"], self.commit)["Variables"]:
             raise DeployError("A configuração publicada da Lambda não corresponde ao commit.")
         self.report["lambdaPackageSha256"] = sha256(self.new_zip)
-        self.check("lambda-code-sha256-runtime-node22-environment-preserved")
+        self.check("lambda-code-sha256-runtime-node22-memory1024-environment-preserved")
 
     @staticmethod
     def http(url: str) -> tuple[int, bytes]:
@@ -713,19 +714,19 @@ class Deployment:
         old_variables = dict(old.get("Environment", {}).get("Variables", {}))
         current_variables = config.get("Environment", {}).get("Variables", {})
         new_variables = merged_environment(old, self.commit)["Variables"]
-        if current_variables not in (old_variables, new_variables) or config.get("Runtime") not in (old["Runtime"], "nodejs22.x"):
+        if current_variables not in (old_variables, new_variables) or config.get("Runtime") not in (old["Runtime"], "nodejs22.x") or config.get("MemorySize") not in (old["MemorySize"], 1024):
             raise DeployError("Outra alteração de configuração foi detectada; restauração não a sobrescreveu.")
-        if config.get("CodeSha256") == old["CodeSha256"] and current_variables == old_variables and config.get("Runtime") == old["Runtime"]:
+        if config.get("CodeSha256") == old["CodeSha256"] and current_variables == old_variables and config.get("Runtime") == old["Runtime"] and config.get("MemorySize") == old["MemorySize"]:
             return
         if config.get("CodeSha256") != old["CodeSha256"]:
             self.aws.call("lambda", "update-function-code", {"FunctionName": FUNCTION,
                           "RevisionId": config["RevisionId"]}, extra=["--zip-file", f"fileb://{self.old_zip}"])
             config = self.wait_lambda(old["CodeSha256"])
         self.aws.call("lambda", "update-function-configuration", {"FunctionName": FUNCTION,
-                      "RevisionId": config["RevisionId"], "Runtime": old["Runtime"],
+                      "RevisionId": config["RevisionId"], "Runtime": old["Runtime"], "MemorySize": old["MemorySize"],
                       "Environment": {"Variables": old_variables}})
         restored = self.wait_lambda(old["CodeSha256"])
-        if restored.get("Runtime") != old["Runtime"] or restored.get("Environment", {}).get("Variables", {}) != old.get("Environment", {}).get("Variables", {}):
+        if restored.get("Runtime") != old["Runtime"] or restored.get("MemorySize") != old["MemorySize"] or restored.get("Environment", {}).get("Variables", {}) != old.get("Environment", {}).get("Variables", {}):
             raise DeployError("A configuração anterior da Lambda não foi restaurada integralmente.")
 
     def rollback(self) -> None:
