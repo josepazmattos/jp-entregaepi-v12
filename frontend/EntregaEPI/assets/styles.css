@@ -271,6 +271,17 @@ h3 { font-size: 16px; line-height: 1.4; letter-spacing: -.01em; }
 .equipment-kind span { font-size: 13px; font-weight: 600; }
 .item-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .delivery-layout { max-width: 1150px; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); }
+.delivery-items { margin: 24px 0 16px; padding-top: 20px; border-top: 1px solid var(--jp-line); }
+.delivery-items .section-heading { margin-bottom: 8px; gap: 12px; }
+.delivery-item-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+.delivery-item-row { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--jp-line); border-radius: 8px; background: var(--jp-bg, #f7faf8); }
+.delivery-item-details { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.delivery-item-details strong, .delivery-item-details small { display: block; }
+.delivery-item-details strong { font-size: 13px; }
+.delivery-item-details small { margin-top: 3px; color: var(--jp-muted); font-size: 12px; }
+.delivery-item-type { display: inline-block; margin-top: 7px; color: var(--jp-green-dark); font-size: 12px; font-weight: 600; }
+.delivery-item-type.return { color: #7b561d; }
+.delivery-item-row .text-button { flex-shrink: 0; min-height: 32px; font-size: 12px; }
 .guidance-card { padding: 32px; border-color: #d9e7db; background: #edf5ee; box-shadow: none; }
 .guidance-icon { display: grid; width: 48px; height: 48px; place-items: center; margin-bottom: 24px; border-radius: 12px; background: #dcebdd; color: #467c4b; }
 .guidance-icon .icon { width: 25px; height: 25px; }

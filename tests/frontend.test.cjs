@@ -273,6 +273,7 @@ test('emissão inclui snapshots e termo integral somente após validar trabalhad
   assert.equal(sent.empresaSnapshot.nome,'EMPRESA EXEMPLO');
   assert.ok(sent.modeloFicha.termoResponsabilidade.includes('súmula n. 80 do TST.'));
   assert.equal(sent.itens[0].quantidade,2);
+  assert.equal(sent.itens[0].tipoMovimentacao,'Entrega');
   assert.equal(form.submitButton.disabled,false);
 });
 
@@ -659,4 +660,33 @@ test('nova devolução preenche só data de devolução; entrega e documentos an
   }
   const legacy=makeDocument({...ficha,tipo:'Devolução',dataDevolucao:'06/10/2026'});assert.ok(legacy.includes('Devolução</td><td>06/10/2026'));assert.ok(legacy.includes('Data da Entrega:'));
   const delivery=makeDocument();assert.ok(delivery.includes('Entrega</td><td>06/10/2026'));assert.ok(delivery.includes('Data da Entrega:'));
+});
+
+test('ficha mista imprime datas por item e uma única imagem de assinatura',()=>{
+  const itens=['Entrega','Devolução','Entrega','Devolução'].map((tipoMovimentacao,index)=>({...ficha.itens[0],tipoMovimentacao,quantidade:index+1,semCA:index>1,datasMovimentacao:{entrega:tipoMovimentacao==='Entrega'?'10/10/2026':'',devolucao:tipoMovimentacao==='Devolução'?'10/10/2026':''}}));
+  const html=makeDocument({...ficha,tipo:'Entrega e Devolução',itens,status:'assinada',assinaturaBiometrica:{realFingerImage:pixel,verificada:true}});
+  assert.equal((html.match(/Entrega<\/td><td>10\/10\/2026/g)||[]).length,2);
+  assert.equal((html.match(/Devolução<\/td><td><\/td>/g)||[]).length,2);
+  assert.equal((html.match(/10\/10\/2026<\/td><\/tr>/g)||[]).length,2);
+  assert.equal((html.match(/Sem CA<\/td>/g)||[]).length,2);
+  assert.equal((html.match(/Imagem da captura biométrica registrada/g)||[]).length,1);
+  assert.ok(html.includes('Data das Movimentações:'));
+});
+
+test('lista de movimentações repete EPI, preserva itens após falha e limpa ao trocar empresa',async()=>{
+  let refuse=true;
+  const app=appHarness((url,options)=>options.method==='POST'?{status:refuse?500:200,body:refuse?{ok:false,error:'Falha sintética'}:{ok:true,item:{id:'FICHA-MISTA'}}}:initialRoute(url));
+  await app.run('refreshAll()');
+  const form=app.elements.entregaForm;
+  for(const tipo of ['Devolução','Entrega','Devolução']){form.fields={trabalhadorId:worker.id,epiId:epi.id,tipo,quantidade:'3'};app.run('addEntregaItem()');}
+  assert.equal(app.run('entregaItems.length'),3);assert.equal(app.elements.entregaTrabalhador.disabled,true);
+  form.fields={epiId:'',tipo:'Entrega',quantidade:'1'};
+  await form.listeners.submit[0]({preventDefault(){},target:form});
+  assert.equal(app.run('entregaItems.length'),3);assert.equal(form.submitButton.disabled,false);
+  refuse=false;await form.listeners.submit[0]({preventDefault(){},target:form});
+  const sent=JSON.parse(app.requests.filter(item=>item.options.method==='POST').at(-1).options.body);
+  assert.equal(sent.itens.length,3);assert.deepEqual(sent.itens.map(item=>item.tipoMovimentacao),['Devolução','Entrega','Devolução']);
+  assert.equal(app.run('entregaItems.length'),0);
+  form.fields={trabalhadorId:worker.id,epiId:epi.id,tipo:'Entrega',quantidade:'1'};app.run('addEntregaItem()');
+  syntheticAuth(app);await app.run('changeActiveCompany("OUTRA-EMPRESA")');assert.equal(app.run('entregaItems.length'),0);
 });

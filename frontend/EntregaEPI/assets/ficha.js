@@ -125,6 +125,7 @@ function equipmentName(item = {}) {
     const type = first(ficha.tipo, ficha.type, "Entrega");
     // Only newly issued returns carry this date. Preserve the rendering of historical documents.
     const returnOnly = type === 'Devolução' && Boolean(ficha.datasMovimentacao?.devolucao);
+    const mixedMovement = type.includes(' e ');
     const number = first(ficha.numero, ficha.id);
     const title = `Ficha de EPI - ${workerName} - ${date.replace(/\//g, "-") || "sem-data"}`;
     const locality = first(company.localidade, company.city, ficha.localidade, ficha.locality, worker.localidade);
@@ -136,13 +137,16 @@ function equipmentName(item = {}) {
     const term = first(ficha.modeloFicha && ficha.modeloFicha.termoResponsabilidade, TERMO_APROVADO);
     const items = Array.isArray(ficha.itens) ? ficha.itens : Array.isArray(ficha.epis) ? ficha.epis : [];
     if (!items.length) throw new Error("Esta ficha não possui EPIs para impressão.");
+    const itemMovements = items.some(item => item.tipoMovimentacao && item.datasMovimentacao);
+    const columnWidths = itemMovements ? [8,22.5,9,12,13.5,20,15] : [6,26,9,10.5,13.5,20,15];
     const rows = items.map(item => {
       const epi = epis.find(entry => entry.id === item.epiId) || {};
-      const requestedType=first(item.tipo,item.type);
+      const requestedType=first(item.tipoMovimentacao,item.tipo,item.type);
       const itemType=['Entrega','Troca','Devolução'].includes(requestedType)?requestedType:type;
       const itemDate = formatDate(first(item.data, item.date, date));
-      const returnDate = formatDate(first(item.dataDevolucao, item.returnDate, returnOnly ? ficha.datasMovimentacao.devolucao : '', itemType === "Devolução" ? itemDate : ""));
-      const deliveryDate = returnOnly ? '' : itemDate;
+      const datedMovement = Boolean(item.tipoMovimentacao && item.datasMovimentacao);
+      const returnDate = datedMovement ? formatDate(item.datasMovimentacao.devolucao) : formatDate(first(item.dataDevolucao, item.returnDate, returnOnly ? ficha.datasMovimentacao.devolucao : '', itemType === "Devolução" ? itemDate : ""));
+      const deliveryDate = datedMovement ? formatDate(item.datasMovimentacao.entrega) : returnOnly ? '' : itemDate;
       const signText = item.signed === false && signature.verified ? "Pendente" : signature.rowText;
       const caLabel = item.semCA === true ? "Sem CA" : first(item.ca, epi.ca);
       return `<tr><td>${esc(first(item.quantidade, item.qty, 1))}</td><td>${esc(equipmentName({...epi,...item}))}</td><td>${esc(caLabel)}</td><td>${esc(itemType)}</td><td>${esc(deliveryDate)}</td><td class="docx-sign-cell">${esc(signText)}</td><td>${esc(returnDate)}</td></tr>`;
@@ -160,12 +164,12 @@ function equipmentName(item = {}) {
       </tbody></table>
       ${cancelled ? `<div class="docx-cancelled">FICHA CANCELADA${ficha.motivoCancelamento ? ` - ${esc(ficha.motivoCancelamento)}` : ""}</div>` : ""}
       <section class="docx-term"><h1 class="docx-term-title">TERMO DE RESPONSABILIDADE</h1>${text(term).split(/\n\s*\n/).map(paragraph => `<p>${esc(paragraph)}</p>`).join("")}
-        <p class="docx-local"><strong>Localidade da Empresa:</strong> ${esc(localityWithUf)} <span class="docx-date-spacer"></span> <strong>${returnOnly?'Data da Devolução:':'Data da Entrega:'}</strong> ${esc(returnOnly?formatDate(ficha.datasMovimentacao.devolucao):date)}.</p>
+        <p class="docx-local"><strong>Localidade da Empresa:</strong> ${esc(localityWithUf)} <span class="docx-date-spacer"></span> <strong>${mixedMovement?'Data das Movimentações:':returnOnly?'Data da Devolução:':'Data da Entrega:'}</strong> ${esc(returnOnly?formatDate(ficha.datasMovimentacao.devolucao):date)}.</p>
         <div class="docx-sign-area">${fingerprint}${signatureNote}<div class="docx-sign-line"></div><div class="docx-worker-name">${esc(workerName)}</div></div>
       </section>
-      <table class="docx-epi-table" aria-label="Relação dos EPIs"><colgroup><col style="width:6%"><col style="width:26%"><col style="width:9%"><col style="width:10.5%"><col style="width:13.5%"><col style="width:20%"><col style="width:15%"></colgroup><thead><tr><th>QTD</th><th>EPI</th><th>CA</th><th>STATUS</th><th>DATA</th><th>ASSINATURA</th><th>DATA DEVOLUÇÃO</th></tr></thead><tbody>${rows}</tbody></table>${footer}
+      <table class="docx-epi-table${itemMovements?' docx-item-movements':''}" aria-label="Relação dos EPIs"><colgroup>${columnWidths.map(width=>`<col style="width:${width}%">`).join('')}</colgroup><thead><tr><th>QTD</th><th>EPI</th><th>CA</th><th>STATUS</th><th>${itemMovements?'DATA ENTREGA':'DATA'}</th><th>ASSINATURA</th><th>DATA DEVOLUÇÃO</th></tr></thead><tbody>${rows}</tbody></table>${footer}
     </main>`;
-    return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${CSS_APROVADO}${CSS_IMPRESSAO}</style></head><body>${content}</body></html>`;
+    return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${CSS_APROVADO}${CSS_IMPRESSAO}${itemMovements?'.docx-item-movements td:nth-child(1),.docx-item-movements td:nth-child(4){white-space:nowrap}':''}</style></head><body>${content}</body></html>`;
   }
 
   root.JP_FICHA = Object.freeze({createSnapshot, buildDocument, formatDate,equipmentName});

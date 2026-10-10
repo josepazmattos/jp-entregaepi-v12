@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" href="/__APP_PREFIX__/assets/favicon-jp-192.png?v=20261010" sizes="192x192" />
   <link rel="icon" type="image/svg+xml" href="/__APP_PREFIX__/assets/favicon-jp.svg?v=20261010" sizes="any" />
   <script src="/__APP_PREFIX__/config.js?v=1294"></script>
-  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=20261010-avatar" />
+  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=20261010-movimentos" />
 </head>
 <body>
   <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
@@ -259,14 +259,16 @@
               <div class="form-heading"><span class="heading-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-package"></use></svg></span><div><h2>Nova movimentação</h2><p>Selecione a empresa, o trabalhador e o equipamento.</p></div></div>
               <div class="grid-form">
                 <div class="field span-two"><label for="entregaEmpresa">Empresa</label><select id="entregaEmpresa" required><option value="">Selecione uma empresa</option></select></div>
-                <div class="field span-two"><label for="entregaTipo">Tipo de movimentação</label><select name="tipo" id="entregaTipo"><option value="Entrega">Entrega de EPI</option><option value="Devolução">Devolução de EPI</option></select><p id="movementHelp" class="field-help">Preenche a data de entrega na nova ficha.</p></div>
                 <div class="field span-two"><label for="entregaTrabalhador">Trabalhador</label><select name="trabalhadorId" id="entregaTrabalhador" required></select></div>
                 <div class="field span-two"><label for="entregaEpi">EPI</label><select name="epiId" id="entregaEpi" required></select></div>
-                <div class="field"><label for="entregaQuantidade">Quantidade</label><input name="quantidade" id="entregaQuantidade" type="number" min="1" step="1" value="1" required></div>
+                <div class="field"><label for="entregaQuantidade">Quantidade</label><input name="quantidade" id="entregaQuantidade" type="number" min="1" max="100000" step="1" value="1" required></div>
+                <div class="field span-two"><label for="entregaTipo">Tipo de movimentação</label><select name="tipo" id="entregaTipo"><option value="Entrega">Entrega de EPI</option><option value="Devolução">Devolução de EPI</option></select><p id="movementHelp" class="field-help">Preenche a data de entrega deste item.</p></div>
+                <div class="span-two"><button id="entregaAddItem" class="btn btn-secondary" type="button"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-plus"></use></svg>Adicionar à ficha</button></div>
               </div>
+              <section id="entregaItemsSection" class="delivery-items hidden" aria-labelledby="entregaItemsTitle"><div class="section-heading"><h3 id="entregaItemsTitle">Itens da ficha</h3><button id="entregaClearItems" class="text-button" type="button">Limpar itens</button></div><p id="entregaItemsCount" class="field-help" aria-live="polite"></p><ol id="entregaItemsList" class="delivery-item-list"></ol></section>
               <div class="form-actions"><button class="btn btn-primary" type="submit"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-file"></use></svg>Gerar ficha de EPI</button></div>
             </form>
-            <aside class="card guidance-card"><span class="guidance-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-file"></use></svg></span><h2>Uma ficha completa<br>para cada movimentação</h2><p>A ficha reúne a identificação do trabalhador, a função, a matrícula eSocial e o tipo da movimentação.</p><div class="guidance-note"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg><span>O Termo de Responsabilidade permanece antes da relação dos EPIs, no modelo aprovado.</span></div><button class="text-button" type="button" onclick="goScreen('fichas')">Consultar fichas <svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-arrow"></use></svg></button></aside>
+            <aside class="card guidance-card"><span class="guidance-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-file"></use></svg></span><h2>Entregas e devoluções.<br>Uma única assinatura.</h2><p>Adicione os itens à ficha, com ou sem CA. O mesmo EPI pode aparecer várias vezes, com quantidades e movimentações diferentes.</p><div class="guidance-note"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg><span>Cada item preenche sua data de entrega ou de devolução. Para um único item, você também pode gerar a ficha diretamente.</span></div><button class="text-button" type="button" onclick="goScreen('fichas')">Consultar fichas <svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-arrow"></use></svg></button></aside>
           </div>
         </section>
 
@@ -319,9 +321,9 @@
       </main>
     </div>
   </section>
-  <script src="/__APP_PREFIX__/assets/ficha.js?v=20261010-devolucao"></script>
+  <script src="/__APP_PREFIX__/assets/ficha.js?v=20261010-movimentos"></script>
   <script src="/__APP_PREFIX__/assets/biometria.js?v=1294"></script>
-  <script src="/__APP_PREFIX__/assets/app.js?v=20261010-avatar"></script>
+  <script src="/__APP_PREFIX__/assets/app.js?v=20261010-movimentos"></script>
   <script src="/__APP_PREFIX__/assets/operations.js?v=20261010-perfil-empresa"></script>
 </body>
 </html>

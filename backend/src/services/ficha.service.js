@@ -38,8 +38,8 @@ function fichaDate(value) {
 }
 
 export function buildFicha({ empresaId, empresa, trabalhador, items, body, actor }) {
-  const tipo = body.tipo || 'Entrega';
-  if (!['Entrega', 'Troca', 'Devolução'].includes(tipo)) throw httpError(400, 'Tipo da movimentação inválido.', 'MOVIMENTACAO_INVALIDA');
+  const defaultTipo = body.tipo || 'Entrega';
+  if (!['Entrega', 'Troca', 'Devolução'].includes(defaultTipo)) throw httpError(400, 'Tipo da movimentação inválido.', 'MOVIMENTACAO_INVALIDA');
   const data = fichaDate(body.data);
   const normalizedItems = items.map(({ requested, epi }) => {
     // The technical equipment catalog is shared. Workers and issued documents
@@ -47,6 +47,8 @@ export function buildFicha({ empresaId, empresa, trabalhador, items, body, actor
     if (!epi) throw httpError(404, 'Equipamento não encontrado no catálogo compartilhado.', 'EPI_NAO_ENCONTRADO');
     const quantidade = Number(requested.quantidade ?? 1);
     if (!Number.isSafeInteger(quantidade) || quantidade < 1 || quantidade > 100000) throw httpError(400, 'A quantidade deve ser um número inteiro maior que zero.', 'QUANTIDADE_INVALIDA');
+    const tipoMovimentacao = requested.tipoMovimentacao ?? defaultTipo;
+    if (!['Entrega', 'Troca', 'Devolução'].includes(tipoMovimentacao)) throw httpError(400, 'Tipo da movimentação do item inválido.', 'MOVIMENTACAO_INVALIDA');
     return {
       epiId: epi.id,
       epiNome: equipmentName(epi),
@@ -55,9 +57,14 @@ export function buildFicha({ empresaId, empresa, trabalhador, items, body, actor
       semCA: epi.semCA === true || epi.tipo === 'sem_ca',
       fabricante: textField(epi.fabricante || epi.manufacturer),
       validade: textField(epi.validade || epi.validity),
-      quantidade
+      quantidade,
+      tipoMovimentacao,
+      datasMovimentacao: { entrega: tipoMovimentacao === 'Devolução' ? '' : data, devolucao: tipoMovimentacao === 'Devolução' ? data : '' }
     };
   });
+  if (trabalhador.status === 'Inativo' && normalizedItems.some(item => item.tipoMovimentacao !== 'Devolução')) throw httpError(409, 'O trabalhador está inativo. Apenas devoluções são permitidas.', 'TRABALHADOR_INATIVO');
+  const tipos = [...new Set(normalizedItems.map(item => item.tipoMovimentacao))];
+  const tipo = tipos.length === 1 ? tipos[0] : ['Entrega', 'Troca', 'Devolução'].filter(value => tipos.includes(value)).join(' e ');
   if (body.modeloFicha != null) {
     if (typeof body.modeloFicha !== 'object' || Array.isArray(body.modeloFicha) || body.modeloFicha.id !== 'JP-DOCX-11.10.6') {
       throw httpError(400, 'Modelo de ficha não reconhecido.', 'MODELO_FICHA_INVALIDO');
