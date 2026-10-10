@@ -7,6 +7,7 @@ import ipaddr from 'ipaddr.js';
 import * as asn1 from 'asn1js';
 import * as pki from 'pkijs';
 import { sha256 } from './document-integrity.js';
+import { normalizeCpf, representationActive } from './certificate-identity.js';
 import { httpError } from '../middleware/auth.js';
 
 pki.setEngine('node', webcrypto, new pki.CryptoEngine({ name:'node',crypto:webcrypto,subtle:webcrypto.subtle }));
@@ -36,19 +37,31 @@ export async function fetchCrl(url) {
   });
 }
 const crlCache=new Map();
-function cnpjFromCertificate(cert) {
+function certificateIdentity(cert) {
   const san=cert.extensions?.find(x=>x.extnID==='2.5.29.17')?.parsedValue;
+  const fields=new Map();
   for(const name of san?.altNames||[]) {
     if(name.type!==0)continue;
-    const elements=name.value?.valueBlock?.value||[];
-    if(elements[0]?.valueBlock?.toString()!=='2.16.76.1.3.3')continue;
+    const elements=name.value?.valueBlock?.value||[],oid=elements[0]?.valueBlock?.toString();
+    if(!['2.16.76.1.3.3','2.16.76.1.3.1'].includes(oid))continue;
     const value=elements[1]?.valueBlock?.value?.[0];
     const text=typeof value?.valueBlock?.value==='string'?value.valueBlock.value:Buffer.from(value?.valueBlock?.valueHexView||[]).toString('utf8');
-    if(/^[A-Z0-9]{12}[0-9]{2}$/.test(text))return text;
+    if(fields.has(oid))reject('Identificação duplicada no certificado.','CERTIFICADO_IDENTIDADE');fields.set(oid,text);
   }
-  reject('Use o certificado e-CNPJ da própria empresa. Certificados de representantes exigem validação específica.','CERTIFICADO_CNPJ_AUSENTE');
+  const serials=(cert.subject.typesAndValues||[]).filter(x=>x.type==='2.5.4.5').map(x=>x.value.valueBlock.value);
+  if(serials.length>1)reject('Identificação ambígua no certificado.','CERTIFICADO_IDENTIDADE');
+  const cnpj=fields.get('2.16.76.1.3.3');
+  if(cnpj!==undefined){if(!/^[A-Z0-9]{12}[0-9]{2}$/.test(cnpj))reject('CNPJ inválido no certificado.','CERTIFICADO_IDENTIDADE');return {kind:'e-CNPJ',cnpj};}
+  // ICP-Brasil: legacy otherName = 8 birth-date characters + 11 CPF.
+  // Modern profiles also use subject serialNumber (Resolution 211).
+  const legacy=fields.get('2.16.76.1.3.1'),legacyCpf=legacy?.slice(8,19),serial=serials[0];
+  if(legacy!==undefined&&(!/^\d{19}/.test(legacy)||!legacyCpf))reject('CPF inválido no certificado.','CERTIFICADO_IDENTIDADE');
+  if(serial!==undefined&&!/^\d{11}$/.test(serial))reject('Use um certificado A1 de pessoa física ou jurídica.','CERTIFICADO_IDENTIDADE');
+  if(legacyCpf&&serial&&legacyCpf!==serial)reject('Identificadores de CPF divergentes no certificado.','CERTIFICADO_IDENTIDADE');
+  let cpf;try{cpf=normalizeCpf(serial||legacyCpf);}catch{reject('CPF ausente ou inválido no certificado.','CERTIFICADO_IDENTIDADE');}
+  return {kind:'e-CPF',cpf};
 }
-export async function verifyCompanyCms(cmsBytes, content, companyCnpj, { roots = null, loadCrl = fetchCrl, now = new Date() } = {}) {
+export async function verifyCompanyCms(cmsBytes, content, companyIdentity, { roots = null, loadCrl = fetchCrl, now = new Date() } = {}) {
   if(!Buffer.isBuffer(cmsBytes)||cmsBytes.length>32768||cmsBytes.length<100)reject('Assinatura digital ausente ou muito grande.');
   let signed, signer;
   try {
@@ -65,13 +78,20 @@ export async function verifyCompanyCms(cmsBytes, content, companyCnpj, { roots =
     const certId=ess?.values?.[0]?.valueBlock?.value?.[0]?.valueBlock?.value?.[0]?.valueBlock?.value;
     if(!certId||(certId.length<1||certId.length>2)||!(certId[0] instanceof asn1.OctetString)||Buffer.from(certId[0].valueBlock.valueHexView).toString('hex')!==sha256(der(signer)))throw new Error();
   }catch(e){if(e.status)throw e;reject('A assinatura não corresponde ao documento ou ao certificado.','CERTIFICADO_ASSINATURA_INVALIDA');}
-  const cnpj=cnpjFromCertificate(signer),expected=String(companyCnpj).replace(/[^A-Za-z0-9]/g,'').toUpperCase();
-  if(cnpj!==expected)reject('O CNPJ do certificado é diferente do cadastro da empresa.','CERTIFICADO_EMPRESA_DIVERGENTE');
-  if(signer.extensions?.find(x=>x.extnID==='2.5.29.19')?.parsedValue?.cA)reject('Use um certificado de pessoa jurídica.');
+  const identity=certificateIdentity(signer),target=typeof companyIdentity==='string'?{registrationType:'CNPJ',registrationNumber:companyIdentity}:companyIdentity;
+  const expected=String(target?.registrationNumber||'').replace(/[^A-Za-z0-9]/g,'').toUpperCase();
+  if(identity.kind==='e-CNPJ') {
+    if(target?.registrationType!=='CNPJ'||identity.cnpj!==expected)reject('O CNPJ do certificado é diferente do cadastro da empresa.','CERTIFICADO_EMPRESA_DIVERGENTE');
+  } else {
+    const representative=target?.representative;
+    if(!representationActive(representative,now.getTime())||representative.companyId!==target.companyId||representative.registrationType!==target.registrationType||representative.registrationNumber!==expected)reject('O Master precisa conferir e autorizar o representante desta empresa antes de usar e-CPF.','CERTIFICADO_REPRESENTACAO_PENDENTE');
+    if(identity.cpf!==representative.cpf)reject('O CPF do certificado não corresponde ao representante autorizado.','CERTIFICADO_REPRESENTANTE_DIVERGENTE');
+  }
+  if(signer.extensions?.find(x=>x.extnID==='2.5.29.19')?.parsedValue?.cA)reject('Use um certificado de pessoa física ou jurídica.');
   const usage=signer.extensions?.find(x=>x.extnID==='2.5.29.15')?.parsedValue?.valueBlock?.valueHexView;
   if(!usage||!(usage[0]&0xc0))reject('O certificado não permite assinatura de documentos.');
   const policies=signer.extensions?.find(x=>x.extnID==='2.5.29.32')?.parsedValue?.certificatePolicies||[];
-  if(!policies.some(x=>/^2\.16\.76\.1\.2\.1\.\d+$/.test(x.policyIdentifier)))reject('Nesta versão, utilize um certificado ICP-Brasil A1 de pessoa jurídica.','CERTIFICADO_TIPO');
+  if(!policies.some(x=>/^2\.16\.76\.1\.2\.1\.\d+$/.test(x.policyIdentifier)))reject('Nesta versão, utilize um certificado ICP-Brasil A1 e-CPF ou e-CNPJ.','CERTIFICADO_TIPO');
   const trusted=roots||trustRoots(),certs=signed.certificates.filter(x=>x instanceof pki.Certificate&&x!==signer).concat(signer);
   const initial=await new pki.CertificateChainValidationEngine({trustedCerts:trusted,certs,checkDate:now}).verify();
   if(!initial.result)reject('Certificado vencido, inválido ou sem cadeia ICP-Brasil confiável.','CERTIFICADO_CADEIA_INVALIDA');
@@ -95,5 +115,5 @@ export async function verifyCompanyCms(cmsBytes, content, companyCnpj, { roots =
   const checked=await new pki.CertificateChainValidationEngine({trustedCerts:trusted,certs,crls:evidence.map(x=>x.crl),checkDate:now}).verify({passedWhenNotRevValues:false});
   if(!checked.result)reject('A cadeia ou a revogação do certificado não foi confirmada.','CERTIFICADO_CADEIA_INVALIDA');
   const nodeCert=new X509Certificate(der(signer));
-  return {certificate:{fingerprint:sha256(der(signer)),thumbprint:nodeCert.fingerprint.replaceAll(':',''),cnpj,subject:nodeCert.subject,issuer:nodeCert.issuer,validTo:signer.notAfter.value.toISOString(),validFrom:signer.notBefore.value.toISOString()},evidence:{checkedAt:now.toISOString(),rootSha256:sha256(der(path[path.length-1])),certificates:path.map(x=>der(x).toString('base64')),crls:evidence.map(x=>({url:x.url,sha256:sha256(x.bytes),der:x.bytes.toString('base64')}))}};
+  return {certificate:{fingerprint:sha256(der(signer)),thumbprint:nodeCert.fingerprint.replaceAll(':',''),...identity,subject:nodeCert.subject,issuer:nodeCert.issuer,validTo:signer.notAfter.value.toISOString(),validFrom:signer.notBefore.value.toISOString()},evidence:{checkedAt:now.toISOString(),rootSha256:sha256(der(path[path.length-1])),certificates:path.map(x=>der(x).toString('base64')),crls:evidence.map(x=>({url:x.url,sha256:sha256(x.bytes),der:x.bytes.toString('base64')}))}};
 }

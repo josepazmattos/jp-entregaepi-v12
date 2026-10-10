@@ -10,18 +10,29 @@ def powershell(script,data=None):
  p=subprocess.run([str(exe),'-NoProfile','-STA','-EncodedCommand',base64.b64encode(script.encode('utf-16le')).decode()],input=(json.dumps(data)+'\n') if data else None,capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=60)
  if p.returncode:raise RuntimeError(p.stderr[-6000:])
  return p.stdout.strip()
+script=(ROOT/'native/biometria/certificates.ps1').read_text(encoding='utf-8')
+import_script=script.split('try {\n    $request')[0]
 with tempfile.TemporaryDirectory(prefix='jpged-win-test-') as folder:
  subprocess.run(['python',str(ROOT/'backend/test/helpers/jpged-fixture.py'),folder],check=True)
- path=Path(folder);pfx=str(path/'synthetic.pfx').replace("'","''")
- setup="$ErrorActionPreference='Stop'; $c=New-Object Security.Cryptography.X509Certificates.X509Certificate2; $c.Import('"+pfx+"','synthetic-test-only',[Security.Cryptography.X509Certificates.X509KeyStorageFlags]::UserKeySet -bor [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::PersistKeySet); $s=New-Object Security.Cryptography.X509Certificates.X509Store('My','CurrentUser');$s.Open('ReadWrite');$s.Add($c);$s.Close();$c.Thumbprint"
- thumbprint=powershell(setup)
- try:
-  assert len(thumbprint)==40
-  content=b'JPGED SYNTHETIC WINDOWS SIGNATURE';(path/'content').write_bytes(content)
-  answer=json.loads(powershell((ROOT/'native/biometria/certificates.ps1').read_text(encoding='utf-8').replace('} catch {\n    # Never','} catch {\n    throw\n    # Never'),{'action':'sign','thumbprint':thumbprint,'contentBase64':base64.b64encode(content).decode()}))
-  assert answer.get('ok'),answer
-  (path/'signed.der').write_bytes(base64.b64decode(answer['cms']))
-  subprocess.run(['node',str(ROOT/'backend/test/helpers/verify-windows-cms.js'),folder],check=True)
- finally:
-  powershell("$s=New-Object Security.Cryptography.X509Certificates.X509Store('My','CurrentUser');$s.Open('ReadWrite');foreach($c in $s.Certificates){if($c.Thumbprint -eq '"+thumbprint+"'){$s.Remove($c)}};$s.Close();exit 0")
-print('Windows certificate signing verified: synthetic CMS, CNPJ, ESS, chain and revocation; no client certificate used.')
+ path=Path(folder)
+ for variant,pfxname in [('leaf','synthetic.pfx'),('pf','pf.pfx'),('chain','chain.pfx')]:
+  pfx=str(path/pfxname).replace("'","''")
+  setup=import_script+"\n$store=[Security.Cryptography.X509Certificates.X509Store]::new('My','CurrentUser');$store.Open('ReadWrite');try {$cert=Import-JpCertificate '"+pfx+"' (ConvertTo-SecureString 'synthetic-test-only' -AsPlainText -Force) $store; $cert.Thumbprint}finally{$store.Close()}"
+  thumbprint=powershell(setup)
+  try:
+   assert len(thumbprint)==40,thumbprint
+   content=b'JPGED SYNTHETIC WINDOWS SIGNATURE';(path/'content').write_bytes(content)
+   answer=json.loads(powershell(script.replace('} catch {\n    # Never','} catch {\n    throw\n    # Never'),{'action':'sign','thumbprint':thumbprint,'contentBase64':base64.b64encode(content).decode()}))
+   assert answer.get('ok'),answer
+   (path/'signed.der').write_bytes(base64.b64decode(answer['cms']))
+   subprocess.run(['node',str(ROOT/'backend/test/helpers/verify-windows-cms.js'),folder,variant],check=True)
+  finally:
+   powershell("$s=New-Object Security.Cryptography.X509Certificates.X509Store('My','CurrentUser');$s.Open('ReadWrite');foreach($c in $s.Certificates){if($c.Thumbprint -eq '"+thumbprint+"'){$s.Remove($c)}};$s.Close();exit 0")
+ # These checks use production import and signing paths without opening a GUI.
+ wrong_password=import_script+"\n$s=[Security.Cryptography.X509Certificates.X509Store]::new('My','CurrentUser');$s.Open('ReadWrite');try{try{$c=Import-JpCertificate '"+str(path/'pf.pfx').replace("'","''")+"' (ConvertTo-SecureString 'wrong-test-password' -AsPlainText -Force) $s;throw 'UNEXPECTED_SUCCESS'}catch{if($_.Exception.Message -eq 'UNEXPECTED_SUCCESS'){throw};'PASSWORD_REJECTED'}}finally{$s.Close()}"
+ assert powershell(wrong_password)=='PASSWORD_REJECTED'
+ missing=json.loads(powershell(script,{'action':'sign','thumbprint':'0'*40,'contentBase64':base64.b64encode(b'test').decode()}))
+ assert missing.get('ok') is False
+ # Cleanup only our synthetic intermediate; no real trust stores are modified.
+ powershell("$s=[Security.Cryptography.X509Certificates.X509Store]::new('CA','CurrentUser');$s.Open('ReadWrite');foreach($c in $s.Certificates){if($c.Subject -eq 'CN=SYNTHETIC INTERMEDIATE'){$s.Remove($c)}};$s.Close()")
+print('Windows production import/sign verified: e-CNPJ, e-CPF, intermediate chain, wrong password and missing key; synthetic certificates only.')

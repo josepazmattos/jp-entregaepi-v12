@@ -61,7 +61,7 @@ function editCompany(id){
   const context=operationContext(),dialog=dialogShell(document,'Editar empresa',item.nome||'Empresa selecionada');
   const fields=[['nome','Nome da empresa'],['localidade','Localidade'],['uf','UF'],['responsavel','Responsável'],['email','E-mail'],['telefone','Telefone']];
   if(isMaster()&&item.acessoStatus==='ativo')fields.splice(1,0,['login','Login da empresa']);
-  dialog.querySelector('.dialog-content').innerHTML='<form id="companyEditForm">'+fields.map(([key,label])=>`<label for="company-edit-${key}">${label}</label><input id="company-edit-${key}" name="${key}" value="${escapeHtml(item[key]||'')}" ${key==='nome'?'required':''} ${key==='uf'?'maxlength="2"':''}>`).join('')+`<p class="field-help">CNPJ: ${escapeHtml(item.cnpj)} · Login: ${escapeHtml(item.login||'—')}</p><button type="submit" class="btn btn-primary" style="margin-top:16px">Salvar alterações</button></form>`;
+  dialog.querySelector('.dialog-content').innerHTML='<form id="companyEditForm">'+fields.map(([key,label])=>`<label for="company-edit-${key}">${label}</label><input id="company-edit-${key}" name="${key}" value="${escapeHtml(item[key]||'')}" ${key==='nome'?'required':''} ${key==='uf'?'maxlength="2"':''}>`).join('')+`<p class="field-help">${item.inscricaoTipo==='CAEPF'?'CAEPF':'CNPJ'}: ${escapeHtml(item.cnpj)} · Login: ${escapeHtml(item.login||'—')}</p><button type="submit" class="btn btn-primary" style="margin-top:16px">Salvar alterações</button></form>`;
   const form=dialog.querySelector('form');form.onsubmit=async event=>{
     event.preventDefault();const button=form.querySelector('button');if(button.disabled)return;button.disabled=true;
     try{assertOperationContext(context);ensureSuccess(await api('/api/empresas/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({...Object.fromEntries(new FormData(form)),_version:item._version||1})}));assertOperationContext(context);await refreshEmpresas(false);dialog.close();}
@@ -72,7 +72,7 @@ function resetCompanyPassword(id){
   if(!isMaster())return;
   let item=cache.empresas.find(x=>x.id===id);if(!item)return;
   const context=operationContext(),requestId=createRequestId(),dialog=dialogShell(document,'Restaurar senha inicial',item.nome);
-  dialog.querySelector('.dialog-content').innerHTML='<p>A senha voltará aos oito primeiros caracteres do CNPJ. O cliente deverá criar uma nova senha ao entrar.</p><label for="companyResetName">Confirme o nome da empresa</label><input id="companyResetName" autocomplete="off"><button id="companyResetConfirm" class="btn btn-primary" type="button" style="margin-top:16px">Restaurar senha inicial</button>';
+  dialog.querySelector('.dialog-content').innerHTML='<p>A senha voltará aos oito primeiros caracteres da inscrição do empregador (CNPJ ou CAEPF). O cliente deverá criar uma nova senha ao entrar.</p><label for="companyResetName">Confirme o nome da empresa</label><input id="companyResetName" autocomplete="off"><button id="companyResetConfirm" class="btn btn-primary" type="button" style="margin-top:16px">Restaurar senha inicial</button>';
   dialog.querySelector('#companyResetConfirm').onclick=async event=>{
     const button=event.target;if(button.disabled)return;button.disabled=true;
     try{

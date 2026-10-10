@@ -2,10 +2,10 @@
 
 ## Uso no aplicativo
 
-1. Atualize o **JP Biometria** pelo instalador completo em **Biometria**. Esta versão exige Windows e e-CNPJ A1 com chave de assinatura.
+1. Atualize o **JP Biometria** pelo instalador completo em **Biometria**. Esta versão exige Windows e A1 e-CNPJ ou e-CPF com chave de assinatura.
 2. Entre novamente na conta. O Master seleciona a empresa; o cliente já acessa sua própria empresa.
-3. Abra **Biometria → Certificado digital → Configurar neste computador**. Na janela nativa do Windows, autorize o CNPJ e escolha o certificado instalado, ou selecione o A1 e informe sua senha **somente nessa janela local**.
-4. O serviço verifica posse da chave, assinatura, CNPJ, finalidade A1, cadeia confiável, validade e revogação. O cadastro só fica configurado após essa conferência.
+3. Abra **Biometria → Certificado digital → Configurar neste computador**. Para e-CPF, o Master primeiro abre **Usar e-CPF · Titular ou representante**, confere o documento de representação e registra CPF, vínculo, referência e data de revisão. Na janela nativa do Windows, autorize o empregador e escolha o certificado instalado, ou selecione o A1 e informe sua senha **somente nessa janela local**.
+4. O serviço verifica posse da chave, assinatura, CNPJ ou CPF autorizado, finalidade A1, cadeia confiável, validade e revogação. O cadastro só fica configurado após essa conferência.
 5. Gere a ficha com todas as entregas e devoluções. Na aba da ficha, confira o conteúdo e clique **Confirmar movimentações e assinar**. Uma comparação biométrica positiva confirma o conteúdo completo.
 6. A certificação acontece automaticamente. Se houver falha, a biometria permanece salva: use **Certificar documento** para tentar novamente. Uma ficha só aparece como **Documento certificado** após verificação criptográfica e armazenamento.
 7. Em **JPGED · Documentos**, baixe o **PDF original**. Use esse arquivo para o Drive, envio e validação. Imprimir novamente em PDF produz outra representação e não preserva a assinatura incorporada.
@@ -13,6 +13,24 @@
 Cada computador/usuário do Windows que assina precisa de configuração local. Ao trocar o certificado, configure os demais computadores novamente. Desvincular no site impede novas certificações, mas preserva os documentos e o certificado do Windows.
 
 Registros biométricos anteriores à versão 12.10.0 não possuem o hash do conteúdo e não são convertidos retroativamente em documentos certificados. Permanecem disponíveis pelo fluxo anterior, sem alterar seu histórico.
+
+## Pessoa física, jurídica e CAEPF
+
+- e-CNPJ: o CNPJ do certificado deve coincidir com a empresa selecionada.
+- e-CPF: o CPF deve coincidir com o titular/representante previamente conferido pelo Master para aquele empregador. O aplicativo registra a conferência administrativa; não consulta poderes de representação nem procurações na Receita e não presume autorização apenas porque o certificado é válido.
+- A autorização indica documento conferido (contrato social, CCMEI, comprovante CAEPF, procuração etc.), responsável pela conferência, data e limite de revisão. O prazo deve respeitar os poderes do documento. Revogação ou alteração bloqueiam novas certificações e exigem nova configuração. Não modificam documentos antigos.
+- CAEPF possui tipo próprio no cadastro e na ficha, com 14 dígitos. A validação de formato não consulta a situação cadastral na Receita; o Master confere o comprovante. A chave interna `cnpj` permanece por compatibilidade, acompanhada de `inscricaoTipo: CAEPF`. Cadastros existentes continuam CNPJ, sem migração de identidade. O cadastro manual de trabalhadores funciona; a importação SOC atual continua exigindo CNPJ.
+- A configuração local assina uma autorização vinculada ao empregador, escopo e representante; o original CMS fica preservado em evidências privadas.
+- CPF é lido do atributo ICP-Brasil otherName 2.16.76.1.3.1 (posições 9–19) ou serialNumber 2.5.4.5. Identificadores conflitantes são recusados. Não se extrai CPF por aproximação do nome do certificado.
+- MEI e ME não são tipos de certificado. O uso de e-CPF depende da identidade e dos poderes do titular para aquele empregador.
+
+## Testes sem expor um certificado real
+
+Não envie PFX/P12 e senha por chat, e-mail ou repositório. Certificados sintéticos e suas chaves são gerados temporariamente nos testes, nunca aceitos pela confiança de produção. Um `.cer`/`.crt` público pode ser analisado, mas não testa a posse da chave privada nem substitui o teste local.
+
+A cobertura inclui e-CNPJ/e-CPF, CPF legado e serialNumber, cadeia com intermediária, assinatura adulterada, empresa/representante divergente, autorização ausente/revogada/expirada, certificado vencido, LCR revogada/expirada/indisponível, troca durante a operação, repetição e isolamento entre clientes. O Windows executa os caminhos reais de importação e assinatura com A1 sintético, incluindo senha incorreta e chave ausente. Testes de interface usam agente simulado. Não garantem antecipar todos os problemas de antivírus, leitor USB, permissões ou de uma instalação específica.
+
+Homologação final: no Windows do cliente, configurar localmente um A1 autorizado; usar uma ficha de teste identificada; confirmar a digital uma vez; certificar; baixar o original JPGED; conferir no VALIDAR/ITI; repetir após falha de rede sem outra digital. Não certifique movimentações fictícias como entregas reais. Esta homologação e a leitura física ainda dependem do ambiente do cliente.
 
 ## O que fica onde
 
@@ -53,7 +71,7 @@ Referências: https://aws.amazon.com/s3/pricing/ ; https://docs.github.com/en/re
 - Objetos usam escrita condicional, versionamento e bloqueio de acesso público. A aplicação não tem permissão de apagar arquivos; sua identidade é explicitamente impedida de acessar o bucket de backup.
 - URLs para download expiram em 60 segundos; respostas privadas sem cache. Logs de auditoria registram configuração, certificação e download.
 - Não é PAdES de preservação com carimbo do tempo qualificado/LTV. Evidências de validação são preservadas separadamente; a data não substitui um carimbo de autoridade de tempo. O resultado real no VALIDAR/ITI precisa de homologação com certificado autorizado antes de afirmar conformidade integral.
-- O certificado empresarial identifica a empresa; a prova biométrica registra a confirmação do trabalhador. Não são a mesma assinatura nem dispensam conferência de identidade, regras trabalhistas, retenção e LGPD.
+- O e-CNPJ identifica a pessoa jurídica; o e-CPF identifica o titular e exige vínculo de representação conferido; a prova biométrica registra a confirmação do trabalhador. Não são a mesma assinatura nem dispensam conferência de identidade, regras trabalhistas, retenção e LGPD.
 
 ## Recuperação e operação
 

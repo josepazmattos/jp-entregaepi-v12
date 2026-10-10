@@ -440,8 +440,10 @@ async function previewCompanyPdf(event){
   }catch(error){if(current()){message.className="message error";message.textContent=error.message||"Não foi possível ler o PDF. Preencha os campos manualmente.";}}
   finally{if(current()){companyPdfLoading=false;$("empresaPdfFile").value="";$("empresaPdfFile").disabled=false;updateCompanySubmitButton();}}
 }
+function updateEmployerRegistration(){const caepf=$('empresaInscricaoTipo')?.value==='CAEPF';setText('empresaInscricaoLabel',caepf?'CAEPF':'CNPJ');$('empresaCnpj').placeholder=caepf?'14 dígitos do CAEPF':'00.000.000/0000-00';}
 function applyCompanyPdf(){
   if(!isMaster()||companySaving||companyPdfLoading||!companyPdfDraft?.cnpj||!companyPdfDraft?.nome)return;
+  $("empresaInscricaoTipo").value="CNPJ";updateEmployerRegistration();
   $("empresaNome").value=companyPdfDraft.nome;$("empresaCnpj").value=companyPdfDraft.cnpj;$("empresaLocalidade").value=companyPdfDraft.localidade||"";
   for(const [key,id] of [["telefone","empresaTelefone"],["email","empresaEmail"]])if(companyPdfDraft[key])$(id).value=companyPdfDraft[key];
   if(companyLoginAutomatic||!$("empresaLogin").value){$("empresaLogin").value=suggestedCompanyLogin(companyPdfDraft.nome);companyLoginAutomatic=true;}
@@ -538,7 +540,7 @@ async function submitCompany(event){
     const result=ensureSuccess(await api("/api/empresas",{method:"POST",body:JSON.stringify(body)}),"Não foi possível cadastrar a empresa.");
     if(!result.body?.item?.id)throw new Error("O serviço não confirmou o cadastro da empresa. Tente novamente.");
     companyGeneration++;const selectedGeneration=companyGeneration;clearImportPreview();resetCompanyLogoEditor();saveActiveCompany(result.body.item.id);
-    form.reset();clearCompanyPdf();empresaRequestId="";empresaLogoDraft="";companyLoginAutomatic=true;setLogoPreview("empresaLogoPreview","empresaLogoPreviewWrap","");
+    form.reset();updateEmployerRegistration();clearCompanyPdf();empresaRequestId="";empresaLogoDraft="";companyLoginAutomatic=true;setLogoPreview("empresaLogoPreview","empresaLogoPreviewWrap","");
     await refreshAll();if(generation!==sessionGeneration||selectedGeneration!==companyGeneration)return;showCompanyAccess(result,body.cnpj);
   }catch(error){if(generation===sessionGeneration)handleAppError(error);}finally{if(generation===sessionGeneration){companySaving=false;updateCompanySubmitButton();}}
 }

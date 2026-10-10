@@ -111,3 +111,5 @@ test('rotas empresas: provisionamento parcial responde202 e Retomar conclui o me
   assert.equal(ready.body.item.id, pending.body.item.id);
   assert.equal((await storage.list('empresa')).length, 1);
 });
+
+test('CAEPF mantém inscrição distinta de CNPJ e snapshot sem alterar cadastros existentes',async()=>{const {storage,request}=setup();const created=await request('POST','/api/empresas',{body:{nome:'EMPREGADOR PF SINTÉTICO',cnpj:'12345678900001',inscricaoTipo:'CAEPF',login:'pf.sintetico',requestId:'synthetic-caepf-0001'}});assert.equal(created.status,200);assert.equal(created.body.item.inscricaoTipo,'CAEPF');const snap=fichaSnapshots(created.body.item,{nomeCompleto:'SYNTHETIC WORKER'});assert.equal(snap.empresaSnapshot.inscricaoTipo,'CAEPF');assert.equal(snap.empresaSnapshot.cnpj,'12345678900001');const changed=await request('PATCH','/api/empresas/'+created.body.item.id,{body:{inscricaoTipo:'CNPJ',nome:'changed'}});assert.equal(changed.status,409);});

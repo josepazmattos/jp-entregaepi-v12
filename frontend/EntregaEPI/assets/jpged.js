@@ -1,13 +1,14 @@
 let jpgedItems=[],jpgedCursor='',jpgedGeneration=0;
-function resetJpged(){jpgedItems=[];jpgedCursor='';jpgedGeneration++;setText('jpgedList','Selecione uma empresa.');setText('certificateDetail','Consulte o certificado da empresa em uso.');setText('certificateState','Não consultado');$('certificateDisconnect')?.classList.add('hidden');}
+function resetJpged(){jpgedItems=[];jpgedCursor='';jpgedGeneration++;setText('jpgedList','Selecione uma empresa.');setText('certificateDetail','Consulte o certificado da empresa em uso.');setText('certificateState','Não consultado');$('representativeForm')?.reset();$('representativeForm')?.classList.add('hidden');setText('representativeStatus','Consulte a empresa selecionada.');$('certificateDisconnect')?.classList.add('hidden');}
 function jpgedCompanyName(){return cache.empresas.find(x=>x.id===activeEmpresaId)?.nome||'Selecione uma empresa';}
 async function loadCompanyCertificate(){
   const context=operationContext();setText('certificateCompany',jpgedCompanyName());
   if(!activeEmpresaId){setText('certificateDetail','Selecione uma empresa no topo da página.');return;}
   try{const r=ensureSuccess(await api('/api/jpged/certificado'));assertOperationContext(context);const cert=r.body.certificate;
-    setText('certificateState',cert?(new Date(cert.validTo)>new Date()?'Configurado':'Vencido'):'Não configurado');
-    setText('certificateDetail',cert?`${cert.subject.replaceAll('\n',' · ')} · Validade: ${new Date(cert.validTo).toLocaleDateString('pt-BR')}`:'Configure o e-CNPJ A1 desta empresa neste computador.');
+    setText('certificateState',cert?(new Date(cert.validTo)>new Date()?(cert.kind==='e-CPF'?'e-CPF configurado':'Configurado'):'Vencido'):'Não configurado');
+    setText('certificateDetail',cert?`${cert.subject.replaceAll('\n',' · ')} · Validade: ${new Date(cert.validTo).toLocaleDateString('pt-BR')}`:'Configure o A1 e-CNPJ ou e-CPF autorizado para este empregador.');
     $('certificateDisconnect').classList.toggle('hidden',!cert);
+    const rep=await loadRepresentative(context);if(cert?.kind==='e-CPF'&&(!rep?.active||new Date(rep.validUntil)<=new Date()||rep.version!==cert.target?.representative?.version))setText('certificateState','Revisar autorização');
   }catch(error){try{assertOperationContext(context);setText('certificateMessage',error.message);}catch{}}
 }
 async function certificateAgent(action,jobId,context){
@@ -58,4 +59,23 @@ async function downloadJpged(id){
   const context=operationContext(),r=ensureSuccess(await api('/api/jpged/documentos/'+encodeURIComponent(id)+'/download'));assertOperationContext(context);
   const url=new URL(r.body.url);if(url.protocol!=='https:'||!/^jpged-documentos-003020057405\.s3(?:\.sa-east-1)?\.amazonaws\.com$/.test(url.hostname))throw new Error('Endereço de download não reconhecido.');
   const link=document.createElement('a');link.href=url.href;link.rel='noopener noreferrer';link.referrerPolicy='no-referrer';link.download='';document.body.appendChild(link);link.click();link.remove();
+}
+
+async function loadRepresentative(context=operationContext()){
+  $('representativeForm').classList.toggle('hidden',!isMaster());
+  const r=ensureSuccess(await api('/api/jpged/representante'));assertOperationContext(context);const rep=r.body.representative;
+  const active=rep?.active&&new Date(rep.validUntil)>new Date();
+  setText('representativeStatus',rep?`${rep.name} · CPF ${rep.cpf.slice(0,3)}.***.***-${rep.cpf.slice(-2)} · ${active?'Autorizado até '+new Date(rep.validUntil).toLocaleDateString('pt-BR'):'Autorização vencida ou revogada'}`:'Para usar e-CPF, solicite ao Master a conferência e autorização do titular ou representante.');
+  if(isMaster())for(const [key,id] of [['name','representativeName'],['cpf','representativeCpf'],['capacity','representativeCapacity'],['reference','representativeReference'],['validUntil','representativeUntil']])$(id).value=key==='validUntil'?(rep?.[key]?.slice(0,10)||''):(rep?.[key]||(key==='capacity'?'titular':''));
+  return rep;
+}
+async function saveRepresentative(event){
+  event.preventDefault();if(!isMaster()||!activeEmpresaId)return;
+  const context=operationContext(),button=event.target.querySelector('button[type="submit"]');if(button.disabled)return;button.disabled=true;
+  try{const body=formDataObj(event.target);body.checked=event.target.elements.checked.checked;ensureSuccess(await api('/api/jpged/representante',{method:'POST',body:JSON.stringify(body)}));assertOperationContext(context);setText('certificateMessage','Autorização salva. Configure o e-CPF neste computador para vincular o certificado a ela.');await loadRepresentative(context);}
+  catch(error){try{assertOperationContext(context);setText('certificateMessage',error.message);}catch{}}finally{button.disabled=false;}
+}
+async function revokeRepresentative(){
+  if(!isMaster()||!activeEmpresaId||!confirm('Revogar o uso de e-CPF para novas certificações desta empresa? Os documentos existentes serão preservados.'))return;
+  const context=operationContext();try{ensureSuccess(await api('/api/jpged/representante/revogar',{method:'POST',body:'{}'}));assertOperationContext(context);await loadRepresentative(context);setText('certificateMessage','Autorização revogada. Novas certificações com este e-CPF estão bloqueadas.');}catch(error){try{assertOperationContext(context);setText('certificateMessage',error.message);}catch{}}
 }

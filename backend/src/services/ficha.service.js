@@ -10,6 +10,7 @@ export function fichaSnapshots(empresa, trabalhador) {
     empresaSnapshot: {
       nome: textField(empresa.nome || empresa.name),
       cnpj: textField(empresa.cnpj),
+      ...(empresa.inscricaoTipo==='CAEPF'?{inscricaoTipo:'CAEPF'}:{}),
       localidade: textField(empresa.localidade || empresa.city),
       uf: textField(empresa.uf || empresa.UF),
       logoDataUrl: typeof empresa.logoDataUrl === 'string' ? empresa.logoDataUrl : '',

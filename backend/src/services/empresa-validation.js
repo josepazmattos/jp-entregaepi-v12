@@ -30,6 +30,16 @@ export function normalizeCnpj(value) {
   return cnpj;
 }
 
+// CAEPF is a separate register. Never apply the CNPJ checksum to a CAEPF.
+export function normalizeEmployerRegistration(value,type='CNPJ') {
+  if(type==='CNPJ')return normalizeCnpj(value);
+  if(type!=='CAEPF')invalid('Tipo de inscrição');
+  const text=String(value||'');if(!/^[0-9.\/\-\s]+$/.test(text))invalid('CAEPF');
+  const number=text.replace(/[^0-9]/g,'');
+  if(!/^\d{14}$/.test(number)||/^(\d)\1{13}$/.test(number))invalid('CAEPF','Informe os 14 dígitos do CAEPF. Confira o comprovante da Receita Federal.');
+  return number;
+}
+
 export function normalizeCompanyLogin(value, fallback = '') {
   const login = textField(value || fallback, { required: true, field: 'Login da empresa', max: 80 }).toLowerCase();
   if (!/^[a-z0-9][a-z0-9._@-]{0,79}$/.test(login)) invalid('Login', 'Use até 80 caracteres no login: letras sem acentos, números, ponto, hífen, sublinhado ou @.');
