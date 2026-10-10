@@ -562,3 +562,6 @@ h3 { font-size: 16px; line-height: 1.4; letter-spacing: -.01em; }
   .client-company-name{max-width:100%;font-size:12px}
   .worker-toolbar{width:100%}.worker-toolbar .btn{flex:1}
 }
+
+/* Certificate setup follows the existing card spacing. */
+.certificate-card{padding:24px;margin-bottom:24px}.certificate-card .item-actions{margin-top:16px;flex-wrap:wrap}.certificate-card details{margin-top:16px}.certificate-card summary{cursor:pointer;font-weight:700}.certificate-card details ol{padding-left:22px;line-height:1.65}.certificate-card .dialog-message:empty{display:none}

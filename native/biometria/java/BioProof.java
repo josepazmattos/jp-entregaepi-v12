@@ -26,6 +26,7 @@ final class BioProof {
             String template=kind.equals("enroll")?(String)result.get("template"):(String)request.get("template");
             if(template==null||template.length()<40||template.length()>120000)throw new IllegalArgumentException();
             Map<String,Object> proof=JPBiometriaAgent.map("v",1,"kind",kind,"challengeId",request.get("challengeId"),"workerId",request.get("workerId"),"fichaId",request.get("fichaId"),"fingerCode",request.get("fingerCode"),"templateHash",hash(template.getBytes(StandardCharsets.UTF_8)));
+            if(request.containsKey("documentHash"))proof.put("documentHash",request.get("documentHash"));
             if(kind.equals("enroll")){proof.put("enrolled",true);String image=(String)result.get("fingerImageDataUrl");proof.put("imageHash",hash(Base64.getDecoder().decode(image.substring(image.indexOf(',')+1))));}
             else {
                 if(!Boolean.TRUE.equals(result.get("matched")))throw new BioFailure("BIOMETRIA_DIVERGENTE","A digital não corresponde ao cadastro. A ficha continua sem assinatura.",422);

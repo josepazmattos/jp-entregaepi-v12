@@ -1,0 +1,17 @@
+{
+  "verifiedAt": "2026-10-10",
+  "roots": [
+    {
+      "file": "raiz-v5.crt",
+      "sha256": "caa53fc6091c6951887c976e378f6ef89aa6377c55d97b6475422b71ed7e9b17",
+      "source": "https://acjus.jus.br/acjus/repositorio/certificados-da-cadeia-v5/ICP-Brasilv5.crt/",
+      "comparedWith": "http://acraiz.icpbrasil.gov.br/credenciadas/RAIZ/ICP-Brasilv5.crt"
+    },
+    {
+      "file": "raiz-v12.crt",
+      "sha256": "d8478e37ce19c690cf657381e68fe600e4e1a042536830f06847e03e554c4b01",
+      "source": "https://acjus.jus.br/acjus/repositorio/certificados-da-cadeia-v6/ICP-Brasilv12.crt/",
+      "comparedWith": "http://acraiz.icpbrasil.gov.br/credenciadas/RAIZ/ICP-Brasilv12.crt"
+    }
+  ]
+}

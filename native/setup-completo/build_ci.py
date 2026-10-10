@@ -12,7 +12,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parent
 SEED_URL = 'https://www.jptreinamentos.com.br/EntregaEPI/build-inputs/biometria-runtime-d821d5dc.zip'
 SEED_HASH = 'd821d5dc768a51f741fd322d480f851058b39429356d1df13aa84e216bccccf9'
-FILENAME = 'JP-Biometria-Completo-12.9.4.exe'
+FILENAME = 'JP-Biometria-Completo-12.10.0.exe'
 
 
 def build(agent, output, commit):
@@ -43,7 +43,7 @@ def build(agent, output, commit):
     exe = output / FILENAME
     subprocess.run([go, 'build', '-trimpath', '-buildvcs=false', '-ldflags', '-s -w -buildid=', '-o', str(exe.resolve()), '.'],
                    cwd=ROOT, env=dict(os.environ, GOOS='windows', GOARCH='amd64', CGO_ENABLED='0'), check=True)
-    manifest = {'version': '12.9.4', 'buildSha': commit, 'filename': FILENAME,
+    manifest = {'version': '12.10.0', 'buildSha': commit, 'filename': FILENAME,
                 'sizeBytes': exe.stat().st_size, 'sha256': hashlib.sha256(exe.read_bytes()).hexdigest(),
                 'platform': 'windows-amd64', 'reader': 'NITGEN FingKey Hamster DX HFDU06', 'serialIncluded': False}
     (output / 'biometria-complete-release.json').write_text(json.dumps(manifest, indent=2) + '\n')

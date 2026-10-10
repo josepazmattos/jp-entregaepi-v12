@@ -28,7 +28,7 @@ from fetch_ca_snapshot import read_source, verify_installed
 from biometria_release import verify_release, ReleaseError, EXECUTABLE, MANIFEST
 from complete_release import verify as verify_complete, FILENAME as COMPLETE_EXECUTABLE, MANIFEST as COMPLETE_MANIFEST
 
-VERSION = "12.9.4"
+VERSION = "12.10.0"
 REPOSITORY = "josepazmattos/jp-entregaepi-v12"
 ACCOUNT = "003020057405"
 REGION = "sa-east-1"
@@ -284,7 +284,7 @@ def validate_preflight(snapshot: dict) -> str:
 
 def merged_environment(config: dict, commit: str) -> dict:
     variables = dict(config.get("Environment", {}).get("Variables", {}))
-    variables.update(TABLE_NAME=TABLE, DATA_MODE="dynamodb", APP_VERSION=VERSION, BUILD_SHA=commit,
+    variables.update(JPGED_TABLE="JPGED", JPGED_BUCKET="jpged-documentos-003020057405", TABLE_NAME=TABLE, DATA_MODE="dynamodb", APP_VERSION=VERSION, BUILD_SHA=commit,
                      COGNITO_ISSUER=ISSUER, COGNITO_CLIENT_ID=CLIENT,
                      COGNITO_USER_POOL_ID=POOL, AUTH_COMPANY_CLAIM="custom:empresa_id")
     return {"Variables": variables}
@@ -314,7 +314,7 @@ def prepare_frontend(root: Path, stage: Path, commit: str, run_id: str) -> list[
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(path.read_bytes())
         files.append(PublicFile(f"{PREFIX}/{relative.as_posix()}", target, content_type(path)))
-    required = {f"{PREFIX}/assets/{name}" for name in ("app.js", "operations.js", "ficha.js", "biometria.js", "styles.css", EXECUTABLE, MANIFEST, COMPLETE_EXECUTABLE, COMPLETE_MANIFEST)}
+    required = {f"{PREFIX}/assets/{name}" for name in ("app.js", "jpged.js", "operations.js", "ficha.js", "biometria.js", "styles.css", EXECUTABLE, MANIFEST, COMPLETE_EXECUTABLE, COMPLETE_MANIFEST)}
     if not required.issubset({item.key for item in files}):
         raise DeployError("Arquivos obrigatórios do frontend estão ausentes.")
     cfg = {"version": VERSION, "buildSha": commit, "appBasePath": f"/{PREFIX}/", "apiBaseUrl": API_URL,

@@ -98,6 +98,10 @@ public final class JPBiometriaAgentTest {
             check(request(port,"GET","/status",ORIGIN,null,headers("Host","evil.example:"+port)).code==403, "DNS rebinding Host blocked");
             check(request(port,"GET","/status","http://127.0.0.1:"+port,null,null).code==200, "own diagnostic origin allowed");
             check(request(port,"GET","/status","http://127.0.0.1:"+(port+1),null,null).code==403, "different local port origin blocked");
+            check(request(port,"POST","/api/certificate/sign",null,"{}",null).code==403,"certificate signing requires browser origin");
+            check(request(port,"POST","/api/certificate/sign","https://foreign.example","{}",null).code==403,"foreign website cannot request signing");
+            check(request(port,"GET","/api/certificate/sign",ORIGIN,null,null).code==405,"certificate signing cannot use navigation GET");
+            check(request(port,"POST","/api/certificate/configure","http://127.0.0.1:"+port,"{}",null).code==403,"local diagnostics cannot configure certificate");
             check(request(port,"GET","/introspect",ORIGIN,null,null).code==404, "no public SDK introspection");
             check(request(port,"GET","/shutdown",ORIGIN,null,null).code==404, "no public shutdown route");
             check(request(port,"GET","/api/capture",ORIGIN,null,null).code==405, "GET cannot capture");

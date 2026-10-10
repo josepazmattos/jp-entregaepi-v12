@@ -29,6 +29,7 @@ async function scenario(options={}){
   await context.route(url=>url.origin!==origin,async route=>{
     const request=route.request(),url=new URL(request.url());
     const json=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)}).catch(()=>{});
+    if(url.pathname==='/api/jpged/certificado')return json({ok:true,certificate:null});
     state.requests.push({path:url.pathname,host:url.hostname,port:url.port,method:request.method(),headers:request.headers()});
     if(url.pathname==='/auth/resolver')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,username:request.postDataJSON().login})});
     if(url.hostname.startsWith('cognito-idp.')){
@@ -71,7 +72,7 @@ async function scenario(options={}){
 }
 async function main(){
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));origin=`http://127.0.0.1:${server.address().port}`;
-  browser=await chromium.launch({headless:true,args:['--no-sandbox']});report.browser=browser.version();
+  browser=await chromium.launch({...(process.env.JP_TEST_CHROMIUM?{executablePath:process.env.JP_TEST_CHROMIUM}:{}),headless:true,args:['--no-sandbox']});report.browser=browser.version();
   for(const user of ['MASTER-TESTE','CLIENTE-TESTE']){
     const s=await scenario();assert.equal(s.state.requests.length,0);await s.login(user);await s.done();
     for(const id of ['startupApiBadge','startupCaBadge','startupBioBadge'])assert.equal(await s.page.locator('#'+id).getAttribute('data-state'),'success');
@@ -111,14 +112,14 @@ async function main(){
   {
     const s=await scenario({version:'12.9.3'});await s.login();await s.done();
     await s.page.evaluate(()=>goScreen('biometria'));
-    assert.match(await s.page.locator('#bioRepairLink').getAttribute('href'),/JP-Biometria-Completo-12\.9\.4\.exe$/);
+    assert.match(await s.page.locator('#bioRepairLink').getAttribute('href'),/JP-Biometria-Completo-12\.10\.0\.exe$/);
     assert.equal(await s.page.locator('#bioRepairLink').innerText(),'Baixar instalador completo');
     // Preserve the real click listener but avoid downloading the 55 MB installer in a UI test.
     await s.page.locator('#bioRepairLink').evaluate(node=>node.addEventListener('click',event=>event.preventDefault(),{once:true}));
     await s.page.locator('#bioRepairLink').click();
     await s.page.evaluate(()=>resumeInstallationWatch());
     assert.ok(await s.page.evaluate(()=>sessionStorage.getItem('jp-biometria-install-until')),'old working agent must not stop monitoring');
-    s.state.version='12.9.4';
+    s.state.version='12.10.0';
     await s.page.evaluate(()=>window.dispatchEvent(new Event('focus')));
     await s.page.waitForFunction(()=>!sessionStorage.getItem('jp-biometria-install-until'));
     assert.equal(await s.page.locator('#startupBioBadge').getAttribute('data-state'),'success');

@@ -1,0 +1,3 @@
+import {readFileSync} from 'node:fs';import {join} from 'node:path';import * as asn1 from 'asn1js';import * as pki from 'pkijs';import assert from 'node:assert/strict';import {verifyCompanyCms} from '../../src/services/jpged-pki.js';
+const dir=process.argv[2],root=new pki.Certificate({schema:asn1.fromBER(readFileSync(join(dir,'root.der'))).result});
+const answer=await verifyCompanyCms(readFileSync(join(dir,'signed.der')),readFileSync(join(dir,'content')),'12345678000195',{roots:[root],loadCrl:async()=>readFileSync(join(dir,'fresh.crl'))});assert.equal(answer.certificate.cnpj,'12345678000195');console.log('Production Windows CMS signer verified independently in backend.');

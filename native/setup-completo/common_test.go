@@ -20,7 +20,7 @@ func sample(t *testing.T, name string, content []byte, corrupt bool) []byte {
 	if corrupt {
 		hash = "invalid"
 	}
-	m := manifest{"12.9.4", []entry{{name, hash, int64(len(content))}}}
+	m := manifest{"12.10.0", []entry{{name, hash, int64(len(content))}}}
 	v, _ := json.Marshal(m)
 	f, _ := z.Create("manifest.json")
 	f.Write(v)

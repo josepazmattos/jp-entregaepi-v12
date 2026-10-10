@@ -41,7 +41,7 @@ def build(inputs, jre, agent, output, go):
     data['agent.exe'] = agent.read_bytes()
     if not data['agent.exe'].startswith(b'MZ'):
         raise ValueError('Agent must be a Windows executable')
-    manifest = {'version': '12.9.4', 'files': [
+    manifest = {'version': '12.10.0', 'files': [
         {'name': n, 'size': len(b), 'sha256': hashlib.sha256(b).hexdigest()}
         for n, b in sorted(data.items())]}
     with zipfile.ZipFile(ROOT / 'payload.zip', 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:

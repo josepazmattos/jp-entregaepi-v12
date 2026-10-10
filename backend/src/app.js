@@ -7,6 +7,7 @@ import fichasRoutes from './routes/fichas.routes.js';
 import caepiRoutes from './routes/caepi.routes.js';
 import auditoriaRoutes from './routes/auditoria.routes.js';
 import loginRoutes from './routes/login.routes.js';
+import jpgedRoutes from './routes/jpged.routes.js';
 import { requireAuth } from './middleware/auth.js';
 import { probeStorage } from './db/store.js';
 import * as storage from './db/store.js';
@@ -26,7 +27,7 @@ app.get('/health', async (req, res) => {
   res.status(storage.ready ? 200 : 503).json({
     ok: storage.ready,
     service: 'JP EntregaEPI V12 API',
-    version: process.env.APP_VERSION || '12.9.4',
+    version: process.env.APP_VERSION || '12.10.0',
     buildSha: process.env.BUILD_SHA || null,
     mode: storage.mode,
     durable: storage.durable,
@@ -43,13 +44,14 @@ app.use('/api/trabalhadores', trabalhadoresRoutes);
 app.use('/api/epis', episRoutes);
 app.use('/api/fichas', fichasRoutes);
 app.use('/api/auditoria', auditoriaRoutes);
+app.use('/api/jpged', jpgedRoutes);
 
 app.use((req, res) => res.status(404).json({ ok: false, error: 'Rota não encontrada', path: req.path }));
 
 app.use((error, req, res, next) => {
   if (res.headersSent) return next(error);
   const status = Number.isInteger(error.status) && error.status >= 400 && error.status < 600 ? error.status : 500;
-  const exposed = status < 500 || error.code === 'PERSISTENCIA_NAO_CONFIGURADA' || error.code === 'AUTORIZACAO_NAO_CONFIGURADA' || error.code === 'CAEPI_BASE_INDISPONIVEL';
+  const exposed = status < 500 || error.code === 'PERSISTENCIA_NAO_CONFIGURADA' || error.code === 'AUTORIZACAO_NAO_CONFIGURADA' || error.code === 'CAEPI_BASE_INDISPONIVEL' || ['JPGED_UNAVAILABLE','ICP_TRUST_UNAVAILABLE','CERTIFICADO_REVOGACAO_INDISPONIVEL'].includes(error.code);
   res.status(status).json({ ok: false, error: exposed ? error.message : 'Não foi possível concluir a operação. Tente novamente.', code: error.code || (status === 500 ? 'ERRO_INTERNO' : 'REQUISICAO_INVALIDA') });
 });
 

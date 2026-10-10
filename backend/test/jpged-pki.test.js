@@ -1,0 +1,23 @@
+import test,{after} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,readFileSync,writeFileSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {execFileSync} from 'node:child_process';
+import * as asn1 from 'asn1js';
+import * as pki from 'pkijs';
+import {verifyCompanyCms,publicAddress,trustRoots} from '../src/services/jpged-pki.js';
+import {buildSigningPdf,embedCms,signingBytes} from '../src/services/jpged-pdf.js';
+const dir=mkdtempSync(join(tmpdir(),'jpged-crypto-'));after(()=>rmSync(dir,{recursive:true,force:true}));
+execFileSync('python3',[new URL('./helpers/jpged-fixture.py',import.meta.url).pathname,dir]);
+const root=new pki.Certificate({schema:asn1.fromBER(readFileSync(join(dir,'root.der'))).result});
+const options={roots:[root],loadCrl:async()=>readFileSync(join(dir,'fresh.crl'))};
+function sign(content){writeFileSync(join(dir,'content'),content);execFileSync('openssl',['cms','-sign','-binary','-cades','-md','sha256','-in',join(dir,'content'),'-signer',join(dir,'leaf.pem'),'-inkey',join(dir,'leaf.key'),'-certfile',join(dir,'root.pem'),'-outform','DER','-out',join(dir,'signed.der')]);return readFileSync(join(dir,'signed.der'));}
+const content=Buffer.from('JPGED SYNTHETIC DOCUMENT'),cms=sign(content);
+test('CAdES real verifica assinatura, CNPJ, cadeia, ESS e revogação',async()=>{const r=await verifyCompanyCms(cms,content,'12345678000195',options);assert.equal(r.certificate.cnpj,'12345678000195');assert.equal(r.evidence.crls.length,1);assert.equal(r.evidence.certificates.length,2);});
+test('documento adulterado e CNPJ de outra empresa são recusados',async()=>{await assert.rejects(verifyCompanyCms(cms,Buffer.from('changed'),'12345678000195',options),{code:'CERTIFICADO_ASSINATURA_INVALIDA'});await assert.rejects(verifyCompanyCms(cms,content,'99999999000199',options),{code:'CERTIFICADO_EMPRESA_DIVERGENTE'});});
+test('certificado não confiável ou vencido é recusado antes de buscar LCR',async()=>{let fetched=false;await assert.rejects(verifyCompanyCms(cms,content,'12345678000195',{roots:[],loadCrl:async()=>{fetched=true;}}),{code:'CERTIFICADO_CADEIA_INVALIDA'});assert.equal(fetched,false);await assert.rejects(verifyCompanyCms(cms,content,'12345678000195',{...options,now:new Date(Date.now()+60*86400000)}),{code:'CERTIFICADO_CADEIA_INVALIDA'});});
+test('revogado, LCR vencida e rede indisponível não concluem',async()=>{await assert.rejects(verifyCompanyCms(cms,content,'12345678000195',{...options,loadCrl:async()=>readFileSync(join(dir,'revoked.crl'))}),{code:'CERTIFICADO_REVOGADO'});for(const loadCrl of [async()=>readFileSync(join(dir,'expired.crl')),async()=>{throw new Error('NETWORK');}])await assert.rejects(verifyCompanyCms(cms,content,'12345678000195',{...options,loadCrl}),{code:'CERTIFICADO_REVOGACAO_INDISPONIVEL'});});
+test('endereços privados, loopback, metadata e IPv4 mapeado são bloqueados',()=>{for(const ip of ['127.0.0.1','10.0.0.1','169.254.169.254','192.168.1.1','::1','::ffff:127.0.0.1','fc00::1'])assert.equal(publicAddress(ip),false,ip);assert.equal(publicAddress('8.8.8.8'),true);});
+test('raízes de produção são oficiais e excluem CA sintética',()=>{assert.ok(trustRoots().length>=2);for(const cert of trustRoots())assert.notEqual(Buffer.from(cert.toSchema(true).toBER(false)).toString('hex'),readFileSync(join(dir,'root.der')).toString('hex'));});
+test('PDF com entrega e devolução preserva ByteRange e valida CMS incorporado',async()=>{const ficha={id:'synthetic',numero:'TESTE',empresaId:'company',trabalhadorId:'worker',trabalhadorNome:'COLABORADOR SINTÉTICO',tipo:'Mista',data:'10/10/2026',empresaSnapshot:{nome:'EMPRESA SINTÉTICA',cnpj:'12345678000195'},trabalhadorSnapshot:{nomeCompleto:'COLABORADOR SINTÉTICO'},assinaturaBiometrica:{id:'bio',signedAt:new Date().toISOString(),dedo:'R_INDEX'},itens:Array.from({length:60},(_,i)=>({quantidade:i+1,epiNome:'CAPACETE DE SEGURANÇA',ca:'365',datasMovimentacao:i%2?{devolucao:'10/10/2026'}:{entrega:'10/10/2026'}}))};const r=await buildSigningPdf(ficha,{subject:'SYNTHETIC COMPANY'}),signature=sign(r.signedBytes),final=embedCms(r.pdf,r.start,r.end,signature);assert.deepEqual(signingBytes(final,r.start,r.end),r.signedBytes);await verifyCompanyCms(signature,signingBytes(final,r.start,r.end),'12345678000195',options);writeFileSync(join(dir,'signed.pdf'),final);if(process.env.JPGED_PDF_OUTPUT)writeFileSync(process.env.JPGED_PDF_OUTPUT,final);const dump=execFileSync('pdftotext',[join(dir,'signed.pdf'),'-']).toString();assert.match(dump,/CAPACETE/);assert.match(dump,/Devolução/);assert.match(dump,/60/);});

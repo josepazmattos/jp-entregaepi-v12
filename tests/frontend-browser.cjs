@@ -8,7 +8,7 @@ const {chromium} = require('playwright');
 const frontend = path.resolve(__dirname, '../frontend/EntregaEPI');
 const output = path.join(__dirname, 'output');
 fs.mkdirSync(output,{recursive:true});
-const results={suite:'Interface e impressão V12.9.4',syntheticData:true,realApiUsed:false,checks:[],pdfs:{},layouts:{}};
+const results={suite:'Interface e impressão V12.10.0',syntheticData:true,realApiUsed:false,checks:[],pdfs:{},layouts:{}};
 const company={id:'EMPRESA-TESTE',nome:'EMPRESA EXEMPLO',cnpj:'00.000.000/0000-00',localidade:'Cidade de Teste',uf:'MS'};
 const worker={id:'TRABALHADOR-TESTE',empresaId:company.id,nomeCompleto:'TRABALHADOR DE TESTE',cpf:'000.000.000-00',funcao:'FUNÇÃO DE TESTE',matriculaESocial:'00042',status:'Ativo'};
 const epi={id:'EPI-TESTE',empresaId:company.id,descricao:'EQUIPAMENTO DE TESTE',ca:'00000',fabricante:'FABRICANTE DE TESTE'};
@@ -175,7 +175,7 @@ async function printAndInspect(context,record,prefix,{expectedPages=1}={}){
 async function main(){
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const origin=`http://127.0.0.1:${server.address().port}`;
-  browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+  browser=await chromium.launch({...(process.env.JP_TEST_CHROMIUM?{executablePath:process.env.JP_TEST_CHROMIUM}:{}),headless:true,args:['--no-sandbox']});
   results.browser=await browser.version();
   const context=await browser.newContext({viewport:{width:1366,height:900},locale:'pt-BR',timezoneId:'America/Campo_Grande'});
   await context.addInitScript(()=>Object.defineProperty(navigator.permissions,'query',{value:async()=>({state:'prompt'})}));
@@ -216,7 +216,7 @@ async function main(){
     }
     if(url.origin==='http://127.0.0.1:8789'&&url.pathname==='/status'){
       biometricRequests++;
-      await json(200,{ok:true,service:'JP Biometria Local Java',version:'12.9.4',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture',verify:true,templates:true},sdk:true,reader:true,deviceCount:1,deviceName:'NITGEN HFDU06'});return;
+      await json(200,{ok:true,service:'JP Biometria Local Java',version:'12.10.0',capabilities:{capture:true,captureMethod:'POST',capturePath:'/api/capture',verify:true,templates:true},sdk:true,reader:true,deviceCount:1,deviceName:'NITGEN HFDU06'});return;
     }
     if(!url.hostname.endsWith('.execute-api.sa-east-1.amazonaws.com')){
       results.unexpectedExternalRequest=true;
@@ -225,7 +225,7 @@ async function main(){
     requests.push({path:url.pathname,method:request.method(),authorizationPresent:request.headers().authorization===`Bearer ${idToken}`,empresaId:request.headers()['x-empresa-id']});
     if(apiFailure){await json(apiFailure,{ok:false,error:apiFailure===403?'Perfil não configurado. Solicite ao administrador.':'Sessão expirada.'});return;}
     if(url.pathname==='/health'){
-      await json(200,{ok:true,version:'12.9.4',mode:'dynamodb',durable:true,storageReady:true,buildSha:'BUILD-SINTETICO',caepi:{sourceKind:'official-snapshot',officialSnapshot:true,live:false,downloadedAt:'2026-10-06T16:00:00Z'}});return;
+      await json(200,{ok:true,version:'12.10.0',mode:'dynamodb',durable:true,storageReady:true,buildSha:'BUILD-SINTETICO',caepi:{sourceKind:'official-snapshot',officialSnapshot:true,live:false,downloadedAt:'2026-10-06T16:00:00Z'}});return;
     }
     if(url.pathname.startsWith('/api/caepi/')){
       if(url.pathname.endsWith('/654321')){
@@ -237,6 +237,7 @@ async function main(){
       await json(200,{ok:true,item:{found:true,name:'EPI SINTÉTICO DE CONSULTA',description:'EPI SINTÉTICO DE CONSULTA',ca:'123456',status:'Válido na base consultada',officialSnapshot:true,verified:false,live:false,requiresOfficialCheck:true,downloadedAt:'2026-10-06T16:00:00Z',sourceUpdatedAt:null,warning:'Base oficial do MTE obtida em 06/10/2026; confirme atualizações no portal.'}});return;
     }
     if(request.headers().authorization!==`Bearer ${idToken}`){await json(401,{ok:false,error:'Não autenticado'});return;}
+    if(url.pathname==='/api/jpged/certificado')return json(200,{ok:true,certificate:null});
     const collection=url.pathname.replace(/^\/api\//,'');
     if(request.method()==='GET'&&Object.hasOwn(database,collection)){await json(200,{ok:true,items:database[collection]});return;}
     if(request.method()==='POST'&&collection==='fichas'){
@@ -322,7 +323,7 @@ async function main(){
 
   await page.locator('.nav [data-screen="config"]').click();
   await assertDiagnosticsClosed('config');
-  assert.ok((await page.locator('#configVersion').innerText()).includes('12.9.4'));
+  assert.ok((await page.locator('#configVersion').innerText()).includes('12.10.0'));
   assert.ok((await page.locator('#configCompany').innerText()).includes(company.nome));
   await inspectLayout('desktop-config');
   await page.locator('#healthTestButton').click();

@@ -25,14 +25,14 @@ let browser, page, claims, holdPreview = false, releasePreview, previewStarted, 
   claims = { ...baseClaims, sub: 'MASTER-SINTETICO', 'cognito:groups': ['MASTER'] };
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
-  browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  browser = await chromium.launch({...(process.env.JP_TEST_CHROMIUM?{executablePath:process.env.JP_TEST_CHROMIUM}:{}), headless: true, args: ['--no-sandbox'] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'pt-BR' });
   context.on('page', p => p.on('pageerror', error => errors.push(error.message)));
   await context.route(url => url.origin !== origin, async route => {
     const req = route.request(), url = new URL(req.url());
     const json = (status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (url.hostname.startsWith('cognito-idp.')) return json(200, { AuthenticationResult: { IdToken: 'header.' + Buffer.from(JSON.stringify(claims)).toString('base64url') + '.synthetic', AccessToken: 'synthetic', ExpiresIn: 3600 } });
-    if (url.hostname === '127.0.0.1') return json(200, { ok: true, service: 'JP Biometria', version: '12.9.4', sdk: true, reader: true, deviceCount: 1, capabilities: { capture: true, verify: true, templates: true } });
+    if (url.hostname === '127.0.0.1') return json(200, { ok: true, service: 'JP Biometria', version: '12.10.0', sdk: true, reader: true, deviceCount: 1, capabilities: { capture: true, verify: true, templates: true } });
     assert.ok(url.hostname.endsWith('.execute-api.sa-east-1.amazonaws.com'));
     if (url.pathname === '/health') return json(200, { ok: true, durable: true, storageReady: true });
     if (url.pathname.startsWith('/api/caepi/')) return json(200, { ok: true, item: { ca: '365', name: 'EPI SINTÉTICO', found: true, officialSnapshot: true, downloadedAt: '2026-10-10T00:00:00Z', autofillAllowed: true } });

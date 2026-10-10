@@ -166,7 +166,7 @@ def make_project(root):
     (root / "backend/src/lambda.js").write_text("export const handler = () => {};")
     (root / "backend/node_modules/synthetic/index.js").write_text("export default {};")
     (root / "frontend/EntregaEPI/index.html").write_text('<script src="/__APP_PREFIX__/assets/app.js"></script>')
-    for name in ("app.js", "operations.js", "ficha.js", "biometria.js", "styles.css"):
+    for name in ("app.js", "jpged.js", "operations.js", "ficha.js", "biometria.js", "styles.css"):
         (root / "frontend/EntregaEPI/assets" / name).write_text("/* fixture sintética */")
     binary = bytearray(512)
     binary[:2] = b"MZ"
@@ -175,12 +175,12 @@ def make_project(root):
     binary[152:154] = b"\x0b\x02"
     (root / "frontend/EntregaEPI/assets" / deploy.EXECUTABLE).write_bytes(binary)
     (root / "frontend/EntregaEPI/assets" / deploy.MANIFEST).write_text(json.dumps({
-        "version": "12.9.4", "buildSha": COMMIT, "filename": deploy.EXECUTABLE,
+        "version": "12.10.0", "buildSha": COMMIT, "filename": deploy.EXECUTABLE,
         "sha256": hashlib.sha256(binary).hexdigest(), "sizeBytes": len(binary)}))
     complete_binary = binary + bytes(1024)
     (root / "frontend/EntregaEPI/assets" / deploy.COMPLETE_EXECUTABLE).write_bytes(complete_binary)
     (root / "frontend/EntregaEPI/assets" / deploy.COMPLETE_MANIFEST).write_text(json.dumps({
-        "version": "12.9.4", "buildSha": COMMIT, "filename": deploy.COMPLETE_EXECUTABLE,
+        "version": "12.10.0", "buildSha": COMMIT, "filename": deploy.COMPLETE_EXECUTABLE,
         "sha256": hashlib.sha256(complete_binary).hexdigest(), "sizeBytes": len(complete_binary)}))
     ca = root / "backend/src/data/caepi"
     shard_bytes = gzip.compress(json.dumps({"items": [{"ca": "365", "name": "EPI SINTÉTICO"}]}).encode())
@@ -330,7 +330,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(cfg["MemorySize"], 256)
         self.assertTrue(any(r.get("AuthorizationType") == "JWT" for r in self.aws.snapshot["routes"]["Items"]))
         deleted = {c[2]["Key"] for c in self.aws.calls if c[0:2] == ("s3api", "delete-object")}
-        self.assertEqual(deleted, {"EntregaEPI/assets/operations.js", "EntregaEPI/assets/ficha.js", "EntregaEPI/assets/biometria.js",
+        self.assertEqual(deleted, {"EntregaEPI/assets/jpged.js", "EntregaEPI/assets/operations.js", "EntregaEPI/assets/ficha.js", "EntregaEPI/assets/biometria.js",
             "EntregaEPI/assets/" + deploy.EXECUTABLE, "EntregaEPI/assets/" + deploy.MANIFEST,
             "EntregaEPI/assets/" + deploy.COMPLETE_EXECUTABLE, "EntregaEPI/assets/" + deploy.COMPLETE_MANIFEST,
             "EntregaEPI/version.json"})

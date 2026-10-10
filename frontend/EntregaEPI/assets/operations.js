@@ -2,6 +2,7 @@
 let workerEdit=null;
 const operationWindows=new Set(),operationDialogs=new Set(),operationControllers=new Set();
 function closeOperations(){
+  if(typeof resetJpged==='function')resetJpged();
   const editing=Boolean(workerEdit);workerEdit=null;
   const form=$('trabalhadorForm');if(form&&editing){form.reset();setText('workerFormTitle','Novo trabalhador');$('workerEditCancel')?.classList.add('hidden');}
   for(const controller of operationControllers)controller.abort();operationControllers.clear();
@@ -140,7 +141,7 @@ function renderBiometricDialog(dialog,worker,ficha){
         const client=getBiometricClient(),base=ficha?'/api/fichas/'+encodeURIComponent(ficha.id):'/api/trabalhadores/'+encodeURIComponent(worker.id);
         // Independent preparation only. Capture starts after BOTH checks succeed.
         const prepared=await Promise.allSettled([
-          client.discover({signal:controller.signal,requireEnrollmentImage:!ficha}).then(status=>{if(!status.ready)throw window.JP_BIOMETRIA.unavailableError(status);if(!ficha&&!status.enrollmentImageAvailable){const error=new Error('O JP Biometria deste computador precisa ser atualizado para recadastrar com imagem. Instale a atualização abaixo e tente novamente. A digital anterior foi preservada.');error.code='BIO_AGENT_IMAGE_UPDATE';throw error;}if(!status.verificationAvailable)throw new Error('Atualize o JP Biometria em Sistema → Biometria para cadastrar e comparar digitais.');return status;}),
+          client.discover({signal:controller.signal,requireEnrollmentImage:!ficha}).then(status=>{if(!status.ready)throw window.JP_BIOMETRIA.unavailableError(status);if(!ficha&&!status.enrollmentImageAvailable){const error=new Error('O JP Biometria deste computador precisa ser atualizado para recadastrar com imagem. Instale a atualização abaixo e tente novamente. A digital anterior foi preservada.');error.code='BIO_AGENT_IMAGE_UPDATE';throw error;}if(ficha&&!status.documentHashAvailable)throw new Error('Atualize o JP Biometria em Biometria antes de confirmar esta ficha. A nova versão vincula a digital ao conteúdo completo.');if(!status.verificationAvailable)throw new Error('Atualize o JP Biometria em Sistema → Biometria para cadastrar e comparar digitais.');return status;}),
           api(base+'/biometria/desafio',{method:'POST',body:JSON.stringify({fingerCode}),signal:controller.signal}).then(ensureSuccess)
         ]);assertOperationContext(context);
         const failed=prepared.find(result=>result.status==='rejected');if(failed)throw failed.reason;
@@ -157,8 +158,9 @@ function renderBiometricDialog(dialog,worker,ficha){
       if(ficha){
         const item=result.body?.item;if(item?.id!==ficha.id||item.assinaturaBiometrica?.verificada!==true)throw new Error('O sistema não confirmou a assinatura desta ficha.');
         cache.fichas=cache.fichas.map(x=>x.id===item.id?item:x);renderFichas();renderDashboard();
-        updatePrintWindow(dialog.ownerDocument.defaultView,item);
+        const preview=dialog.ownerDocument.defaultView;updatePrintWindow(preview,item);
         dialog.close();
+        if(typeof certifyFicha==='function'){try{await certifyFicha(item.id,preview,context);}catch(error){if(!preview.closed)preview.document.getElementById('printSignatureStatus').textContent='Biometria confirmada · Certificação pendente: '+error.message;}}
       }else{
         const saved=result.body?.biometria,item=result.body?.item;
         if(item?.id!==worker.id||saved?.fingerCode!==fingerCode||!saved.imageDataUrl)throw new Error('A imagem do cadastro não foi confirmada. Atualize a lista e confira a digital antes de tentar novamente.');
@@ -184,8 +186,10 @@ function renderBiometricDialog(dialog,worker,ficha){
 function printToolbarCSS(){return `.print-toolbar{position:sticky;top:0;display:flex;gap:12px;align-items:center;justify-content:center;padding:14px;background:#f0f6f2;border-bottom:1px solid #d6e3db;font:14px Arial,sans-serif;margin-bottom:18px;z-index:2;flex-wrap:wrap}.print-toolbar button,.jp-dialog button{border:1px solid #c6d8cd;border-radius:8px;padding:12px 16px;background:#fff;color:#174c35;cursor:pointer;font-weight:bold}.print-toolbar button.primary,.jp-dialog .btn-primary{background:#078448;color:white}.print-toolbar button:disabled{opacity:.55;cursor:default}.jp-dialog{border:0;border-radius:16px;padding:28px;width:min(660px,90vw);max-height:90vh;font:15px/1.5 Arial,sans-serif;color:#183d31}.jp-dialog::backdrop{background:#173a2c88}.jp-dialog select{display:block;width:100%;padding:12px;border:1px solid #c4d8cd;border-radius:8px;margin:8px 0}.jp-dialog .dialog-actions{display:flex;gap:12px;margin-top:20px;flex-wrap:wrap}.jp-dialog .dialog-message{margin-top:16px;white-space:pre-line}.jp-dialog .error{color:#a23126}.bio-summary{display:flex;gap:8px;flex-wrap:wrap;font-size:12px}.bio-summary span{background:#eaf4ed;border-radius:12px;padding:5px 9px}@media print{.print-toolbar,.jp-dialog{display:none!important}body{padding:0!important}}`;}
 function setupPrintWindow(preview,ficha,context){
   const doc=preview.document,style=doc.createElement('style');style.textContent=printToolbarCSS();doc.head.appendChild(style);
-  const toolbar=doc.createElement('div');toolbar.className='print-toolbar';toolbar.innerHTML='<span id="printSignatureStatus"></span><button id="signDocument" class="primary" type="button">Assinar biometricamente</button><button id="printDocument" type="button">Imprimir</button>';doc.body.prepend(toolbar);
+  const toolbar=doc.createElement('div');toolbar.className='print-toolbar';toolbar.innerHTML='<span id="printSignatureStatus"></span><button id="signDocument" class="primary" type="button">Confirmar movimentações e assinar</button><button id="certifyDocument" type="button" hidden>Certificar documento</button><button id="downloadOriginal" type="button" hidden>Baixar PDF original</button><button id="printDocument" type="button">Imprimir</button>';doc.body.prepend(toolbar);
   toolbar.querySelector('#printDocument').onclick=()=>preview.print();
+  toolbar.querySelector('#certifyDocument').onclick=async()=>{const button=doc.getElementById('certifyDocument');button.disabled=true;try{await certifyFicha(ficha.id,preview,context);}catch(error){doc.getElementById('printSignatureStatus').textContent='Biometria confirmada · Certificação pendente: '+error.message;}finally{button.disabled=false;}};
+  toolbar.querySelector('#downloadOriginal').onclick=()=>downloadJpged(preview.jpgedDocumentId).catch(error=>{doc.getElementById('printSignatureStatus').textContent=error.message;});
   toolbar.querySelector('#signDocument').onclick=async()=>{
     try{assertOperationContext(context);const result=ensureSuccess(await api('/api/fichas/'+encodeURIComponent(ficha.id)+'/assinatura-contexto'));assertOperationContext(context);
       const current=result.body.ficha,worker=result.body.worker;
@@ -204,9 +208,10 @@ function updatePrintWindow(preview,ficha){
   const html=window.JP_FICHA.buildDocument(ficha,empresa,worker,cache.epis,{defaultLogo:documentLogoUrl()});
   const parsed=new DOMParser().parseFromString(html,'text/html');doc.querySelector('main.sheet')?.replaceWith(doc.importNode(parsed.querySelector('main.sheet'),true));
   doc.getElementById('signDocument').disabled=!canSignFicha(ficha);doc.getElementById('printSignatureStatus').textContent=fichaStatus(ficha);
+  if(doc.getElementById('certifyDocument')){doc.getElementById('certifyDocument').hidden=ficha.status!=='assinada'||!ficha.assinaturaBiometrica?.verificada||Boolean(ficha.certificacao?.documentId);doc.getElementById('downloadOriginal').hidden=!ficha.certificacao?.documentId;preview.jpgedDocumentId=ficha.certificacao?.documentId||'';}
 }
 function canSignFicha(ficha){return ficha?.status==='pendente'||ficha?.status==='assinada'&&ficha.assinaturaBiometrica?.verificada!==true;}
-function fichaStatus(ficha){return ficha.status==='cancelada'?'Excluída / cancelada':ficha.status==='assinada'?(ficha.assinaturaBiometrica?.verificada===true?'Assinada biometricamente':'Assinada — registro anterior sem conferência'):'Não assinada';}
+function fichaStatus(ficha){return ficha.status==='cancelada'?'Excluída / cancelada':ficha.status==='assinada'?(ficha.assinaturaBiometrica?.verificada===true?(ficha.certificacao?.status==='certificado'?'Biometria confirmada · Documento certificado':'Biometria confirmada · Certificação pendente'):'Assinada — registro anterior sem conferência'):'Não assinada';}
 function deleteFicha(id){
   const ficha=cache.fichas.find(x=>x.id===id);if(!ficha)return;
   const context=operationContext(),signed=ficha.status==='assinada'||Boolean(ficha.assinaturaBiometrica);

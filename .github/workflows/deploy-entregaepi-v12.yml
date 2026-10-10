@@ -4,7 +4,8 @@ on:
   push:
     branches:
       - main
-      - instalador-completo-12.9.4
+      - jpged-certificacao-20261010
+      - instalador-completo-12.10.0
       - v12-teste
       - install-v12-7-recovery-20261006
   workflow_dispatch:
@@ -69,7 +70,7 @@ jobs:
       - name: Compilar o reparador Windows do commit testado
         run: python3 native/biometria/build.py --output native/biometria/dist --build-sha "$GITHUB_SHA"
       - name: Compilar e testar o instalador completo com os componentes fixados
-        run: python3 native/setup-completo/build_ci.py --agent native/biometria/dist/JP-Biometria-Setup-12.9.4.exe --output native/setup-completo/dist --commit "$GITHUB_SHA"
+        run: python3 native/setup-completo/build_ci.py --agent native/biometria/dist/JP-Biometria-Setup-12.10.0.exe --output native/setup-completo/dist --commit "$GITHUB_SHA"
       - name: Preparar o download completo para os testes do site
         run: python3 infra/complete_release.py --source native/setup-completo/dist --destination frontend/EntregaEPI/assets --commit "$GITHUB_SHA"
       - name: Conferir e preparar o download do componente local
@@ -78,6 +79,13 @@ jobs:
         run: npm ci --prefix backend --no-audit --no-fund
       - name: Preparar a cópia oficial CAEPI fixada por hash
         run: python3 infra/fetch_ca_snapshot.py
+      - name: Preparar certificados sintéticos de teste
+        run: python3 -m pip install cryptography==46.0.3
+      - name: Preparar leitura dos PDFs gerados nos testes
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y poppler-utils
+          pdftotext -v
       - name: Testar backend com dados sintéticos
         run: npm test --prefix backend
       - name: Validar automação de implantação
@@ -89,11 +97,6 @@ jobs:
         run: npm ci --prefix tests --no-audit --no-fund
       - name: Preparar Chromium
         run: npm --prefix tests run install-browser
-      - name: Preparar leitura dos PDFs gerados nos testes
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y poppler-utils
-          pdftotext -v
       - name: Testar dashboard, login e ficha no navegador
         run: npm --prefix tests test
       - name: Guardar o componente Windows aprovado por estes testes
@@ -101,7 +104,7 @@ jobs:
         with:
           name: jp-biometria-windows-${{ github.sha }}
           path: |
-            native/biometria/dist/JP-Biometria-Setup-12.9.4.exe
+            native/biometria/dist/JP-Biometria-Setup-12.10.0.exe
             native/biometria/dist/biometria-release.json
           if-no-files-found: error
           retention-days: 14
@@ -137,6 +140,16 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      - name: Preparar Node.js para validar CMS Windows
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+      - name: Testar certificado A1 sintético no assinador Windows
+        shell: pwsh
+        run: |
+          python -m pip install cryptography==46.0.3
+          npm ci --prefix backend --no-audit --no-fund
+          python infra/windows_certificate_smoke.py
       - name: Baixar o mesmo executável aprovado pelo job de testes
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
