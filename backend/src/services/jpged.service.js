@@ -1,4 +1,5 @@
 import { randomUUID, createPublicKey, verify } from 'node:crypto';
+import { validateCaptureImage } from './capture-image.js';
 import { httpError } from '../middleware/auth.js';
 import { documentHash, sha256 } from './document-integrity.js';
 import { buildSigningPdf, signingBytes, embedCms } from './jpged-pdf.js';
@@ -35,6 +36,8 @@ export function createGedService({ged,store,validate=verifyCompanyCms,buildPdf=b
     catch{error(409,'A prova biométrica não pôde ser validada.','JPGED_PROVA_INVALIDA');}
     if(!proof.documentHash)error(409,'Esta ficha possui um registro biométrico anterior ao JPGED. O original permanece disponível no fluxo anterior.','JPGED_REGISTRO_ANTERIOR');
     if(proof.documentHash!==documentHash(ficha)||proof.fichaId!==ficha.id||proof.workerId!==ficha.trabalhadorId||proof.matched!==true)error(409,'O conteúdo da ficha difere do confirmado pelo trabalhador.','JPGED_DOCUMENTO_ALTERADO');
+    const captured=validateCaptureImage(bio.realFingerImage);
+    if(proof.imageHash!==sha256(captured.bytes)||proof.fingerCode!==bio.dedo||proof.kind!=='verify')error(409,'A imagem da confirmação biométrica perdeu a integridade.','JPGED_PROVA_INVALIDA');
     return proof.documentHash;
   }
   async function prepare(ficha,actor) {

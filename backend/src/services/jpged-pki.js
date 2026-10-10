@@ -29,10 +29,10 @@ export async function fetchCrl(url) {
   if(!addresses.length||addresses.some(x=>!publicAddress(x.address)))reject('Endereço de revogação não permitido.','CRL_ADDRESS');
   return new Promise((resolve,rejectPromise)=>{
     const chosen=addresses[0];
-    const request=(target.protocol==='https:'?https:http).get(target,{lookup:(host,options,callback)=>callback(null,chosen.address,chosen.family),timeout:6000,headers:{Accept:'application/pkix-crl, application/octet-stream'}},response=>{
+    const request=(target.protocol==='https:'?https:http).get(target,{family:chosen.family,autoSelectFamily:false,lookup:(host,options,callback)=>options.all?callback(null,[chosen]):callback(null,chosen.address,chosen.family),timeout:6000,headers:{Accept:'application/pkix-crl, application/octet-stream'}},response=>{
       if(response.statusCode!==200){response.resume();rejectPromise(new Error('CRL_HTTP'));return;}
       const chunks=[];let size=0;response.on('data',chunk=>{size+=chunk.length;if(size>24*1024*1024){request.destroy(new Error('CRL_LIMIT'));return;}chunks.push(chunk);});response.on('end',()=>resolve(Buffer.concat(chunks)));response.on('error',rejectPromise);
-    });request.on('timeout',()=>request.destroy(new Error('CRL_TIMEOUT')));request.on('error',rejectPromise);
+    });const deadline=setTimeout(()=>request.destroy(new Error('CRL_DEADLINE')),7000);request.on('close',()=>clearTimeout(deadline));request.on('timeout',()=>request.destroy(new Error('CRL_TIMEOUT')));request.on('error',rejectPromise);
   });
 }
 const crlCache=new Map();
@@ -87,7 +87,7 @@ export async function verifyCompanyCms(cmsBytes, content, companyCnpj, { roots =
       if(crl.thisUpdate.value>now||!crl.nextUpdate||crl.nextUpdate.value<=now||!crl.issuer.isEqual(path[index+1].subject)||!await crl.verify({issuerCertificate:path[index+1]}))continue;
       if(crl.crlExtensions?.extensions?.some(x=>x.extnID==='2.5.29.27'||x.extnID==='2.5.29.28'))continue; // delta/indirect CRLs require separate support
       if(crl.isCertificateRevoked(cert))reject('O certificado foi revogado.','CERTIFICADO_REVOGADO');
-      if(loadCrl===fetchCrl){if(crlCache.size>24)crlCache.clear();crlCache.set(cacheKey,{bytes,until:Math.min(crl.nextUpdate.value.getTime(),now.getTime()+300000)});}
+      if(loadCrl===fetchCrl){if(crlCache.size>=8||[...crlCache.values()].reduce((size,item)=>size+item.bytes.length,0)+bytes.length>64*1024*1024)crlCache.clear();crlCache.set(cacheKey,{bytes,until:Math.min(crl.nextUpdate.value.getTime(),now.getTime()+300000)});}
       return {crl,bytes,url};
     }catch(e){if(e.code==='CERTIFICADO_REVOGADO')throw e;}
     reject('Não foi possível verificar a revogação. A certificação continua pendente; tente novamente.','CERTIFICADO_REVOGACAO_INDISPONIVEL',503);

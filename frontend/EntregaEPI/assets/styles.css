@@ -565,3 +565,5 @@ h3 { font-size: 16px; line-height: 1.4; letter-spacing: -.01em; }
 
 /* Certificate setup follows the existing card spacing. */
 .certificate-card{padding:24px;margin-bottom:24px}.certificate-card .item-actions{margin-top:16px;flex-wrap:wrap}.certificate-card details{margin-top:16px}.certificate-card summary{cursor:pointer;font-weight:700}.certificate-card details ol{padding-left:22px;line-height:1.65}.certificate-card .dialog-message:empty{display:none}
+
+.ficha-row>div{min-width:0}.ficha-row .item-actions{min-width:0;flex-wrap:wrap}.ficha-state{max-width:100%;white-space:normal;overflow-wrap:anywhere}#screen-jpged .field{margin:16px 0}

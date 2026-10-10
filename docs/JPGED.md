@@ -61,4 +61,4 @@ Infraestrutura: stack CloudFormation **JPGED**, tabela JPGED, buckets jpged-docu
 
 Para recuperar um original, um administrador separado da aplicação lê a versão no backup, confere o SHA-256 registrado e recupera em uma nova chave; nunca sobrescreve o original. Restaure o banco por PITR em uma tabela nova, valide o período e os vínculos por empresa antes de mudar o destino da API. Retenha o banco anterior durante a conferência. Não apague fichas por economia sem política formal de retenção.
 
-Em 10/10/2026 foi criado um objeto sintético identificável e confirmada a replicação (COMPLETED na origem, REPLICA no backup, mesmo tamanho/ETag). Isso verifica replicação, não uma restauração completa do banco. Nenhum arquivo real de cliente foi utilizado nesse teste.
+Em 10/10/2026 foi criado um objeto sintético identificável e confirmada a replicação (COMPLETED na origem, REPLICA no backup, mesmo tamanho/ETag), além da leitura do conteúdo preservado no backup. Isso verifica replicação e recuperação desse objeto, não uma restauração completa do banco. Nenhum arquivo real de cliente foi utilizado nesse teste.

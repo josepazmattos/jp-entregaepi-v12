@@ -7,7 +7,8 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 def powershell(script,data=None):
  exe=Path(os.environ['SystemRoot'])/'System32/WindowsPowerShell/v1.0/powershell.exe'
- p=subprocess.run([str(exe),'-NoProfile','-STA','-EncodedCommand',base64.b64encode(script.encode('utf-16le')).decode()],input=(json.dumps(data)+'\n') if data else None,capture_output=True,text=True,encoding='utf-8',timeout=60,check=True)
+ p=subprocess.run([str(exe),'-NoProfile','-STA','-EncodedCommand',base64.b64encode(script.encode('utf-16le')).decode()],input=(json.dumps(data)+'\n') if data else None,capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=60)
+ if p.returncode:raise RuntimeError(p.stderr[-6000:])
  return p.stdout.strip()
 with tempfile.TemporaryDirectory(prefix='jpged-win-test-') as folder:
  subprocess.run(['python',str(ROOT/'backend/test/helpers/jpged-fixture.py'),folder],check=True)
@@ -17,10 +18,10 @@ with tempfile.TemporaryDirectory(prefix='jpged-win-test-') as folder:
  try:
   assert len(thumbprint)==40
   content=b'JPGED SYNTHETIC WINDOWS SIGNATURE';(path/'content').write_bytes(content)
-  answer=json.loads(powershell((ROOT/'native/biometria/certificates.ps1').read_text(),{'action':'sign','thumbprint':thumbprint,'contentBase64':base64.b64encode(content).decode()}))
+  answer=json.loads(powershell((ROOT/'native/biometria/certificates.ps1').read_text(encoding='utf-8').replace('} catch {\n    # Never','} catch {\n    throw\n    # Never'),{'action':'sign','thumbprint':thumbprint,'contentBase64':base64.b64encode(content).decode()}))
   assert answer.get('ok'),answer
   (path/'signed.der').write_bytes(base64.b64decode(answer['cms']))
   subprocess.run(['node',str(ROOT/'backend/test/helpers/verify-windows-cms.js'),folder],check=True)
  finally:
-  powershell("Remove-Item -LiteralPath 'Cert:\\CurrentUser\\My\\"+thumbprint+"' -DeleteKey -ErrorAction SilentlyContinue")
+  powershell("Remove-Item -LiteralPath 'Cert:\\CurrentUser\\My\\"+thumbprint+"' -ErrorAction SilentlyContinue")
 print('Windows certificate signing verified: synthetic CMS, CNPJ, ESS, chain and revocation; no client certificate used.')
