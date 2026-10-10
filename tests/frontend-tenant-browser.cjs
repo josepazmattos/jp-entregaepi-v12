@@ -117,6 +117,15 @@ module.exports=async function runTenantBrowser({browser,origin,output}){
   async function login(app,password){await app.page.locator('#username').fill(app.company?.login||'master-sintetico');await app.page.locator('#password').fill(password);await app.page.locator('#loginButton').click();}
   async function loaded(page){await page.locator('#appShell:not(.hidden)').waitFor();await page.waitForFunction(()=>document.getElementById('empresaAtivaSelect').options.length>1);}
   async function navigate(page,screen){const mobile=await page.locator('#menuToggle').isVisible();if(mobile)await page.locator('#menuToggle').click();await page.locator(`.nav [data-screen="${screen}"]`).click();if(mobile)await page.locator('#primarySidebar').waitFor({state:'hidden'});}
+  async function checkAccountHeader(page,hasLogo){
+    await page.locator(hasLogo?'#userAvatarImage:not(.hidden)':'#userAvatarFallback:not(.hidden)').waitFor();
+    assert.equal(await page.locator('.app-header #logoutButton').isVisible(),true);
+    assert.equal(await page.locator('#primarySidebar #logoutButton').count(),0);
+    const geometry=await page.evaluate(()=>{const name=document.getElementById('userBadge').getBoundingClientRect(),logout=document.getElementById('logoutButton').getBoundingClientRect(),avatar=document.getElementById('userAvatar').getBoundingClientRect();return {nameBottom:name.bottom,logoutTop:logout.top,avatarWidth:avatar.width,avatarHeight:avatar.height};});
+    assert.ok(geometry.logoutTop>=geometry.nameBottom,'Sair fica abaixo do nome');
+    assert.ok(geometry.avatarWidth>=34&&geometry.avatarWidth<=38);assert.equal(geometry.avatarHeight,geometry.avatarWidth);
+    assert.equal(await page.locator('#userAvatarImage').isVisible(),hasLogo);
+  }
   async function inspect(page,name){
     await page.evaluate(()=>window.scrollTo({top:0,left:0,behavior:'instant'}));
     await page.waitForFunction(()=>window.scrollY===0);
@@ -142,6 +151,8 @@ module.exports=async function runTenantBrowser({browser,origin,output}){
     await master.page.locator('[data-reset-company="EMPRESA-NOVA-SINTETICA"]').click();await master.page.locator('#companyResetName').fill('INCORRETO');await master.page.locator('#companyResetConfirm').click();await master.page.waitForFunction(()=>document.querySelector('.dialog-message')?.textContent.includes('Confirme'));assert.equal(resetRequest,undefined);
     await master.page.locator('#companyResetName').fill('NOVA EMPRESA CLIENTE SINTÉTICA');await master.page.locator('#companyResetConfirm').click();await master.page.waitForSelector('#resetInitialPassword');assert.equal(await master.page.locator('#resetInitialPassword').inputValue(),'11222333');assert.equal(await master.page.locator('#resetInitialPassword').getAttribute('type'),'password');await master.page.locator('.dialog-close').click();passed('Empresas Cadastradas separa a lista; Master edita login e restaura senha com confirmação');
 
+    await checkAccountHeader(master.page,false);
+    companyA.logoDataUrl=await master.page.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=canvas.height=96;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,96,96);ctx.fillStyle='#0b8447';ctx.font='bold 72px sans-serif';ctx.fillText('A',22,74);return canvas.toDataURL('image/png');});
     const alpha=await makeContext('EMPRESA',companyA);await login(alpha,'12345678');await alpha.page.locator('#newPasswordForm:not(.hidden)').waitFor();
     assert.equal(await alpha.page.locator('#password').inputValue(),'');assert.equal(await alpha.page.evaluate(()=>sessionStorage.getItem('jp-v12-auth')),null);
     await inspect(alpha.page,'desktop-primeiro-acesso');const challengeBefore=result.requests.filter(x=>x.operation==='RespondToAuthChallenge').length;await alpha.page.locator('#initialPasswordConfirm').fill('INCORRETA');await alpha.page.locator('#newPassword').fill('SenhaDefinitivaSintetica8');await alpha.page.locator('#newPasswordConfirm').fill('SenhaDefinitivaSintetica8');await alpha.page.locator('#newPasswordButton').click();await alpha.page.waitForFunction(()=>document.getElementById('newPasswordMessage').textContent.includes('senha inicial'));assert.equal(result.requests.filter(x=>x.operation==='RespondToAuthChallenge').length,challengeBefore);await alpha.page.locator('#initialPasswordConfirm').fill('12345678');await alpha.page.locator('#newPassword').fill('SenhaDefinitivaSintetica8');await alpha.page.locator('#newPasswordConfirm').fill('SenhaDefinitivaSintetica8');await alpha.page.locator('#newPasswordButton').click();await loaded(alpha.page);
@@ -155,12 +166,18 @@ module.exports=async function runTenantBrowser({browser,origin,output}){
     assert.equal(await alpha.page.locator('.metrics .metric-card:visible').count(),3);
     assert.equal(await alpha.page.locator('.quick-actions .shortcut:visible').count(),3);
     assert.equal(await alpha.page.locator('#empresaLogoForm').isVisible(),false);
+    await checkAccountHeader(alpha.page,true);assert.equal(await alpha.page.locator('#userAvatarImage').getAttribute('src'),companyA.logoDataUrl);
+    assert.equal(await alpha.page.locator('#userAvatarImage').getAttribute('alt'),'Logotipo de '+companyA.nome);
     await inspect(alpha.page,'desktop-dashboard-empresa');
     await master.page.locator('#empresaLogoAtualFile').setInputFiles(logo);await master.page.waitForFunction(()=>!document.getElementById('empresaLogoSave').disabled);await master.page.locator('#empresaLogoSave').click();await master.page.waitForFunction(()=>document.getElementById('appMessage').textContent.includes('Logotipo atualizado'));
     passed('Empresa acessa Dashboard compacto sem gestão empresarial; somente Master atualiza logotipo');
 
     const second=await makeContext('EMPRESA',companyA,{mobile:true});await login(second,'SenhaDefinitivaSintetica8');await loaded(second.page);
     const beta=await makeContext('EMPRESA',companyB);await login(beta,'SENHA-BETA-SINTETICA');await loaded(beta.page);
+    await checkAccountHeader(second.page,true);await checkAccountHeader(beta.page,false);
+    companyB.logoDataUrl='data:image/png;base64,aW52YWxpZA==';await beta.page.evaluate(()=>refreshEmpresas(false));await checkAccountHeader(beta.page,false);
+    await beta.page.waitForFunction(()=>!document.getElementById('userAvatarImage').hasAttribute('src'));delete companyB.logoDataUrl;
+    passed('Avatar usa somente o logo da própria empresa; Master e logo ausente ou inválido usam símbolo padrão');
     assert.equal(await second.page.locator('#empresaAtivaSelect').inputValue(),companyA.id);assert.equal(await beta.page.locator('#empresaAtivaSelect').inputValue(),companyB.id);
     await navigate(alpha.page,'trabalhadores');assert.ok((await alpha.page.locator('#trabalhadoresList').innerText()).includes('BIA'));assert.ok(!(await alpha.page.locator('#trabalhadoresList').innerText()).includes('EXCLUSIVO BETA'));
     await navigate(master.page,'trabalhadores');
@@ -206,9 +223,13 @@ module.exports=async function runTenantBrowser({browser,origin,output}){
     assert.ok(!(await beta.page.locator('#episList').innerText()).includes(companyA.nome));passed('equipamento sem CA entra no catálogo comum e fica disponível à outra empresa e ao Master sem autoria');
 
     await alpha.page.locator('#logoutButton').click();assert.equal(await alpha.page.evaluate(()=>sessionStorage.getItem('jp-v12-auth')),null);
+    assert.equal(await alpha.page.locator('#userAvatarImage').getAttribute('src'),null);
     assert.ok(await second.page.evaluate(()=>sessionStorage.getItem('jp-v12-auth')));await navigate(second.page,'dashboard');await inspect(second.page,'mobile-dashboard-empresa');await second.page.locator('#refreshButton').click();await second.page.waitForFunction(()=>document.getElementById('metricTrabalhadores').textContent==='500');
     assert.equal(await second.page.locator('#appShell').isVisible(),true);assert.equal(result.requests.filter(item=>item.operation==='GlobalSignOut').length,0);
     passed('duas sessões da mesma empresa funcionam simultaneamente e sair de uma mantém a outra autenticada');
+    await checkAccountHeader(second.page,true);await second.page.locator('#logoutButton').click();await second.page.locator('#loginPage').waitFor({state:'visible'});assert.equal(await second.page.evaluate(()=>sessionStorage.getItem('jp-v12-auth')),null);assert.equal(await second.page.locator('#userAvatarImage').getAttribute('src'),null);
+    await master.page.setViewportSize({width:390,height:844});await checkAccountHeader(master.page,false);await inspect(master.page,'mobile-master-sair');await master.page.locator('#logoutButton').click();await master.page.locator('#loginPage').waitFor({state:'visible'});assert.equal(await master.page.evaluate(()=>sessionStorage.getItem('jp-v12-auth')),null);
+    passed('Sair abaixo do nome funciona em Cliente e Master no celular, encerra a sessão e limpa o avatar');
     assert.deepEqual(errors,[]);assert.ok(!result.unexpectedExternal);result.passed=true;return result;
   }catch(error){result.passed=false;result.error=error.message;for(let i=0;i<pages.length;i++){if(!pages[i].isClosed())await pages[i].screenshot({path:path.join(output,`tenant-falha-${i}.png`),fullPage:false}).catch(()=>{});}throw error;}
   finally{fs.writeFileSync(path.join(output,'tenant-browser-results.json'),JSON.stringify(result,null,2)+'\n');await Promise.all(contexts.map(context=>context.close()));}

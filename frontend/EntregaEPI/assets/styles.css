@@ -154,12 +154,17 @@ h3 { font-size: 16px; line-height: 1.4; letter-spacing: -.01em; }
 .company-box { display: grid; gap: 3px; width: 300px; min-width: 0; max-width: 100%; }
 .company-box label { color: var(--jp-muted); font-size: 10px; font-weight: 500; line-height: 1.3; }
 .company-box select { width: 100%; min-width: 0; height: 34px; padding: 4px 28px 4px 0; border: 0; border-bottom: 1px solid var(--jp-line); border-radius: 0; background: #fff; color: var(--jp-ink); font-size: 13px; font-weight: 600; text-overflow: ellipsis; }
-.user-menu { display: flex; min-width: 0; max-width: 210px; align-items: center; gap: 10px; padding-left: 24px; border-left: 1px solid var(--jp-line); }
+.user-menu { display: flex; flex-shrink: 0; min-width: 0; max-width: 210px; align-items: center; gap: 10px; padding-left: 24px; border-left: 1px solid var(--jp-line); }
 .user-avatar { display: grid; width: 38px; height: 38px; flex: 0 0 38px; place-items: center; background: #edf4ef; border: 1px solid #e0ece4; border-radius: 50%; color: #49745a; }
 .user-avatar .icon { width: 18px; height: 18px; }
+.user-avatar.has-company-logo { background: #fff; }
+.user-avatar img { width: calc(100% - 6px); height: calc(100% - 6px); object-fit: contain; }
 .user-menu > div { min-width: 0; }
 .user-menu small { display: block; color: var(--jp-muted); font-size: 10px; }
 .user-menu strong { display: block; max-width: 150px; overflow: hidden; color: #355044; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.header-logout { display: flex; align-items: center; gap: 4px; min-height: 24px; padding: 0; border: 0; background: transparent; color: var(--jp-green-dark); font-size: 11px; font-weight: 600; }
+.header-logout .icon { width: 13px; height: 13px; }
+.header-logout:hover { color: var(--jp-action); text-decoration: underline; }
 .main { width: 100%; max-width: 1480px; padding: 32px 32px 48px; margin: 0 auto; min-width: 0; }
 .main:focus { outline: none; }
 .screen { display: none; }
@@ -398,8 +403,9 @@ h3 { font-size: 16px; line-height: 1.4; letter-spacing: -.01em; }
   .header-controls { gap: 16px; }
   .company-box { width: auto; flex: 1; }
   .company-box select { font-size: 12px; }
-  .user-menu { max-width: 100px; padding-left: 16px; }
-  .user-menu > div { display: none; }
+  .user-menu { max-width: 158px; padding-left: 16px; gap: 8px; }
+  .user-menu strong { max-width: 80px; }
+  .user-menu small { display: none; }
   .user-avatar { width: 34px; height: 34px; flex-basis: 34px; }
   .main { padding: 24px 20px 40px; }
   .topbar { gap: 16px; align-items: flex-start; margin-bottom: 24px; }
