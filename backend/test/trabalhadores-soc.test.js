@@ -30,9 +30,9 @@ test('SOC bloqueia CNPJ divergente, status desconhecido e campos obrigatórios a
   await assert.rejects(read(await socFile(), { companyCnpj: '' }), /CNPJ válido/);
   await assert.rejects(read(await socFile(), { matriculaColumn: 'inventado' }), /Escolha/);
 });
-test('SOC recusa matrícula numérica, fórmulas em campo importado e cabeçalho duplicado', async () => {
+test('SOC aceita matrícula numérica e recusa fórmulas em campo importado e cabeçalho duplicado', async () => {
   const [row] = await read(await socFile({ change(sheet) { sheet.getCell('C3').value = 1; sheet.getCell('E3').value = { formula: '1+1', result: 2 }; } }));
-  assert.match(row.erros.join(' '), /zeros à esquerda/); assert.match(row.erros.join(' '), /fórmulas/);
+  assert.equal(row.data.matriculaESocial, '1'); assert.equal(row.erros.length, 1); assert.match(row.erros.join(' '), /fórmulas/);
   await assert.rejects(read(await socFile({ change(sheet) { sheet.getCell('R2').value = 'CPF'; } })), /Cabeçalho repetido/);
 });
 test('SOC em memória não grava o arquivo nem dados extras; confirma sem duplicar e preserva biometria', async () => {
@@ -64,4 +64,21 @@ test('SOC duplicado não permite confirmação e N corresponde a Inativo', async
   const store = createStore({ allowMemory: true }), company = await store.create('empresa', { cnpj: CNPJ });
   const preview = await createWorkerImportService(store).preview({ arquivoNome: 'soc.xlsx', arquivoBase64: bytes.toString('base64'), empresaId: company.id, actor: 'master', origem: 'soc', master: true });
   assert.equal(preview.podeConfirmar, false); assert.equal(preview.resumo.erros, 2);
+});
+
+
+test('SOC sincroniza matrícula numérica, reenvio textual não duplica e Matrícula RH preserva zeros da máscara', async () => {
+  const store = createStore({ allowMemory: true }), company = await store.create('empresa', { cnpj: CNPJ });
+  const importer = createWorkerImportService(store);
+  const numeric = await socFile({ change(sheet) { sheet.getCell('C3').value = 1; sheet.getCell('D3').value = 42; sheet.getCell('D3').numFmt = '000000'; } });
+  const body = { arquivoNome: 'soc.xlsx', arquivoBase64: numeric.toString('base64'), empresaId: company.id, actor: 'master', origem: 'soc', master: true };
+  const preview = await importer.preview(body);
+  assert.equal(preview.podeConfirmar, true); assert.equal(preview.resumo.erros, 0);
+  assert.equal(preview.linhas[0].dados.matriculaESocial, '1');
+  const completed = await importer.confirm({ id: preview.importacaoId, empresaId: company.id, actor: 'master', master: true, compact: true });
+  assert.equal(completed.status, 'concluida');
+  const textual = await socFile({ change(sheet) { sheet.getCell('C3').value = '1'; } });
+  const repeated = await importer.preview({ ...body, arquivoBase64: textual.toString('base64') });
+  assert.equal(repeated.status, 'sem_alteracoes'); assert.equal((await store.list('trabalhador', company.id)).length, 1);
+  assert.equal((await read(numeric, { matriculaColumn: 'matriculaRH' }))[0].data.matriculaESocial, '000042');
 });
