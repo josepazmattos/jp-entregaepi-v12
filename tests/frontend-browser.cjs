@@ -32,7 +32,7 @@ const server=http.createServer((req,res)=>{
   const file=path.resolve(frontend,relative||'index.html');
   if(!file.startsWith(frontend+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end('Não encontrado');return;}
   const ext=path.extname(file);
-  res.setHeader('Content-Type',({'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png'})[ext]||'application/octet-stream');
+  res.setHeader('Content-Type',({'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.svg':'image/svg+xml'})[ext]||'application/octet-stream');
   res.setHeader('Cache-Control','no-store');
   const contents=fs.readFileSync(file);
   res.end(ext==='.html'?contents.toString().replaceAll('__APP_PREFIX__','EntregaEPI'):contents);

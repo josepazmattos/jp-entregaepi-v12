@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="112" viewBox="0 0 520 112" role="img" aria-labelledby="title">
+  <title id="title">JP EntregaEPI</title>
+  <path fill="#8ce0b0" d="M24 12h42v67L51 96H16L2 81V66h22v8l4 4h14l3-4V32H24z"/>
+  <path fill="#fff" fill-rule="evenodd" d="M76 12h49l15 15v33l-15 15H99v21H76zm23 21v21h18l3-3V36l-3-3z"/>
+  <text x="158" y="76" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="59" font-weight="700" letter-spacing="-1.9" fill="#fff">Entrega<tspan fill="#8ce0b0">EPI</tspan></text>
+</svg>
