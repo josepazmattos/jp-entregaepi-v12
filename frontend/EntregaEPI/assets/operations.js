@@ -158,7 +158,7 @@ function setupPrintWindow(preview,ficha,context){
 function updatePrintWindow(preview,ficha){
   if(preview.closed)return;const doc=preview.document;
   const empresa=cache.empresas.find(x=>String(x.id)===String(ficha.empresaId))||{},worker=cache.trabalhadores.find(x=>x.id===ficha.trabalhadorId)||{};
-  const html=window.JP_FICHA.buildDocument(ficha,empresa,worker,cache.epis,{defaultLogo:document.querySelector('.brand-logo')?.src});
+  const html=window.JP_FICHA.buildDocument(ficha,empresa,worker,cache.epis,{defaultLogo:documentLogoUrl()});
   const parsed=new DOMParser().parseFromString(html,'text/html');doc.querySelector('main.sheet')?.replaceWith(doc.importNode(parsed.querySelector('main.sheet'),true));
   doc.getElementById('signDocument').disabled=!canSignFicha(ficha);doc.getElementById('printSignatureStatus').textContent=fichaStatus(ficha);
 }
