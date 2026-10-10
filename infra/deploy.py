@@ -47,7 +47,7 @@ CLIENT = "2q2inha617oeer4vb0m0hjoja0"
 ISSUER = f"https://cognito-idp.{REGION}.amazonaws.com/{POOL}"
 PUBLIC_URL = "https://www.jptreinamentos.com.br"
 CACHE_CONTROL = "no-store, no-cache, must-revalidate"
-PUBLIC_ROUTES = ("GET /health", "GET /api/caepi", "GET /api/caepi/{ca}",
+PUBLIC_ROUTES = ("POST /auth/resolver", "GET /health", "GET /api/caepi", "GET /api/caepi/{ca}",
                  "OPTIONS /", "OPTIONS /{proxy+}")
 OBJECT_METADATA_FIELDS = ("ContentType", "CacheControl", "ContentDisposition",
                           "ContentEncoding", "ContentLanguage", "Expires", "Metadata",

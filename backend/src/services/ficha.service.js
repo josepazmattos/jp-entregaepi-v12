@@ -40,6 +40,7 @@ function fichaDate(value) {
 export function buildFicha({ empresaId, empresa, trabalhador, items, body, actor }) {
   const tipo = body.tipo || 'Entrega';
   if (!['Entrega', 'Troca', 'Devolução'].includes(tipo)) throw httpError(400, 'Tipo da movimentação inválido.', 'MOVIMENTACAO_INVALIDA');
+  const data = fichaDate(body.data);
   const normalizedItems = items.map(({ requested, epi }) => {
     // The technical equipment catalog is shared. Workers and issued documents
     // remain company-scoped; their authorization is checked before this builder.
@@ -73,7 +74,8 @@ export function buildFicha({ empresaId, empresa, trabalhador, items, body, actor
     itens: normalizedItems,
     status: 'pendente',
     tipo,
-    data: fichaDate(body.data),
+    data,
+    ...(tipo === 'Devolução' ? { datasMovimentacao: { entrega: '', devolucao: data } } : {}),
     criadoPor: actor
   };
 }

@@ -29,7 +29,7 @@ function readProof(body, challenge, publicKey) {
 export function createBiometricsService(store) {
   async function challenge({ worker, ficha = null, fingerCode, actor, kind }) {
     if (!fingerValid(fingerCode) || !['enroll','verify'].includes(kind)) bad('Selecione o dedo que será utilizado.');
-    if (worker.status === 'Inativo') bad('O trabalhador está inativo.', 'TRABALHADOR_INATIVO', 409);
+    if (worker.status === 'Inativo' && !(kind === 'verify' && ficha?.tipo === 'Devolução')) bad('O trabalhador está inativo.', 'TRABALHADOR_INATIVO', 409);
     let enrollment;
     if (kind === 'verify') {
       if (!signaturePending(ficha)) bad('A ficha não está pendente de assinatura.', 'FICHA_NAO_PENDENTE', 409);

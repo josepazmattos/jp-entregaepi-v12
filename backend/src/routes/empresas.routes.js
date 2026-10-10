@@ -37,8 +37,9 @@ export function createEmpresasRouter({ storage = defaultStorage, accounts = comp
     assertCompanyAccess(req, req.params.id);
     const body = objectBody(req);
     if (body._version != null && (!Number.isSafeInteger(body._version) || body._version < 1)) throw httpError(400, 'A versão do cadastro é inválida. Atualize a tela.', 'EMPRESA_VERSAO_INVALIDA');
-    ok(res, { item: await service.edit(req.params.id, body, { expectedVersion: body._version }) });
+    ok(res, { item: await service.edit(req.params.id, body, { expectedVersion: body._version, master: req.auth.master, actor: req.auth.sub }) });
   });
+  router.post('/:id/restaurar-senha', requireMaster, async (req, res) => { ok(res, await service.resetPassword(req.params.id, objectBody(req), req.auth.sub)); });
   router.delete('/:id', requireMaster, async (req,res) => { ok(res, await service.exclude(req.params.id, objectBody(req), req.auth.sub)); });
   return router;
 }

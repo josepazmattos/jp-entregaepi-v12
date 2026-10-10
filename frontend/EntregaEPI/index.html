@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#146544" />
   <title>JP EntregaEPI</title>
   <script src="/__APP_PREFIX__/config.js?v=1294"></script>
-  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=20261010-cadastros" />
+  <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=20261010-empresas" />
 </head>
 <body>
   <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
@@ -73,6 +73,7 @@
         </form>
         <form id="newPasswordForm" class="form hidden" aria-labelledby="newPasswordTitle">
           <div class="first-access-heading"><span class="eyebrow">Primeiro acesso</span><h3 id="newPasswordTitle">Crie a senha da sua empresa</h3><p>O acesso <strong id="newPasswordUsername"></strong> precisa de uma senha definitiva para continuar.</p></div>
+          <div class="field"><label for="initialPasswordConfirm">Confirme a senha inicial</label><input id="initialPasswordConfirm" type="password" autocomplete="current-password" required maxlength="256"></div>
           <div class="field"><label for="newPassword">Nova senha</label><input id="newPassword" type="password" autocomplete="new-password" required minlength="8" maxlength="256" aria-describedby="newPasswordHelp"><small id="newPasswordHelp" class="field-help">Use pelo menos 8 caracteres, com uma letra maiúscula, uma minúscula e um número. Escolha uma senha diferente da inicial.</small></div>
           <div class="field"><label for="newPasswordConfirm">Confirme a nova senha</label><input id="newPasswordConfirm" type="password" autocomplete="new-password" required minlength="8" maxlength="256"></div>
           <div id="newPasswordMessage" class="message hidden" role="alert" aria-live="polite"></div>
@@ -94,6 +95,7 @@
         <div class="nav-group"><p class="nav-label">Gestão</p>
           <button type="button" class="nav-button active" data-screen="dashboard" aria-current="page"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-grid"></use></svg><span>Dashboard</span></button>
           <button type="button" class="nav-button" data-screen="empresas"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg><span>Empresas</span></button>
+        <button class="nav-button nav-subitem hidden" type="button" data-screen="empresas-cadastradas" data-master-only><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg><span>Empresas Cadastradas</span></button>
           <button type="button" class="nav-button" data-screen="trabalhadores"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-users"></use></svg><span>Trabalhadores</span></button>
           <button type="button" class="nav-button" data-screen="epis"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg><span>EPIs e CA</span></button>
           <button type="button" class="nav-button" data-screen="entrega"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-package"></use></svg><span>Entrega de EPI</span></button>
@@ -158,19 +160,20 @@
               </div>
               <div class="field"><label for="empresaNome">Nome da empresa <span class="required-mark" aria-hidden="true">*</span></label><input name="nome" id="empresaNome" required placeholder="Nome ou razão social"></div>
               <div class="field"><label for="empresaCnpj">CNPJ <span class="required-mark" aria-hidden="true">*</span></label><input name="cnpj" id="empresaCnpj" required placeholder="00.000.000/0000-00" inputmode="text" maxlength="18"></div>
-              <div class="field"><label for="empresaLogin">Login da empresa <span class="required-mark" aria-hidden="true">*</span></label><input name="login" id="empresaLogin" required placeholder="CNPJ completo, sem pontuação" autocomplete="off" maxlength="80"><small class="field-help">Preenchido com o CNPJ completo. Você pode definir outro login antes de salvar.</small></div>
+              <div class="field"><label for="empresaLogin">Login da empresa <span class="required-mark" aria-hidden="true">*</span></label><input name="login" id="empresaLogin" required placeholder="Ex.: ivr" autocomplete="off" maxlength="80"><small class="field-help">Sugerido pela primeira palavra do nome da empresa. Você pode definir outro login antes de salvar.</small></div>
               <div class="field"><label for="empresaLocalidade">Localidade</label><input name="localidade" id="empresaLocalidade" placeholder="Cidade/UF"></div>
+              <div class="grid-form"><div class="field"><label for="empresaTelefone">Contato / telefone</label><input name="telefone" id="empresaTelefone" type="tel" maxlength="50"></div><div class="field"><label for="empresaEmail">E-mail</label><input name="email" id="empresaEmail" type="email" maxlength="254"></div></div>
               <div class="field"><label for="empresaResponsavel">Responsável</label><input name="responsavel" id="empresaResponsavel" placeholder="Nome do responsável"></div>
               <div class="field"><label for="empresaLogoFile">Logotipo da empresa</label><input id="empresaLogoFile" type="file" accept="image/png,image/jpeg"><small class="field-help">PNG ou JPG de até 2 MB. A imagem é ajustada automaticamente. O logotipo será usado nas novas fichas de EPI.</small><div class="logo-preview hidden" id="empresaLogoPreviewWrap"><img id="empresaLogoPreview" alt="Prévia do logotipo da nova empresa"><button id="empresaLogoRemove" type="button" class="text-button">Remover imagem</button></div></div>
               <div class="form-note"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-lock"></use></svg><p>A senha inicial será formada pelos 8 primeiros caracteres do CNPJ sem pontuação, com troca obrigatória no primeiro acesso.</p></div>
               <div class="form-actions"><button class="btn btn-primary" type="submit"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>Cadastrar empresa e acesso</button></div>
             </form>
-            <div class="stack-cards">
+            <div id="companyListClientHost"><div id="companyRegisteredContent" class="stack-cards">
               <div class="card list-card"><div class="section-heading"><div><h2 id="empresasListTitle">Empresa cadastrada</h2><p id="empresasListHelp">Dados disponíveis para este acesso.</p></div></div><div id="empresasList" class="list">Carregando...</div></div>
               <form id="empresaAccessForm" class="card form-card hidden">
                 <div class="form-heading"><span class="heading-icon"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-lock"></use></svg></span><div><h2>Criar acesso para esta empresa</h2><p id="empresaAccessCompany">Complete o acesso da empresa já cadastrada.</p></div></div>
                 <div class="field"><label for="empresaAccessCnpj">CNPJ</label><input id="empresaAccessCnpj" name="cnpj" required inputmode="text" maxlength="18" placeholder="00.000.000/0000-00"></div>
-                <div class="field"><label for="empresaAccessLogin">Login da empresa</label><input id="empresaAccessLogin" name="login" required maxlength="80" autocomplete="off" placeholder="CNPJ completo, sem pontuação"></div>
+                <div class="field"><label for="empresaAccessLogin">Login da empresa</label><input id="empresaAccessLogin" name="login" required maxlength="80" autocomplete="off" placeholder="Ex.: ivr"></div>
                 <p class="field-help">O acesso será vinculado a este cadastro, mantendo os trabalhadores e as fichas existentes.</p>
                 <div class="form-actions"><button class="btn btn-primary" type="submit">Criar acesso da empresa</button></div>
               </form>
@@ -181,16 +184,18 @@
                 <div class="form-actions wrap-actions"><button id="empresaLogoSave" class="btn btn-primary" type="submit" disabled>Salvar logotipo</button><button id="empresaLogoAtualRemove" type="button" class="text-button">Remover logotipo</button></div>
               </form>
             </div>
-          </div>
+          </div></div>
         </section>
+        <section id="screen-empresas-cadastradas" class="screen hidden" data-master-only aria-labelledby="title-empresas-cadastradas"><div class="topbar"><div><span class="kicker">Cadastros</span><h1 id="title-empresas-cadastradas">Empresas Cadastradas</h1></div><button class="btn btn-secondary" type="button" onclick="refreshEmpresas().catch(handleAppError)">Atualizar empresas</button></div><div id="companyListMasterHost"></div></section>
 
         <section id="screen-trabalhadores" class="screen" aria-labelledby="title-trabalhadores">
           <div class="topbar"><div><span class="kicker">Cadastros</span><h1 id="title-trabalhadores">Trabalhadores</h1><p>Mantenha os dados da equipe organizados para cada entrega.</p></div><button class="btn btn-secondary" type="button" onclick="refreshTrabalhadores().catch(handleAppError)"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Atualizar trabalhadores</button></div>
-          <div class="card import-card">
-            <div class="section-heading"><div><h2>Importar equipe pelo Excel</h2><p>Baixe o modelo, preencha os trabalhadores e envie para conferir a sincronização.</p></div><span class="product-tag">.xlsx</span></div>
-            <div class="import-actions"><button id="trabalhadoresTemplateButton" class="btn btn-secondary" type="button">Baixar planilha modelo</button><div class="field grow"><label for="trabalhadoresImportFile">Enviar planilha preenchida</label><input id="trabalhadoresImportFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div></div>
+          <div class="card worker-registration"><div class="grid-form"><div class="field"><label for="workerCompanySelect">1. Selecione a empresa</label><select id="workerCompanySelect"><option value="">Selecione a empresa</option></select></div><div class="field"><label for="workerRegistrationMethod">2. O que deseja fazer?</label><select id="workerRegistrationMethod" disabled><option value="">Selecione uma opção</option><option value="modelo">Baixar / enviar planilha modelo</option><option value="soc">Upload da planilha SOC · Master</option><option value="manual">Preenchimento manual</option><option value="consultar">Consultar trabalhadores</option></select></div></div></div>
+          <div id="workerImportCard" class="card import-card hidden">
+            <div class="section-heading"><div><h2 id="workerImportHeading">Importar equipe pelo Excel</h2><p>Baixe o modelo, preencha os trabalhadores e envie para conferir a sincronização.</p></div><span class="product-tag">.xlsx</span></div>
+            <div id="workerStandardImport"><div class="import-actions"><button id="trabalhadoresTemplateButton" class="btn btn-secondary" type="button">Baixar planilha modelo</button><div class="field grow"><label for="trabalhadoresImportFile">Enviar planilha preenchida</label><input id="trabalhadoresImportFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div></div>
             <p class="field-help">CPF e matrícula eSocial identificam os cadastros. Confira a prévia antes de sincronizar. Trabalhadores que não estiverem na planilha serão preservados.</p>
-            <details class="soc-import hidden" data-master-only>
+            </div><details class="soc-import hidden" data-master-only>
               <summary>Importar lista do SOC · Master</summary>
               <div class="import-actions"><div class="field"><label for="socMatriculaColumn">Coluna usada como matrícula eSocial</label><select id="socMatriculaColumn"><option value="matricula">Matrícula</option><option value="matriculaRH">Matrícula RH</option></select></div><div class="field grow"><label for="trabalhadoresSocFile">Lista SOC Modelo 1</label><input id="trabalhadoresSocFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div></div>
               <p class="field-help">Até 500 trabalhadores e 512 KB. O CNPJ da unidade deve corresponder à empresa selecionada. A planilha original não é armazenada.</p>
@@ -203,8 +208,8 @@
               <div class="form-actions wrap-actions"><button id="trabalhadoresImportCommit" class="btn btn-primary" type="button">Sincronizar trabalhadores</button><button id="trabalhadoresImportCancel" class="btn btn-secondary" type="button">Descartar prévia</button></div>
             </section>
           </div>
-          <div class="two-col wide">
-            <form id="trabalhadorForm" class="card form-card">
+          <div id="workerColumns" class="two-col wide worker-list-only">
+            <form id="trabalhadorForm" class="card form-card hidden">
               <div class="form-heading"><span class="heading-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-users"></use></svg></span><div><h2 id="workerFormTitle">Novo trabalhador</h2><p>Os campos com * são obrigatórios.</p></div></div>
               <div class="grid-form">
                 <div class="field span-two"><label for="trabalhadorNome">Nome completo <span class="required-mark" aria-hidden="true">*</span></label><input name="nomeCompleto" id="trabalhadorNome" required placeholder="Nome completo do trabalhador"></div>
@@ -222,7 +227,7 @@
               </div>
               <div class="form-actions"><button class="btn btn-primary" type="submit"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg>Salvar trabalhador</button><button id="workerEditCancel" class="btn btn-secondary hidden" type="button" onclick="cancelWorkerEdit()">Cancelar edição</button></div>
             </form>
-            <div class="card list-card"><div class="section-heading"><div><h2>Trabalhadores cadastrados</h2><p>Equipe da empresa em ordem alfabética.</p></div></div><div class="field list-search"><label for="trabalhadorSearch">Buscar trabalhador</label><input id="trabalhadorSearch" type="search" placeholder="Nome, CPF ou matrícula eSocial"></div><div id="trabalhadoresList" class="list">Carregando...</div></div>
+            <div id="workerListCard" class="card list-card hidden"><div class="section-heading"><div><h2>Trabalhadores cadastrados</h2><p>Consulte a equipe, edite dados e gerencie a situação de cada trabalhador.</p></div></div><div class="worker-list-filters"><div class="field"><label for="trabalhadorSearch">Buscar trabalhador</label><input id="trabalhadorSearch" type="search" placeholder="Nome, CPF ou matrícula eSocial"></div><div class="field"><label for="workerStatusFilter">Situação</label><select id="workerStatusFilter"><option value="Ativo">Ativos</option><option value="Inativo">Inativos</option><option value="todos">Todos</option></select></div></div><div id="trabalhadoresList" class="list">Carregando...</div><div class="worker-pagination"><span id="workerListCount" role="status" aria-live="polite"></span><div class="item-actions"><button id="workerPagePrevious" type="button" class="btn btn-secondary" disabled>Anterior</button><button id="workerPageNext" type="button" class="btn btn-secondary" disabled>Próxima</button></div></div></div>
           </div>
         </section>
 
@@ -250,14 +255,14 @@
             <form id="entregaForm" class="card form-card">
               <div class="form-heading"><span class="heading-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-package"></use></svg></span><div><h2>Nova movimentação</h2><p>Selecione o trabalhador e o equipamento.</p></div></div>
               <div class="grid-form">
+                <div class="field span-two"><label for="entregaTipo">Tipo de movimentação</label><select name="tipo" id="entregaTipo"><option value="Entrega">Entrega de EPI</option><option value="Devolução">Devolução de EPI</option></select><p id="movementHelp" class="field-help">Preenche a data de entrega na nova ficha.</p></div>
                 <div class="field span-two"><label for="entregaTrabalhador">Trabalhador</label><select name="trabalhadorId" id="entregaTrabalhador" required></select></div>
                 <div class="field span-two"><label for="entregaEpi">EPI</label><select name="epiId" id="entregaEpi" required></select></div>
-                <div class="field"><label for="entregaTipo">Tipo de movimentação</label><select name="tipo" id="entregaTipo"><option>Entrega</option><option>Troca</option><option>Devolução</option></select></div>
                 <div class="field"><label for="entregaQuantidade">Quantidade</label><input name="quantidade" id="entregaQuantidade" type="number" min="1" step="1" value="1" required></div>
               </div>
               <div class="form-actions"><button class="btn btn-primary" type="submit"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-file"></use></svg>Gerar ficha de EPI</button></div>
             </form>
-            <aside class="card guidance-card"><span class="guidance-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-file"></use></svg></span><h2>Uma ficha completa<br>para cada entrega</h2><p>A ficha reúne a identificação do trabalhador, a função, a matrícula eSocial e o tipo da movimentação.</p><div class="guidance-note"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg><span>O Termo de Responsabilidade permanece antes da relação dos EPIs, no modelo aprovado.</span></div><button class="text-button" type="button" onclick="goScreen('fichas')">Consultar fichas <svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-arrow"></use></svg></button></aside>
+            <aside class="card guidance-card"><span class="guidance-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-file"></use></svg></span><h2>Uma ficha completa<br>para cada movimentação</h2><p>A ficha reúne a identificação do trabalhador, a função, a matrícula eSocial e o tipo da movimentação.</p><div class="guidance-note"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-check"></use></svg><span>O Termo de Responsabilidade permanece antes da relação dos EPIs, no modelo aprovado.</span></div><button class="text-button" type="button" onclick="goScreen('fichas')">Consultar fichas <svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-arrow"></use></svg></button></aside>
           </div>
         </section>
 
@@ -310,9 +315,9 @@
       </main>
     </div>
   </section>
-  <script src="/__APP_PREFIX__/assets/ficha.js?v=1294"></script>
+  <script src="/__APP_PREFIX__/assets/ficha.js?v=20261010-devolucao"></script>
   <script src="/__APP_PREFIX__/assets/biometria.js?v=1294"></script>
-  <script src="/__APP_PREFIX__/assets/app.js?v=20261010-cadastros"></script>
-  <script src="/__APP_PREFIX__/assets/operations.js?v=20261010-login"></script>
+  <script src="/__APP_PREFIX__/assets/app.js?v=20261010-empresas"></script>
+  <script src="/__APP_PREFIX__/assets/operations.js?v=20261010-empresas-20261010-login"></script>
 </body>
 </html>

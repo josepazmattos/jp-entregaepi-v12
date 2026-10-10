@@ -68,6 +68,8 @@ test('rotas empresas: conta EMPRESA edita sua logo e recebe403 para criar, provi
   assert.equal((await request('POST', '/api/empresas', { ...auth, body: { nome: 'NÃO GRAVAR' } })).status, 403);
   assert.equal((await request('POST', `/api/empresas/${own.id}/acesso`, { ...auth, body: {} })).status, 403);
   assert.equal((await request('PATCH', `/api/empresas/${foreign.id}`, { ...auth, body: { nome: 'NÃO GRAVAR' } })).status, 403);
+  assert.equal((await request('POST', `/api/empresas/${own.id}/restaurar-senha`, {...auth,body:{}})).status,403);
+  assert.equal((await request('PATCH', `/api/empresas/${own.id}`, {...auth,body:{login:'outro'}})).status,403);
   const updated = await request('PATCH', `/api/empresas/${own.id}`, { ...auth, body: { logoDataUrl: logo, _version: own._version } });
   assert.equal(updated.status, 200);
   assert.equal(updated.body.item.logoDataUrl, logo);

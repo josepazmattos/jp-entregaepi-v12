@@ -4,13 +4,16 @@ let sessionGeneration=0,companyGeneration=0,authAttempt=0,importAttempt=0,logoCr
 let firstAccessChallenge=null,empresaLogoDraft="",empresaLogoEdit=null,empresaRequestId="",importPreview=null,companyLoginAutomatic=true;
 let logoCreateLoading=false,companySaving=false;
 let companyPdfController=null,companyPdfDraft=null,companyPdfLoading=false;
+let workerRegistrationCompany="";
+let workerListPage=1;
+const workerPageSize=15;
 let biometricClient=null,biometricGeneration=0,biometricBusy=false,biometricCapture=null,biometricAbort=null,biometricStartAt=0;
 let startupCheckSession=-1,startupChecksPromise=null;
 const installationWatchKey='jp-biometria-install-until';
 let installationWatchTimer=null,installationWatchRunning=false,installationWatchEpoch=0;
 const diagnosticRequests=new Set();
 const startupMirrors={apiStatusBadge:'startupApiBadge',caStatusBadge:'startupCaBadge',bioStatusBadge:'startupBioBadge',apiStatusText:'startupApiText',caStatusText:'startupCaText',bioStatusText:'startupBioText'};
-const screenLabels={dashboard:"Dashboard",empresas:"Empresas",trabalhadores:"Trabalhadores",epis:"EPIs e CA",entrega:"Entrega de EPI",fichas:"Fichas de EPI",biometria:"Biometria",config:"Configurações"};
+const screenLabels={dashboard:"Dashboard",empresas:"Empresas","empresas-cadastradas":"Empresas Cadastradas",trabalhadores:"Trabalhadores",epis:"EPIs e CA",entrega:"Entrega de EPI",fichas:"Fichas de EPI",biometria:"Biometria",config:"Configurações"};
 const navigationMedia=typeof window.matchMedia==="function"?window.matchMedia("(max-width: 1024px)"):null;
 function setText(id,value){const node=$(id);if(node)node.textContent=value;const mirror=$(startupMirrors[id]);if(mirror)mirror.textContent=value;}
 function setStatusBadge(id,label,state){const node=$(id);if(node){node.textContent=label;node.dataset.state=state;}const mirror=$(startupMirrors[id]);if(mirror){mirror.textContent=label;mirror.dataset.state=state;renderStartupProgress();}}
@@ -50,12 +53,31 @@ function renderRoleAccess(){
   const master=isMaster();
   document.querySelectorAll("[data-master-only]").forEach(node=>node.classList.toggle("hidden",!master));
   $("empresasColumns")?.classList.toggle("company-self",!master);
+  $("empresasColumns")?.classList.toggle("company-registration-only",master);
+  const registered=$("companyRegisteredContent"),host=$(master?"companyListMasterHost":"companyListClientHost");
+  if(registered&&host&&registered.parentElement!==host)host.appendChild(registered);
   if($("empresaAtivaSelect"))$("empresaAtivaSelect").disabled=!master;
   setText("companyShortcutTitle",master?"Nova empresa":"Minha empresa");
   setText("companyShortcutText",master?"Cadastre clientes e acessos":"Consulte dados e logotipo");
-  setText("empresasIntro",master?"Cadastre empresas clientes, crie os acessos e acompanhe seus cadastros.":"Consulte os dados e o logotipo utilizados nas fichas da sua empresa.");
+  setText("empresasIntro",master?"Cadastre empresas clientes e crie seus acessos.":"Consulte os dados e o logotipo utilizados nas fichas da sua empresa.");
   setText("empresasListTitle",master?"Empresas cadastradas":"Minha empresa");
   setText("empresasListHelp",master?"Selecione a empresa em uso no topo da página.":"Este acesso está vinculado à sua empresa.");
+  renderWorkerRegistration();
+}
+function renderWorkerRegistration(){
+  const select=$("workerCompanySelect"),method=$("workerRegistrationMethod");if(!select||!method)return;
+  if(!cache.empresas.some(item=>item.id===workerRegistrationCompany)||workerRegistrationCompany!==activeEmpresaId)workerRegistrationCompany="";
+  select.innerHTML='<option value="">Selecione a empresa</option>'+cache.empresas.map(item=>`<option value="${escapeHtml(item.id)}">${escapeHtml(item.nome)}</option>`).join("");select.value=workerRegistrationCompany;
+  const socOption=method.querySelector('option[value="soc"]');if(socOption){socOption.hidden=!isMaster();socOption.disabled=!isMaster();}
+  if(!workerRegistrationCompany||method.value==='soc'&&!isMaster())method.value="";
+  method.disabled=!workerRegistrationCompany;const value=method.value;
+  $("workerImportCard")?.classList.toggle("hidden",!['modelo','soc'].includes(value));
+  $("workerStandardImport")?.classList.toggle("hidden",value!=='modelo');
+  const soc=document.querySelector('.soc-import');if(soc){soc.classList.toggle('hidden',value!=='soc'||!isMaster());soc.open=value==='soc';}
+  $("trabalhadorForm")?.classList.toggle("hidden",value!=='manual');
+  $("workerListCard")?.classList.toggle("hidden",value!=='consultar');
+  if(value==='consultar')renderTrabalhadores();
+  setText('workerImportHeading',value==='soc'?'Importar lista do SOC':'Importar equipe pelo Excel');
 }
 function renderConfigSummary(){
   const cfg=window.JP_CONFIG||{},auth=getAuth();
@@ -96,6 +118,7 @@ function setSidebarOpen(open,returnFocus=false){
 }
 function activateScreen(screen,focusContent=true){
   if(!Object.prototype.hasOwnProperty.call(screenLabels,screen))return;
+  if(screen==="empresas-cadastradas"&&!isMaster())return;
   if(screen!=="biometria"&&biometricCapture)resetBiometricCapture();
   document.querySelectorAll(".nav button").forEach(button=>{
     const active=button.dataset.screen===screen;button.classList.toggle("active",active);
@@ -117,7 +140,9 @@ async function cognitoRequest(operation,payload){
   return data;
 }
 async function cognitoLogin(username,password){
-  const authenticate=value=>cognitoRequest("InitiateAuth",{AuthFlow:"USER_PASSWORD_AUTH",AuthParameters:{USERNAME:username,PASSWORD:value}});
+  const response=await fetch(window.JP_CONFIG.apiBaseUrl+"/auth/resolver",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({login:username})});
+  const resolved=await response.json();if(!response.ok||!resolved.ok||!resolved.username)throw new Error(resolved.error||"Não foi possível conferir o login. Tente novamente.");
+  const authenticate=value=>cognitoRequest("InitiateAuth",{AuthFlow:"USER_PASSWORD_AUTH",AuthParameters:{USERNAME:resolved.username,PASSWORD:value}});
   let data;
   try{data=await authenticate(password);}catch(error){
     if(error.code!=="NotAuthorizedException"||!/^[a-z0-9]{8}$/i.test(password))throw error;
@@ -125,21 +150,23 @@ async function cognitoLogin(username,password){
     data=await authenticate("JpEpi1-Inicial-"+password.toUpperCase());
   }
   if(data.ChallengeName&&data.ChallengeName!=="NEW_PASSWORD_REQUIRED")throw new Error("Este acesso exige uma verificação adicional. Solicite orientação ao administrador.");
-  return data;
+  return {...data,resolvedUsername:resolved.username};
 }
+async function passwordDigest(value){return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value)))).map(byte=>byte.toString(16).padStart(2,"0")).join("");}
 function resetFirstAccess(){
   firstAccessChallenge=null;$("newPasswordForm")?.classList.add("hidden");$("loginForm")?.classList.remove("hidden");
-  ["newPassword","newPasswordConfirm"].forEach(id=>{if($(id))$(id).value="";});
+  ["initialPasswordConfirm","newPassword","newPasswordConfirm"].forEach(id=>{if($(id))$(id).value="";});
   if($("newPasswordButton"))$("newPasswordButton").disabled=false;
   if($("loginButton")){$("loginButton").disabled=false;$("loginButton").textContent="Entrar";}
   setText("newPasswordUsername","");setText("newPasswordMessage","");$("newPasswordMessage")?.classList.add("hidden");
 }
-function beginFirstAccess(data,username){
+async function beginFirstAccess(data,username,initialPassword){
   let required=[];try{required=JSON.parse(data.ChallengeParameters?.requiredAttributes||"[]");}catch(error){throw new Error("Não foi possível preparar o primeiro acesso. Entre novamente.");}
   if(!data.Session||required.length)throw new Error("O cadastro de acesso precisa ser completado pelo administrador antes da troca de senha.");
-  firstAccessChallenge={session:data.Session,username,cognitoUsername:data.ChallengeParameters?.USER_ID_FOR_SRP||data.ChallengeParameters?.USERNAME||username};
+  const attempt=authAttempt,initialHash=await passwordDigest(initialPassword);if(attempt!==authAttempt)return;
+  firstAccessChallenge={session:data.Session,username,initialHash,cognitoUsername:data.ChallengeParameters?.USER_ID_FOR_SRP||data.ChallengeParameters?.USERNAME||data.resolvedUsername||username};
   $("password").value="";hideMsg();$("loginForm").classList.add("hidden");$("newPasswordForm").classList.remove("hidden");
-  setText("newPasswordUsername",username);$("newPassword")?.focus();
+  setText("newPasswordUsername",username);$("initialPasswordConfirm")?.focus();
 }
 function rememberLogin(username){if($("rememberUser").checked)localStorage.setItem(rememberedUserKey,username);else localStorage.removeItem(rememberedUserKey);}
 function finishLogin(authentication,username){
@@ -160,6 +187,8 @@ function ensureSuccess(result, fallback="Não foi possível concluir a operaçã
   return result;
 }
 function clearSessionData(clearDrafts=false) {
+  workerListPage=1;if($("trabalhadorSearch"))$("trabalhadorSearch").value="";if($("workerStatusFilter"))$("workerStatusFilter").value="Ativo";
+  workerRegistrationCompany="";if($("workerRegistrationMethod"))$("workerRegistrationMethod").value="";
   clearCompanyPdf();
   if(typeof closeOperations==='function')closeOperations();
   sessionGeneration++;companyGeneration++;authAttempt++;logoCreateGeneration++;logoEditGeneration++;
@@ -257,7 +286,7 @@ function renderEmpresas(){
   if(!cache.empresas.length){el.textContent="Nenhuma empresa cadastrada.";return;}
   el.innerHTML=cache.empresas.map(e=>{
     const pending=isMaster()&&e.acessoStatus==="pendente";
-    const actions=`<div class="item-actions"><button class="btn btn-secondary" type="button" data-edit-company="${escapeHtml(e.id)}" onclick="editCompany(this.dataset.editCompany)">Editar</button>${isMaster()?`<button class="btn btn-danger" type="button" data-delete-company="${escapeHtml(e.id)}" onclick="deleteCompany(this.dataset.deleteCompany)">Excluir</button>`:""}${pending?`<button class="btn btn-secondary" type="button" data-empresa-id="${escapeHtml(e.id)}" onclick="resumeCompanyAccess(this)">Retomar acesso</button>`:""}</div>`;
+    const actions=`<div class="item-actions"><button class="btn btn-secondary" type="button" data-edit-company="${escapeHtml(e.id)}" onclick="editCompany(this.dataset.editCompany)">Editar</button>${isMaster()?`<button class="btn btn-danger" type="button" data-delete-company="${escapeHtml(e.id)}" onclick="deleteCompany(this.dataset.deleteCompany)">Excluir</button>${e.acessoStatus==="ativo"?`<button class="btn btn-secondary" type="button" data-reset-company="${escapeHtml(e.id)}" onclick="resetCompanyPassword(this.dataset.resetCompany)">Restaurar senha inicial</button>`:""}`:""}${pending?`<button class="btn btn-secondary" type="button" data-empresa-id="${escapeHtml(e.id)}" onclick="resumeCompanyAccess(this)">Retomar acesso</button>`:""}</div>`;
     return itemHtml(e,[e.cnpj,e.localidade,e.login?"Login: "+e.login:"",e.acessoStatus==="pendente"?"Acesso pendente de criação":e.acessoStatus==="ativo"?"Acesso da empresa criado":e.status],actions);
   }).join("");
   cache.empresas.forEach(e=>{const o=document.createElement("option");o.value=e.id;o.textContent=e.nome||"Empresa";if(String(e.id)===String(activeEmpresaId))o.selected=true;sel.appendChild(o);});
@@ -265,8 +294,14 @@ function renderEmpresas(){
 function normalizeSearch(value){return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR").trim();}
 function alphabetical(items,key){return [...items].sort((left,right)=>String(key(left)||"").localeCompare(String(key(right)||""),"pt-BR",{sensitivity:"base",numeric:true}));}
 function renderTrabalhadores(){
-  const search=normalizeSearch($("trabalhadorSearch")?.value),numeric=/^[\d.\-\s]+$/.test(search)?search.replace(/\D/g,""):"";const rows=cache.trabalhadores.filter(item=>!search||normalizeSearch([item.nomeCompleto||item.nome,item.cpf,item.matriculaESocial].join(" ")).includes(search)||(numeric&&String(item.cpf||"").replace(/\D/g,"").includes(numeric)));
-  $("trabalhadoresList").innerHTML=rows.length?rows.map(t=>itemHtml(t,[t.cpf,t.funcao,t.matriculaESocial?"Matrícula eSocial: "+t.matriculaESocial:"",t.status],`<div class="item-actions"><button class="btn btn-secondary" type="button" data-edit-worker="${escapeHtml(t.id)}" onclick="editWorker(this.dataset.editWorker)">Editar</button><button class="btn btn-secondary" type="button" data-worker-bio="${escapeHtml(t.id)}" onclick="workerBiometrics(this.dataset.workerBio)">Digitais · ${Object.keys(t.biometrias||{}).length}</button></div>`)).join(""):search?"Nenhum trabalhador corresponde à busca.":"Nenhum trabalhador cadastrado.";
+  const search=normalizeSearch($("trabalhadorSearch")?.value),status=$("workerStatusFilter")?.value||'Ativo',numeric=/^[\d.\-\s]+$/.test(search)?search.replace(/\D/g,""):"";
+  const rows=cache.trabalhadores.filter(item=>(status==='todos'||(item.status||'Ativo')===status)&&(!search||normalizeSearch([item.nomeCompleto||item.nome,item.cpf,item.matriculaESocial].join(" ")).includes(search)||(numeric&&String(item.cpf||"").replace(/\D/g,"").includes(numeric))));
+  const pages=Math.max(1,Math.ceil(rows.length/workerPageSize));workerListPage=Math.min(Math.max(1,workerListPage),pages);
+  const start=(workerListPage-1)*workerPageSize;
+  $("trabalhadoresList").innerHTML=rows.length?rows.slice(start,start+workerPageSize).map(t=>itemHtml(t,[t.cpf,t.funcao,t.matriculaESocial?"Matrícula eSocial: "+t.matriculaESocial:""],`<div class="item-actions"><span class="worker-status ${t.status==='Inativo'?'inactive':''}">${t.status==='Inativo'?'Inativo':'Ativo'}</span><button class="btn btn-secondary" type="button" data-edit-worker="${escapeHtml(t.id)}" onclick="editWorker(this.dataset.editWorker)">Editar</button><button class="btn btn-secondary" type="button" data-worker-bio="${escapeHtml(t.id)}" onclick="workerBiometrics(this.dataset.workerBio)">Digitais · ${Object.keys(t.biometrias||{}).length}</button><button class="btn btn-secondary" type="button" data-worker-status="${escapeHtml(t.id)}" onclick="changeWorkerStatus(this.dataset.workerStatus)">${t.status==='Inativo'?'Reativar':'Inativar'}</button></div>`)).join(""):"Nenhum trabalhador encontrado neste filtro.";
+  setText('workerListCount',rows.length?`${start+1}–${Math.min(start+workerPageSize,rows.length)} de ${rows.length} · Página ${workerListPage} de ${pages}`:'0 trabalhadores');
+  if($('workerPagePrevious'))$('workerPagePrevious').disabled=workerListPage<=1;
+  if($('workerPageNext'))$('workerPageNext').disabled=workerListPage>=pages;
 }
 async function refreshTrabalhadores(update=true){if(!activeEmpresaId){$("trabalhadoresList").textContent="Selecione uma empresa.";return;}const r=await api("/api/trabalhadores");ensureSuccess(r,"Não foi possível carregar os trabalhadores.");cache.trabalhadores=alphabetical(asArray(r),t=>t.nomeCompleto||t.nome||t.name);renderTrabalhadores();renderEntregaOptions();if(update)await refreshAllSafe();return r;}
 function isWithoutCA(item){return item.tipo==="sem_ca"||item.semCA===true;}
@@ -284,7 +319,11 @@ function renderFichas(){
 }
 async function refreshFichas(update=true){if(!activeEmpresaId){$("fichasList").textContent="Selecione uma empresa.";return}const r=await api("/api/fichas");ensureSuccess(r,"Não foi possível carregar as fichas.");cache.fichas=asArray(r);renderFichas();if(update)await refreshAllSafe();return r}
 async function refreshAllSafe(){try{await refreshAll()}catch(error){handleAppError(error)}}
-function renderEntregaOptions(){const tsel=$("entregaTrabalhador"),esel=$("entregaEpi");if(tsel)tsel.innerHTML=cache.trabalhadores.map(t=>`<option value="${escapeHtml(t.id)}">${escapeHtml(t.nomeCompleto||t.nome||"Trabalhador")}</option>`).join("");if(esel)esel.innerHTML=cache.epis.map(e=>`<option value="${escapeHtml(e.id)}">${escapeHtml(equipmentDescription(e)+" - "+equipmentLabel(e))}</option>`).join("");}
+function renderEntregaOptions(){
+  const tsel=$("entregaTrabalhador"),esel=$("entregaEpi"),devolucao=$("entregaTipo")?.value==='Devolução';
+  if(tsel){const selected=tsel.value,workers=cache.trabalhadores.filter(t=>devolucao||t.status!=='Inativo');tsel.innerHTML=workers.map(t=>`<option value="${escapeHtml(t.id)}">${escapeHtml(t.nomeCompleto||t.nome||"Trabalhador")}${t.status==='Inativo'?' · Inativo':''}</option>`).join("");if(workers.some(t=>t.id===selected))tsel.value=selected;}
+  if(esel){const selected=esel.value;esel.innerHTML=cache.epis.map(e=>`<option value="${escapeHtml(e.id)}">${escapeHtml(equipmentDescription(e)+" - "+equipmentLabel(e))}</option>`).join("");if(cache.epis.some(e=>e.id===selected))esel.value=selected;}
+}
 function updateEquipmentKind(){
   const without=$("epiSemCa")?.checked===true;
   $("epiCaFields")?.classList.toggle("hidden",without);$("epiCaDetails")?.classList.toggle("hidden",without);$("epiSemCaHelp")?.classList.toggle("hidden",!without);
@@ -294,6 +333,7 @@ function updateEquipmentKind(){
   $("caMessage").className="message hidden";$("caMessage").textContent="";
 }
 function normalizedCnpj(value){return String(value||"").replace(/[^a-z0-9]/gi,"").toUpperCase();}
+function suggestedCompanyLogin(name){return String(name||"").trim().split(/\s+/)[0].normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9._-]/g,"").replace(/^[^a-z0-9]+/,"").slice(0,80);}
 function createRequestId(){if(window.crypto?.randomUUID)return window.crypto.randomUUID();throw new Error("Este navegador precisa ser atualizado para concluir o cadastro.");}
 function updateCompanySubmitButton(){const button=$("empresaForm")?.querySelector('button[type="submit"]');if(button)button.disabled=logoCreateLoading||companySaving||companyPdfLoading;}
 function clearCompanyPdf(){
@@ -310,11 +350,11 @@ async function previewCompanyPdf(event){
   const message=$("empresaPdfMessage");message.className="message warn";message.textContent="Lendo o cartão CNPJ…";
   try{
     const base=(window.JP_CONFIG.appBasePath||"/EntregaEPI/").replace(/\/?$/, "/");
-    const {readCompanyPdf}=await import(base+"assets/company-pdf.mjs?v=20261010");
+    const {readCompanyPdf}=await import(base+"assets/company-pdf.mjs?v=20261010-empresas");
     if(!current())return;
     const result=await readCompanyPdf(file,{signal:controller.signal});if(!current())return;
     companyPdfDraft=result.fields;
-    const labels={nome:"Empresa",cnpj:"CNPJ",localidade:"Localidade"};
+    const labels={nome:"Empresa",cnpj:"CNPJ",localidade:"Localidade",telefone:"Contato",email:"E-mail"};
     $("empresaPdfFields").innerHTML=Object.entries(labels).map(([key,label])=>`<dt>${label}</dt><dd>${escapeHtml(result.fields[key]||"Não identificado")}</dd>`).join("");
     const applicable=Boolean(result.fields.cnpj&&result.fields.nome);
     $("empresaPdfPreview").classList.toggle("hidden",!applicable);$("empresaPdfApply").disabled=!applicable;
@@ -326,7 +366,8 @@ async function previewCompanyPdf(event){
 function applyCompanyPdf(){
   if(!isMaster()||companySaving||companyPdfLoading||!companyPdfDraft?.cnpj||!companyPdfDraft?.nome)return;
   $("empresaNome").value=companyPdfDraft.nome;$("empresaCnpj").value=companyPdfDraft.cnpj;$("empresaLocalidade").value=companyPdfDraft.localidade||"";
-  if(companyLoginAutomatic||!$("empresaLogin").value){$("empresaLogin").value=normalizedCnpj(companyPdfDraft.cnpj).toLowerCase();companyLoginAutomatic=true;}
+  for(const [key,id] of [["telefone","empresaTelefone"],["email","empresaEmail"]])if(companyPdfDraft[key])$(id).value=companyPdfDraft[key];
+  if(companyLoginAutomatic||!$("empresaLogin").value){$("empresaLogin").value=suggestedCompanyLogin(companyPdfDraft.nome);companyLoginAutomatic=true;}
   empresaRequestId="";companyPdfDraft=null;$("empresaPdfPreview").classList.add("hidden");
   $("empresaPdfMessage").className="message success";setText("empresaPdfMessage","Dados preenchidos. Confira o formulário, escolha o logo e salve a empresa.");
 }
@@ -391,7 +432,7 @@ function renderCompanyLogoEditor(){
   $("empresaAccessForm")?.classList.toggle("hidden",!needsAccess);
   if(needsAccess){
     setText("empresaAccessCompany",empresa.nome||"Empresa selecionada");
-    $("empresaAccessCnpj").value=empresa.cnpj||"";$("empresaAccessLogin").value=empresa.login||normalizedCnpj(empresa.cnpj).toLowerCase();
+    $("empresaAccessCnpj").value=empresa.cnpj||"";$("empresaAccessLogin").value=empresa.login||suggestedCompanyLogin(empresa.nome);
   }
 }
 async function selectLogo(event,editing){
@@ -563,6 +604,7 @@ async function confirmWorkersImport(){
   }
 }
 function downloadWorkersTemplate(){
+  if(!workerRegistrationCompany||workerRegistrationCompany!==activeEmpresaId){$("workerCompanySelect")?.focus();return;}
   const anchor=document.createElement("a");anchor.href=(window.JP_CONFIG.appBasePath||"/EntregaEPI/").replace(/\/?$/, "/")+"assets/modelo-trabalhadores.xlsx";anchor.download="Modelo_Trabalhadores_JP_EntregaEPI.xlsx";document.body.appendChild(anchor);anchor.click();anchor.remove();
 }
 async function consultarCA(){
@@ -808,14 +850,28 @@ function imprimirFicha(id){
 function goScreen(screen){document.querySelector(`[data-screen="${screen}"]`)?.click()}
 function showApp(){const auth=getAuth();if(!auth)return;$("loginPage").classList.add("hidden");$("appShell").classList.remove("hidden");$("userBadge").textContent=auth.username||"Usuário autenticado";renderConfigSummary();renderRoleAccess();activateScreen("dashboard",false);refreshAll().catch(handleAppError);runStartupChecks()}
 function showLogin(clearDrafts=false){clearSessionData(clearDrafts);if(clearDrafts)$("password").value="";$("appShell").classList.add("hidden");$("loginPage").classList.remove("hidden")}
-$("empresaAtivaSelect").addEventListener("change",async e=>{
+async function changeActiveCompany(id){
   if(typeof closeOperations==='function')closeOperations();
   if(!isMaster()){renderEmpresas();return;}
+  workerListPage=1;$("trabalhadorSearch").value="";$("workerStatusFilter").value="Ativo";
+  workerRegistrationCompany="";$("workerRegistrationMethod").value="";
   companyGeneration++;clearCompanyPdf();if(biometricCapture)resetBiometricCapture();logoEditGeneration++;clearCredentials();clearImportPreview();resetCompanyLogoEditor();
   ["trabalhadorForm","entregaForm"].forEach(id=>{$(id).reset();const button=$(id).querySelector('button[type="submit"]');if(button)button.disabled=false;});if($("trabalhadorSearch"))$("trabalhadorSearch").value="";
   cache.trabalhadores=[];cache.fichas=[];$("trabalhadoresList").textContent="Carregando...";$("fichasList").textContent="Carregando...";$("dashboardFichas").textContent="";renderEntregaOptions();
-  saveActiveCompany(e.target.value);await refreshAllSafe();
+  saveActiveCompany(id);await refreshAllSafe();
+}
+$("empresaAtivaSelect").addEventListener("change",event=>changeActiveCompany(event.target.value));
+$("workerCompanySelect").addEventListener("change",async event=>{
+  const id=event.target.value,generation=sessionGeneration;
+  if(!cache.empresas.some(item=>item.id===id)){workerRegistrationCompany="";renderWorkerRegistration();return;}
+  if(id!==activeEmpresaId){if(!isMaster())return;await changeActiveCompany(id);}
+  if(generation!==sessionGeneration||id!==activeEmpresaId)return;
+  workerRegistrationCompany=id;cancelWorkerEdit();
+  if(importPreview?.empresaId===id)$("workerRegistrationMethod").value=importPreview.origem==='soc'?'soc':'modelo';
+  else{clearImportPreview();$("workerRegistrationMethod").value="";}
+  renderWorkerRegistration();
 });
+$("workerRegistrationMethod").addEventListener("change",()=>{const selected=$("workerRegistrationMethod").value;if(!importPreview||(importPreview.origem==='soc'?'soc':'modelo')!==selected){clearImportReference();clearImportPreview();}cancelWorkerEdit();renderWorkerRegistration();});
 $("togglePassword").addEventListener("click",()=>{const i=$("password");const show=i.type==="password";i.type=show?"text":"password";$("togglePassword").textContent=show?"Ocultar":"Mostrar"});
 $("forgotLink").addEventListener("click",e=>{e.preventDefault();setMsg("warn","Recuperação de senha será tratada pelo administrador.")});
 $("loginForm").addEventListener("submit",async e=>{
@@ -824,7 +880,7 @@ $("loginForm").addEventListener("submit",async e=>{
   const attempt=++authAttempt;$("loginButton").disabled=true;$("loginButton").textContent="Entrando...";
   try{
     const result=await cognitoLogin(username,password);if(attempt!==authAttempt)return;
-    if(result.ChallengeName==="NEW_PASSWORD_REQUIRED")beginFirstAccess(result,username);else finishLogin(result.AuthenticationResult,username);
+    if(result.ChallengeName==="NEW_PASSWORD_REQUIRED")await beginFirstAccess(result,username,password);else finishLogin(result.AuthenticationResult,username);
   }catch(error){if(attempt===authAttempt)setMsg("error",error.code==="NotAuthorizedException"?"Usuário ou senha inválidos. Confira o acesso informado pelo administrador.":error.message||"Não foi possível entrar.");}
   finally{if(attempt===authAttempt){$("loginButton").disabled=false;$("loginButton").textContent="Entrar";}}
 });
@@ -838,6 +894,8 @@ $("newPasswordForm").addEventListener("submit",async event=>{
   }
   const attempt=++authAttempt,challenge=firstAccessChallenge;button.disabled=true;
   try{
+    if(await passwordDigest($("initialPasswordConfirm").value)!==challenge.initialHash)throw new Error("A senha inicial não confere. Digite novamente a senha utilizada para entrar.");
+    if(attempt!==authAttempt)return;
     const result=await cognitoRequest("RespondToAuthChallenge",{ChallengeName:"NEW_PASSWORD_REQUIRED",Session:challenge.session,ChallengeResponses:{USERNAME:challenge.cognitoUsername,NEW_PASSWORD:password}});
     if(attempt!==authAttempt)return;
     if(result.ChallengeName)throw new Error("Este acesso exige uma verificação adicional. Solicite orientação ao administrador.");
@@ -871,7 +929,7 @@ $("empresaPdfFile").addEventListener("change",previewCompanyPdf);
 $("empresaPdfApply").addEventListener("click",applyCompanyPdf);
 $("trabalhadorForm").addEventListener("submit",event=>submitWorker(event));
 $("epiForm").addEventListener("submit",event=>submitCadastro(event,"/api/epis"));
-$("empresaCnpj").addEventListener("input",()=>{if(companyLoginAutomatic)$("empresaLogin").value=normalizedCnpj($("empresaCnpj").value).toLowerCase();});
+$("empresaNome").addEventListener("input",()=>{if(companyLoginAutomatic)$("empresaLogin").value=suggestedCompanyLogin($("empresaNome").value);});
 $("empresaLogin").addEventListener("input",()=>{companyLoginAutomatic=!$("empresaLogin").value.trim();});
 $("empresaForm").addEventListener("input",()=>{empresaRequestId="";});
 $("empresaLogoFile").addEventListener("change",event=>selectLogo(event,false));
@@ -881,7 +939,6 @@ $("empresaLogoAtualRemove").addEventListener("click",()=>{logoEditGeneration++;e
 $("empresaLogoForm").addEventListener("submit",submitCompanyLogo);
 $("empresaAccessForm").addEventListener("submit",submitExistingCompanyAccess);
 $("empresaAccessForm").addEventListener("input",event=>{event.currentTarget.dataset.requestId="";});
-$("empresaAccessCnpj").addEventListener("input",()=>{$("empresaAccessLogin").value=normalizedCnpj($("empresaAccessCnpj").value).toLowerCase();});
 $("empresaCredentialsDismiss").addEventListener("click",clearCredentials);
 $("empresaCredentialsToggle").addEventListener("click",()=>{const input=$("empresaCredentialsPassword"),visible=input.type==="password";input.type=visible?"text":"password";setText("empresaCredentialsToggle",visible?"Ocultar":"Mostrar");});
 $("trabalhadoresTemplateButton").addEventListener("click",downloadWorkersTemplate);
@@ -889,7 +946,11 @@ $("trabalhadoresImportFile").addEventListener("change",previewWorkersFile);
 $("trabalhadoresSocFile").addEventListener("change",previewWorkersFile);
 $("trabalhadoresImportCommit").addEventListener("click",()=>confirmWorkersImport().catch(handleAppError));
 $("trabalhadoresImportCancel").addEventListener("click",()=>{clearImportReference();clearImportPreview();});
-$("trabalhadorSearch").addEventListener("input",renderTrabalhadores);
+$("trabalhadorSearch").addEventListener("input",()=>{workerListPage=1;renderTrabalhadores();});
+$("workerStatusFilter").addEventListener("change",()=>{workerListPage=1;renderTrabalhadores();});
+$("workerPagePrevious").addEventListener("click",()=>{workerListPage--;renderTrabalhadores();});
+$("workerPageNext").addEventListener("click",()=>{workerListPage++;renderTrabalhadores();});
+$("entregaTipo").addEventListener("change",()=>{renderEntregaOptions();setText("movementHelp",$("entregaTipo").value==='Devolução'?"Preenche somente a data de devolução na nova ficha. Use também para registrar o EPI devolvido em uma troca.":"Preenche a data de entrega na nova ficha.");});
 $("epiSearch").addEventListener("input",renderEpis);
 ["epiComCa","epiSemCa"].forEach(id=>$(id).addEventListener("change",updateEquipmentKind));
 $("entregaForm").addEventListener("submit",async event=>{

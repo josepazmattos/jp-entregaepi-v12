@@ -11,7 +11,7 @@ async function socFile({ change, rows = 1, wide = true } = {}) {
   return Buffer.from(await book.xlsx.writeBuffer());
 }
 function companyPdf({ scanned = false, cnpj = '11.222.333/0001-81', multiple = false } = {}) {
-  const entries = [['COMPROVANTE DE INSCRICAO E SITUACAO CADASTRAL', 40, 780], ['NUMERO DE INSCRICAO', 40, 740], [cnpj, 40, 720], ['NOME EMPRESARIAL', 40, 680], ['EMPRESA SINTETICA LTDA', 40, 660], ['MUNICIPIO', 40, 620], ['UF', 440, 620], ['CIDADE EXEMPLO', 40, 600], ['MS', 440, 600]];
+  const entries = [['COMPROVANTE DE INSCRICAO E SITUACAO CADASTRAL', 40, 780], ['NUMERO DE INSCRICAO', 40, 740], [cnpj, 40, 720], ['NOME EMPRESARIAL', 40, 680], ['EMPRESA SINTETICA LTDA', 40, 660], ['MUNICIPIO', 40, 620], ['UF', 440, 620], ['CIDADE EXEMPLO', 40, 600], ['MS', 440, 600], ['ENDERECO ELETRONICO', 40, 560], ['TELEFONE', 350, 560], ['CONTATO@EXAMPLE.INVALID', 40, 540], ['67 99999-0000', 350, 540]];
   if (multiple) entries.push(['11.444.777/0001-61', 40, 500]);
   const stream = scanned ? 'q Q' : entries.map(([text, x, y]) => `BT /F1 11 Tf ${x} ${y} Td (${text}) Tj ET`).join('\n');
   const objects = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>', '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`];

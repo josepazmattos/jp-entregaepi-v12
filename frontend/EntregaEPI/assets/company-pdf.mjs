@@ -11,7 +11,7 @@ export function validCnpj(value) {
   const first = digit(cnpj.slice(0, 12));
   return cnpj.slice(-2) === first + digit(cnpj.slice(0, 12) + first);
 }
-const labels = { nome: ['NOME EMPRESARIAL', 'RAZAO SOCIAL'], cnpj: ['NUMERO DE INSCRICAO', 'CNPJ'], cidade: ['MUNICIPIO', 'CIDADE', 'LOCALIDADE'], uf: ['UF', 'ESTADO'] };
+const labels = { nome: ['NOME EMPRESARIAL', 'RAZAO SOCIAL'], cnpj: ['NUMERO DE INSCRICAO', 'CNPJ'], cidade: ['MUNICIPIO', 'CIDADE', 'LOCALIDADE'], uf: ['UF', 'ESTADO'], email: ['ENDERECO ELETRONICO', 'E-MAIL', 'EMAIL'], telefone: ['TELEFONE', 'CONTATO', 'TELEFONES'] };
 const isLabel = (text, options) => options.some(label => fold(text).replace(/:.*$/, '') === label);
 export function extractCompany(pages) {
   const fields = {}, texts = [];
@@ -43,7 +43,9 @@ export function extractCompany(pages) {
   if (!name) warnings.push('A razão social não foi identificada. Preencha o nome manualmente.');
   if (!locality) warnings.push('Município/UF não identificados. Confira a localidade.');
   if (text.replace(/\s/g, '').length < 35) warnings.push('Este PDF não contém texto legível. Use um PDF pesquisável ou o cadastro manual.');
-  return { fields: { nome: name, cnpj: validCnpj(cnpj) ? cnpj.replace(/^(.{2})(.{3})(.{3})(.{4})(.{2})$/, '$1.$2.$3/$4-$5') : '', localidade: locality }, warnings };
+  const email = String(fields.email || '').trim().toLowerCase();
+  const telefone = String(fields.telefone || '').trim();
+  return { fields: { nome: name, cnpj: validCnpj(cnpj) ? cnpj.replace(/^(.{2})(.{3})(.{3})(.{4})(.{2})$/, '$1.$2.$3/$4-$5') : '', localidade: locality, email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '', telefone: /^[\d\s()+./-]{8,50}$/.test(telefone) ? telefone : '' }, warnings };
 }
 
 export async function readCompanyPdf(file, { signal } = {}) {

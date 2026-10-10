@@ -19,11 +19,25 @@ function dialogShell(doc,title,intro){
 function dialogMessage(dialog,message,type=''){const node=dialog.querySelector('.dialog-message');node.textContent=message;node.className='dialog-message '+type;}
 function editWorker(id){
   const item=cache.trabalhadores.find(x=>x.id===id);if(!item||String(item.empresaId)!==String(activeEmpresaId))return;
+  workerRegistrationCompany=activeEmpresaId;$('workerRegistrationMethod').value='manual';renderWorkerRegistration();
   workerEdit={id,version:item._version||1,...operationContext()};
   const form=$('trabalhadorForm');for(const field of form.elements)if(field.name)field.value=item[field.name]??(field.name==='nomeCompleto'?item.nome||'':'');
   setText('workerFormTitle','Editar trabalhador');$('workerEditCancel').classList.remove('hidden');form.scrollIntoView({block:'start',behavior:'smooth'});$('trabalhadorNome').focus({preventScroll:true});
 }
 function cancelWorkerEdit(){workerEdit=null;$('trabalhadorForm').reset();setText('workerFormTitle','Novo trabalhador');$('workerEditCancel').classList.add('hidden');}
+async function changeWorkerStatus(id){
+  const initialContext=operationContext();
+  try{await refreshTrabalhadores(false);assertOperationContext(initialContext);}catch(error){handleAppError(error);return;}
+  const item=cache.trabalhadores.find(x=>x.id===id);if(!item||String(item.empresaId)!==String(activeEmpresaId))return;
+  const inactive=item.status!=='Inativo',status=inactive?'Inativo':'Ativo',context=operationContext();
+  const dialog=dialogShell(document,inactive?'Inativar trabalhador':'Reativar trabalhador',item.nomeCompleto||item.nome||'Trabalhador');
+  dialog.querySelector('.dialog-content').textContent=inactive?'O trabalhador sairá das novas entregas. Suas fichas anteriores e digitais serão preservadas. Você poderá reativá-lo quando precisar.':'O trabalhador voltará a ficar disponível nas novas entregas.';
+  const button=document.createElement('button');button.type='button';button.className='btn btn-primary';button.textContent=inactive?'Confirmar inativação':'Confirmar reativação';dialog.querySelector('.dialog-actions').prepend(button);
+  button.onclick=async()=>{if(button.disabled)return;button.disabled=true;
+    try{assertOperationContext(context);ensureSuccess(await api('/api/trabalhadores/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({status,_version:item._version||1})}));assertOperationContext(context);await refreshTrabalhadores(false);assertOperationContext(context);dialog.close();setText('appMessage',inactive?'Trabalhador inativado. Histórico preservado.':'Trabalhador reativado.');$('appMessage').className='message success';}
+    catch(error){if(dialog.isConnected)dialogMessage(dialog,error.message,'error');button.disabled=false;}
+  };
+}
 async function submitWorker(event){
   if(!workerEdit)return submitCadastro(event,'/api/trabalhadores',true);
   event.preventDefault();const context=workerEdit,form=event.target,button=form.querySelector('[type=submit]');if(button.disabled)return;button.disabled=true;
@@ -34,11 +48,29 @@ function editCompany(id){
   const item=cache.empresas.find(x=>x.id===id);if(!item)return;
   const context=operationContext(),dialog=dialogShell(document,'Editar empresa',item.nome||'Empresa selecionada');
   const fields=[['nome','Nome da empresa'],['localidade','Localidade'],['uf','UF'],['responsavel','Responsável'],['email','E-mail'],['telefone','Telefone']];
+  if(isMaster()&&item.acessoStatus==='ativo')fields.splice(1,0,['login','Login da empresa']);
   dialog.querySelector('.dialog-content').innerHTML='<form id="companyEditForm">'+fields.map(([key,label])=>`<label for="company-edit-${key}">${label}</label><input id="company-edit-${key}" name="${key}" value="${escapeHtml(item[key]||'')}" ${key==='nome'?'required':''} ${key==='uf'?'maxlength="2"':''}>`).join('')+`<p class="field-help">CNPJ: ${escapeHtml(item.cnpj)} · Login: ${escapeHtml(item.login||'—')}</p><button type="submit" class="btn btn-primary" style="margin-top:16px">Salvar alterações</button></form>`;
   const form=dialog.querySelector('form');form.onsubmit=async event=>{
     event.preventDefault();const button=form.querySelector('button');if(button.disabled)return;button.disabled=true;
     try{assertOperationContext(context);ensureSuccess(await api('/api/empresas/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({...Object.fromEntries(new FormData(form)),_version:item._version||1})}));assertOperationContext(context);await refreshEmpresas(false);dialog.close();}
     catch(error){dialogMessage(dialog,error.message,'error');}finally{button.disabled=false;}
+  };
+}
+function resetCompanyPassword(id){
+  if(!isMaster())return;
+  let item=cache.empresas.find(x=>x.id===id);if(!item)return;
+  const context=operationContext(),requestId=createRequestId(),dialog=dialogShell(document,'Restaurar senha inicial',item.nome);
+  dialog.querySelector('.dialog-content').innerHTML='<p>A senha voltará aos oito primeiros caracteres do CNPJ. O cliente deverá criar uma nova senha ao entrar.</p><label for="companyResetName">Confirme o nome da empresa</label><input id="companyResetName" autocomplete="off"><button id="companyResetConfirm" class="btn btn-primary" type="button" style="margin-top:16px">Restaurar senha inicial</button>';
+  dialog.querySelector('#companyResetConfirm').onclick=async event=>{
+    const button=event.target;if(button.disabled)return;button.disabled=true;
+    try{
+      assertOperationContext(context);
+      ensureSuccess(await api('/api/empresas/'+encodeURIComponent(id)+'/restaurar-senha',{method:'POST',body:JSON.stringify({_version:item._version,requestId,confirmacao:dialog.querySelector('#companyResetName').value})}));
+      assertOperationContext(context);await refreshEmpresas(false);assertOperationContext(context);
+      dialog.querySelector('.dialog-content').innerHTML=`<p>Senha inicial restaurada. A troca será obrigatória no próximo acesso.</p><label>Login</label><input readonly value="${escapeHtml(item.login)}"><label>Senha inicial</label><div class="password-wrap"><input id="resetInitialPassword" type="password" readonly autocomplete="off" value="${escapeHtml(normalizedCnpj(item.cnpj).slice(0,8))}"><button id="resetInitialToggle" type="button" class="toggle-password">Mostrar</button></div>`;
+      dialog.querySelector('#resetInitialToggle').onclick=()=>{const input=dialog.querySelector('#resetInitialPassword');input.type=input.type==='password'?'text':'password';dialog.querySelector('#resetInitialToggle').textContent=input.type==='password'?'Mostrar':'Ocultar';};
+      dialogMessage(dialog,'Senha restaurada.','success');
+    }catch(error){dialogMessage(dialog,error.message,'error');try{await refreshEmpresas(false);item=cache.empresas.find(x=>x.id===id)||item;}catch{}button.disabled=false;}
   };
 }
 function deleteCompany(id){

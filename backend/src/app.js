@@ -6,6 +6,7 @@ import episRoutes from './routes/epis.routes.js';
 import fichasRoutes from './routes/fichas.routes.js';
 import caepiRoutes from './routes/caepi.routes.js';
 import auditoriaRoutes from './routes/auditoria.routes.js';
+import loginRoutes from './routes/login.routes.js';
 import { requireAuth } from './middleware/auth.js';
 import { probeStorage } from './db/store.js';
 import * as storage from './db/store.js';
@@ -35,6 +36,7 @@ app.get('/health', async (req, res) => {
 });
 
 app.use('/api/caepi', caepiRoutes);
+app.use('/auth', loginRoutes);
 app.use('/api', requireAuth, companyActive(storage));
 app.use('/api/empresas', empresasRoutes);
 app.use('/api/trabalhadores', trabalhadoresRoutes);

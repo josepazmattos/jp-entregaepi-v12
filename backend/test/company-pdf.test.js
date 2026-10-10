@@ -5,7 +5,7 @@ const cell = (str, x, y) => ({ str, transform: [1, 0, 0, 1, x, y] });
 const page = () => [cell('NUMERO DE INSCRICAO', 40, 740), cell('11.222.333/0001-81', 40, 720), cell('NOME EMPRESARIAL', 40, 680), cell('EMPRESA SINTETICA', 40, 660), cell('MUNICIPIO', 40, 620), cell('UF', 440, 620), cell('CIDADE EXEMPLO', 40, 600), cell('MS', 440, 600)];
 test('cartão CNPJ extrai razão social e município/UF respeitando colunas e valida DV', () => {
   const result = extractCompany([page()]);
-  assert.deepEqual(result.fields, { nome: 'EMPRESA SINTETICA', cnpj: '11.222.333/0001-81', localidade: 'CIDADE EXEMPLO/MS' });
+  assert.deepEqual(result.fields, { nome: 'EMPRESA SINTETICA', cnpj: '11.222.333/0001-81', localidade: 'CIDADE EXEMPLO/MS', email: '', telefone: '' });
   assert.deepEqual(result.warnings, []); assert.equal(validCnpj('00000000000000'), false); assert.equal(validCnpj('11222333000182'), false);
 });
 test('cartão com múltiplos CNPJs não mistura empresas e PDF sem texto mantém cadastro manual', () => {
@@ -16,4 +16,9 @@ test('cartão aceita rótulos inline e CNPJ alfanumérico já suportado pelo cad
   assert.equal(validCnpj('12.ABC.345/01DE-35'), true);
   const result = extractCompany([[cell('CNPJ: 12.ABC.345/01DE-35', 0, 10), cell('RAZAO SOCIAL: EMPRESA SINTETICA', 0, 0)]]);
   assert.equal(result.fields.cnpj, '12.ABC.345/01DE-35'); assert.equal(result.fields.nome, 'EMPRESA SINTETICA');
+});
+
+test('cartão extrai telefone e e-mail de colunas adjacentes sem misturar valores',()=>{
+ const result=extractCompany([[...page(),cell('ENDERECO ELETRONICO',40,540),cell('TELEFONE',350,540),cell('CONTATO@EXEMPLO.INVALID',40,520),cell('(67) 99999-0000 / (67) 3333-0000',350,520)]]);
+ assert.equal(result.fields.email,'contato@exemplo.invalid');assert.equal(result.fields.telefone,'(67) 99999-0000 / (67) 3333-0000');
 });
