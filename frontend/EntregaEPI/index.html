@@ -324,6 +324,14 @@
 
         <section id="screen-config" class="screen" aria-labelledby="title-config">
           <div class="topbar"><div><span class="kicker">Sistema</span><h1 id="title-config">Configurações</h1><p>Informações do ambiente e verificação dos serviços do sistema.</p></div></div>
+          <section id="downloadsBiometria" class="card service-card" aria-labelledby="downloadsTitle">
+            <div class="section-heading"><div><h2 id="downloadsTitle">Downloads</h2><p>Componente local para o leitor NITGEN Hamster DX.</p></div></div>
+            <h3>JP Biometria para Windows</h3>
+            <p>Atualiza o agente em computadores com driver NITGEN, SDK e Java já instalados. As digitais cadastradas no aplicativo são preservadas.</p>
+            <p class="field-help">Versão 12.10.0-bio2 · Windows 64 bits · 7,9 MB</p>
+            <div class="bio-connection-actions"><a id="downloadBiometriaLink" class="btn btn-primary" href="/__APP_PREFIX__/updates/12.10.0-bio2/JP-Biometria-Setup-12.10.0-bio2.exe" download>Baixar JP Biometria</a><button class="btn btn-secondary" type="button" onclick="goScreen('biometria')">Verificar leitor</button></div>
+            <p class="field-help">Abra o arquivo baixado e siga a instalação. Ao voltar ao aplicativo, a conexão será verificada automaticamente. Em uma máquina nova, prepare primeiro o driver, o SDK e o Java.</p>
+          </section>
           <section class="card startup-checks" aria-labelledby="startupTitle">
             <div class="section-heading"><div><h2 id="startupTitle">Verificação ao entrar</h2><p id="startupStatusText" role="status" aria-live="polite">Preparando as verificações automáticas.</p></div><button id="startupRetryButton" class="btn btn-secondary" type="button" onclick="runStartupChecks(true)">Verificar novamente</button></div>
             <div class="startup-grid">
@@ -347,7 +355,7 @@
   </section>
   <script src="/__APP_PREFIX__/assets/ficha.js?v=20261010-movimentos"></script>
   <script src="/__APP_PREFIX__/assets/biometria.js?v=20261011-login1"></script>
-  <script src="/__APP_PREFIX__/assets/app.js?v=20261011-bio2"></script>
+  <script src="/__APP_PREFIX__/assets/app.js?v=20261011-downloads1"></script>
   <script src="/__APP_PREFIX__/assets/operations.js?v=20261011-login1"></script>
   <script src="/__APP_PREFIX__/assets/jpged.js?v=20261011-bio2"></script>
   <script src="/__APP_PREFIX__/assets/certificate-install.js?v=20261011-cert1"></script>

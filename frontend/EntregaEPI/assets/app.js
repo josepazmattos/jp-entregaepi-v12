@@ -1133,7 +1133,7 @@ async function resumeInstallationWatch(){
     if(epoch===installationWatchEpoch&&session===sessionGeneration&&sessionStorage.getItem(installationWatchKey))installationWatchTimer=setTimeout(resumeInstallationWatch,5000);
   }
 }
-$('bioRepairLink')?.addEventListener('click',()=>{
+for(const id of ['bioRepairLink','downloadBiometriaLink'])$(id)?.addEventListener('click',()=>{
   sessionStorage.setItem(installationWatchKey,String(Date.now()+15*60*1000));
   clearTimeout(installationWatchTimer);installationWatchTimer=setTimeout(resumeInstallationWatch,5000);
 });
