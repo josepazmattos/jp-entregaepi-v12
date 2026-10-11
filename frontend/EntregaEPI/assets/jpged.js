@@ -81,12 +81,25 @@ async function loadJpged(next=false){
 }
 function renderJpged(){
   const search=normalizeSearch($('jpgedSearch')?.value||''),rows=jpgedItems.filter(x=>!search||normalizeSearch(`${x.trabalhadorNome} ${x.numero}`).includes(search));
-  $('jpgedList').innerHTML=rows.length?rows.map(x=>`<div class="ficha-row"><div><strong>${escapeHtml(x.trabalhadorNome)}</strong><small>${escapeHtml(x.numero)} · ${escapeHtml(x.tipo)} · ${escapeHtml(x.data)}</small><small>Certificado em ${escapeHtml(new Date(x.certifiedAt).toLocaleString('pt-BR'))}</small></div><div class="item-actions"><span class="ficha-state signed">Biometria confirmada · Documento certificado</span><button class="btn btn-secondary" type="button" data-jpged="${escapeHtml(x.id)}">Baixar PDF original</button></div></div>`).join(''):'Nenhum documento certificado encontrado nesta página.';
-  $('jpgedList').querySelectorAll('[data-jpged]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{await downloadJpged(button.dataset.jpged);}catch(error){handleAppError(error);}finally{button.disabled=false;}});
+  $('jpgedList').innerHTML=rows.length?rows.map(x=>`<div class="ficha-row"><div><strong>${escapeHtml(x.trabalhadorNome)}</strong><small>${escapeHtml(x.numero)} · ${escapeHtml(x.tipo)} · ${escapeHtml(x.data)}</small><small>Original certificado em ${escapeHtml(new Date(x.certifiedAt).toLocaleString('pt-BR'))}</small>${x.compactRevision?`<small>Impressão compacta certificada em ${escapeHtml(new Date(x.compactRevision.certifiedAt).toLocaleString('pt-BR'))}</small>`:''}</div><div class="item-actions"><span class="ficha-state signed">Biometria confirmada · Documento certificado</span><button class="btn btn-secondary" type="button" data-jpged="${escapeHtml(x.id)}">${x.compactRevision?'Baixar PDF atualizado':'Baixar PDF original'}</button>${x.compactRevision?`<button class="btn btn-secondary" type="button" data-jpged="${escapeHtml(x.id)}" data-original="true">Original anterior</button>`:x.layoutVersion==='compact-1'?'':`<button class="btn btn-primary" type="button" data-layout="${escapeHtml(x.id)}">Atualizar impressão</button>`}</div></div>`).join(''):'Nenhum documento certificado encontrado nesta página.';
+  $('jpgedList').querySelectorAll('[data-jpged]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{await downloadJpged(button.dataset.jpged,button.dataset.original==='true');}catch(error){handleAppError(error);}finally{button.disabled=false;}});
+  $('jpgedList').querySelectorAll('[data-layout]').forEach(button=>button.onclick=()=>updateJpgedLayout(button));
   $('jpgedNext').classList.toggle('hidden',!jpgedCursor);
 }
-async function downloadJpged(id){
-  const context=operationContext(),r=ensureSuccess(await api('/api/jpged/documentos/'+encodeURIComponent(id)+'/download'));assertOperationContext(context);
+async function updateJpgedLayout(button){
+  if(button.disabled)return;
+  const context=operationContext(),id=button.dataset.layout;
+  if(!confirm('Criar uma nova versão com a impressão compacta?\n\nOs dados e a biometria serão preservados, sem nova leitura. O cofre aplicará uma nova certificação. O PDF anterior continuará disponível.'))return;
+  const controller=new AbortController();operationControllers.add(controller);clearAppError();button.disabled=true;button.textContent='Atualizando impressão…';
+  try{
+    const result=ensureSuccess(await api('/api/jpged/documentos/'+encodeURIComponent(id)+'/atualizar-layout',{method:'POST',body:'{}',signal:controller.signal}));assertOperationContext(context);
+    jpgedItems=jpgedItems.map(item=>item.id===id?{...item,layoutVersion:'compact-1',compactRevision:result.body.revision||item.compactRevision}:item);renderJpged();
+    setText('appMessage','Impressão atualizada. Baixe o PDF atualizado; o original anterior foi preservado.');$('appMessage').className='message success';
+  }catch(error){try{assertOperationContext(context);handleAppError(error);}catch{}}
+  finally{operationControllers.delete(controller);button.disabled=false;button.textContent='Atualizar impressão';}
+}
+async function downloadJpged(id,original=false){
+  const context=operationContext(),r=ensureSuccess(await api('/api/jpged/documentos/'+encodeURIComponent(id)+'/download'+(original?'?versao=original':'')));assertOperationContext(context);
   const url=new URL(r.body.url);if(url.protocol!=='https:'||!/^jpged-documentos-003020057405\.s3(?:\.sa-east-1)?\.amazonaws\.com$/.test(url.hostname))throw new Error('Endereço de download não reconhecido.');
   const link=document.createElement('a');link.href=url.href;link.rel='noopener noreferrer';link.referrerPolicy='no-referrer';link.download='';document.body.appendChild(link);link.click();link.remove();
 }

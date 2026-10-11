@@ -1,0 +1,37 @@
+name: Reemissão compacta de fichas preservando originais
+on:
+  push:
+    branches: [jpged-layout-antigo-20261011]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preservar leitor, cofre e renderizador compacto
+        run: git diff --exit-code 2de55ae41085101be1154c9a27d74918570f6c09 HEAD -- native backend/src/services/jpged-pdf.js backend/src/services/jpged-pki.js backend/src/services/jpged-vault.js backend/src/services/biometria.service.js
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: python3 -m pip install cryptography==46.0.3
+      - run: sudo apt-get update && sudo apt-get install --no-install-recommends -y poppler-utils
+      - run: npm ci --prefix backend --no-audit --no-fund
+      - run: JPGED_LAYOUT_OUTPUT=tests/output/layout node --test backend/test/jpged-*.test.js backend/test/auth.test.js backend/test/biometria-login.test.js backend/test/ficha-capture-api.test.js tests/biometria.test.cjs
+      - run: npm ci --prefix tests --no-audit --no-fund
+      - run: npm run install-browser --prefix tests
+      - run: node tests/jpged-layout-browser.cjs
+      - run: node tests/auto-update-browser.cjs
+      - run: node tests/jpged-browser.cjs
+      - run: node tests/frontend-startup-browser.cjs
+      - run: node tests/biometria-login-browser.cjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: jpged-layout-${{ github.sha }}
+          path: tests/output/
+          retention-days: 14
