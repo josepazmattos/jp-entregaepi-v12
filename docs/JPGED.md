@@ -101,3 +101,42 @@ Em 10/10/2026 foi criado um objeto sintético identificável e confirmada a repl
 O certificado pode ser configurado com o Hamster DX desconectado. O instalador completo conclui a instalação do agente e do assinador e informa separadamente que falta conectar o leitor para capturar digitais. Uma instalação antiga em outra porta não deve impedir a busca pelo assinador atualizado. Instale o pacote 12.10.1 para receber também a correção da leitura das respostas da API pelo agente Java.
 
 No Dashboard, **Certificado digital** apresenta a situação do cadastro da empresa selecionada: Pendente, Configurado, Vencido ou Indisponível. Ao clicar, abre Biometria. “Configurado” indica um certificado cadastrado dentro da validade; o acesso à chave local e a validação criptográfica são conferidos novamente a cada assinatura. A ausência do leitor mantém o indicador de Biometria em atenção, sem bloquear o cadastro do certificado.
+
+## Cofre administrado pelo Master — 12.10.1
+
+O Master seleciona a empresa em Biometria e cadastra uma vez um A1 RSA (.pfx/.p12,
+2048/3072/4096 bits). A senha do Master é reconfirmada pela interface; a API exige
+MASTER e autenticação recente. O PFX é aberto somente no agente do administrador,
+sem importação no repositório do Windows. Senha e chave em claro não atravessam a API.
+O agente comprova posse, recebe a chave pública de wrapping do KMS e aplica
+RSA_AES_KEY_WRAP_SHA_256 (RSA-OAEP SHA256 + AES-256 RFC5649). Somente o material
+protegido é recebido pelo backend. A identidade/cadeia/validade/LCR do A1 continuam
+verificadas; e-CPF não exige cadastro nem pesquisa de representante.
+
+A chave importada recebe política própria, restrita às operações JPGED do serviço.
+A permissão IAM de criação permite somente RSA EXTERNAL SIGN_VERIFY na região da
+aplicação; não concede uso geral, alteração de políticas ou marcação de chaves
+existentes. O bypass do teste de auto-administração na criação é intencional:
+o aplicativo não pode modificar a política; a conta AWS conserva a administração.
+Uma invasão do backend/conta administrativa continua sendo risco: KMS protege a
+custódia, mas não substitui a proteção do código, da autenticação e das permissões.
+
+A API não oferece assinatura genérica. O job é vinculado ao usuário, empresa,
+ficha, prova biométrica, hash do PDF, certificado e prazo. A certificação gera CMS
+com atributos assinados e ESS SigningCertificateV2 e valida o resultado antes de
+incorporá-lo ao PDF e arquivá-lo. O cliente não recebe ARN/chave privada/arquivo A1.
+Certificados antigos locais continuam utilizáveis até migração pelo Master.
+
+Na substituição, a nova chave só é ativada após teste de assinatura; concorrência
+usa versões condicionais. Cancelamentos e falhas retiram a chave nova sem alterar
+o certificado anterior. Chaves substituídas/desativadas entram em exclusão agendada
+em sete dias; os PDFs e os certificados públicos não dependem dessas chaves para
+verificação. A desativação no aplicativo não revoga o A1 junto à certificadora.
+Operações interrompidas antes de receber a resposta AWS devem ser conferidas no
+CloudTrail e nos registros IMPORT/AUDIT; a próxima configuração limpa importação
+expirada conhecida. Não há alegação de teste de intrusão independente.
+
+Custo de referência: US$ 1/chave/mês no KMS, proporcional ao tempo, mais operações,
+armazenamento, API e tributos. Não enviar A1, senha, chave ou templates biométricos
+para GitHub. Cloud A1 não exportável depende da API do fornecedor, não desta importação.
+O protocolo imprimível fica em assets/protocolo-certificado.html.

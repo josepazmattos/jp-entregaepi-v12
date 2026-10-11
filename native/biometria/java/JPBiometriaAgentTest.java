@@ -15,7 +15,7 @@ public final class JPBiometriaAgentTest {
     private static final String ORIGIN = "https://www.jptreinamentos.com.br";
     private static final String SHA = "1111111111111111111111111111111111111111";
     public static void main(String[] args) throws Exception {
-        jsonTests(); certificateResponseTests(); imageTests(); httpTests();
+        jsonTests(); certificateResponseTests(); vaultWrapTests(); imageTests(); httpTests();
         System.out.println("Java native bridge: " + assertions + " assertions passed (synthetic reader; no physical SDK/device).");
     }
     static void check(boolean condition, String label) { assertions++; if (!condition) throw new AssertionError(label); }
@@ -30,6 +30,20 @@ public final class JPBiometriaAgentTest {
         for (String invalid : new String[]{"{\"a\":1,\"a\":2}", "{\"a\":false}x", "{\"a\":{}}", "{\"a\":[]}", "{\"a\":01}", "{\"a\":\"\\u+123\"}", "{\"a\":\"\\u-123\"}", "{\"a\":\"\\u١٢٣٤\"}", "{\"a\":true,}"}) rejects(() -> Json.object(invalid), "strict JSON rejects " + invalid);
         check(Json.encode(JPBiometriaAgent.map("s", "\n\"\\")).equals("{\"s\":\"\\n\\\"\\\\\"}"), "JSON escaping");
         check(JPBiometriaAgent.hmac(KEY, "abc").equals("_XrbFSwF74Dcz1Ch-kwF1aPsbalVdfwxKufF0JGDY1E"), "stable HMAC-SHA256 test vector");
+    }
+    static void vaultWrapTests() throws Exception {
+        java.security.KeyPairGenerator generator=java.security.KeyPairGenerator.getInstance("RSA");generator.initialize(2048);
+        java.security.KeyPair source=generator.generateKeyPair(),wrapping=generator.generateKeyPair();
+        byte[] raw=source.getPrivate().getEncoded(),encrypted=VaultImport.wrap(raw,wrapping.getPublic().getEncoded());
+        javax.crypto.Cipher rsa=javax.crypto.Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding");
+        rsa.init(javax.crypto.Cipher.DECRYPT_MODE,wrapping.getPrivate(),new javax.crypto.spec.OAEPParameterSpec("SHA-256","MGF1",java.security.spec.MGF1ParameterSpec.SHA256,javax.crypto.spec.PSource.PSpecified.DEFAULT));
+        byte[] aes=rsa.doFinal(Arrays.copyOf(encrypted,256));
+        byte[] iv=java.nio.ByteBuffer.allocate(8).putInt(0xA65959A6).putInt(raw.length).array();
+        javax.crypto.Cipher kw=javax.crypto.Cipher.getInstance("AESWrap");kw.init(javax.crypto.Cipher.DECRYPT_MODE,new javax.crypto.spec.SecretKeySpec(aes,"AES"),new javax.crypto.spec.IvParameterSpec(iv));
+        byte[] decoded=kw.doFinal(Arrays.copyOfRange(encrypted,256,encrypted.length));
+        check(Arrays.equals(raw,Arrays.copyOf(decoded,raw.length)),"KMS RFC5649 wrapping preserves PKCS8 and OAEP uses SHA256 for MGF1");
+        encrypted[encrypted.length-1]^=1;
+        rejects(()->kw.doFinal(Arrays.copyOfRange(encrypted,256,encrypted.length)),"modified wrapped key rejected by integrity check");
     }
     static void certificateResponseTests() throws Exception {
         Map<String,Object> response=CertificateBridge.decodeApiResponse(200,"{\"ok\":true,\"configuration\":{\"id\":\"config-test\",\"target\":{\"registrationType\":\"CNPJ\",\"registrationNumber\":\"12345678000195\"},\"contentBase64\":\"dGVzdA==\"}}");

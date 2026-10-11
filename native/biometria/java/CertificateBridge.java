@@ -22,7 +22,8 @@ final class CertificateBridge {
             if(action.equals("sign")&&!job.matches("[A-Za-z0-9_-]{1,128}"))throw new IllegalArgumentException();
             Map<String,Object> answer,packet;
             String route;
-            if(action.equals("configure")) {
+            if(action.equals("configure"))return VaultImport.execute(token,company);
+            if(action.equals("legacy-configure")) {
                 answer=api("POST","/api/jpged/certificado/configurar",token,company,JPBiometriaAgent.map());
                 packet=object(answer,"configuration");route="/api/jpged/certificado/configurar/"+value(packet,"id");
             } else {
@@ -67,8 +68,8 @@ final class CertificateBridge {
             return result;
         }finally{pool.shutdownNow();process.destroy();}
     }
-    private static Map<String,Object> api(String method,String route,String token,String company,Map<String,Object> body) throws Exception {
-        if(!route.matches("/api/jpged/(certificado/configurar(?:/[A-Za-z0-9_-]+)?|assinaturas/[A-Za-z0-9_-]+)"))throw new IllegalArgumentException();
+    static Map<String,Object> api(String method,String route,String token,String company,Map<String,Object> body) throws Exception {
+        if(!route.matches("/api/jpged/(cofre/(?:preparar|[A-Za-z0-9_-]+/(?:comprovar|concluir|cancelar))|certificado/configurar(?:/[A-Za-z0-9_-]+)?|assinaturas/[A-Za-z0-9_-]+)"))throw new IllegalArgumentException();
         HttpURLConnection connection=(HttpURLConnection)new URL(API+route).openConnection();connection.setInstanceFollowRedirects(false);
         connection.setRequestMethod(method);connection.setConnectTimeout(10000);connection.setReadTimeout(30000);
         connection.setRequestProperty("Authorization","Bearer "+token);connection.setRequestProperty("x-empresa-id",company);
@@ -84,6 +85,6 @@ final class CertificateBridge {
         return result;
     }
     private static byte[] read(InputStream stream,int max) throws IOException {if(stream==null)throw new IOException();ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] buffer=new byte[8192];int n;while((n=stream.read(buffer))!=-1){if(out.size()+n>max)throw new IOException();out.write(buffer,0,n);}return out.toByteArray();}
-    @SuppressWarnings("unchecked") private static Map<String,Object> object(Map<String,Object> in,String key){Object value=in.get(key);if(!(value instanceof Map))throw new IllegalArgumentException();return (Map<String,Object>)value;}
-    private static String value(Map<String,Object> in,String key){Object value=in.get(key);return value instanceof String?(String)value:"";}
+    @SuppressWarnings("unchecked") static Map<String,Object> object(Map<String,Object> in,String key){Object value=in.get(key);if(!(value instanceof Map))throw new IllegalArgumentException();return (Map<String,Object>)value;}
+    static String value(Map<String,Object> in,String key){Object value=in.get(key);return value instanceof String?(String)value:"";}
 }
