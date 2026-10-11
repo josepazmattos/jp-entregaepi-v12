@@ -49,7 +49,8 @@ async function signingContext(req) {
 router.get('/:id/assinatura-contexto',async(req,res)=>{const {ficha,worker}=await signingContext(req);ok(res,{ficha,worker});});
 router.post('/:id/biometria/desafio',async(req,res)=>{
   const context=await signingContext(req);
-  ok(res,{challenge:await biometrics.challenge({...context,fingerCode:objectBody(req).fingerCode})});
+  const body=objectBody(req);
+  ok(res,{challenge:await biometrics.challenge({...context,fingerCode:body.fingerCode,devicePublicKey:body.devicePublicKey})});
 });
 router.post('/:id/assinar',async(req,res)=>{
   const context=await signingContext(req);

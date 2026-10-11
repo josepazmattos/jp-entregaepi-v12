@@ -139,13 +139,12 @@ function renderBiometricDialog(dialog,worker,ficha){
       if(!completedBody){
         dialogMessage(dialog,'Localizando o leitor. Aguarde...');
         const client=getBiometricClient(),base=ficha?'/api/fichas/'+encodeURIComponent(ficha.id):'/api/trabalhadores/'+encodeURIComponent(worker.id);
-        // Independent preparation only. Capture starts after BOTH checks succeed.
-        const prepared=await Promise.allSettled([
-          client.discover({signal:controller.signal,requireEnrollmentImage:!ficha}).then(status=>{if(!status.ready)throw window.JP_BIOMETRIA.unavailableError(status);if(!ficha&&!status.enrollmentImageAvailable){const error=new Error('O JP Biometria deste computador precisa ser atualizado para recadastrar com imagem. Instale a atualização abaixo e tente novamente. A digital anterior foi preservada.');error.code='BIO_AGENT_IMAGE_UPDATE';throw error;}if(ficha&&!status.documentHashAvailable)throw new Error('Atualize o JP Biometria em Biometria antes de confirmar esta ficha. A nova versão vincula a digital ao conteúdo completo.');if(!status.verificationAvailable)throw new Error('Atualize o JP Biometria em Sistema → Biometria para cadastrar e comparar digitais.');return status;}),
-          api(base+'/biometria/desafio',{method:'POST',body:JSON.stringify({fingerCode}),signal:controller.signal}).then(ensureSuccess)
-        ]);assertOperationContext(context);
-        const failed=prepared.find(result=>result.status==='rejected');if(failed)throw failed.reason;
-        const start=prepared[1].value;
+        const status=await client.discover({signal:controller.signal,requireEnrollmentImage:!ficha});assertOperationContext(context);
+        if(!status.ready)throw window.JP_BIOMETRIA.unavailableError(status);
+        if(!ficha&&!status.enrollmentImageAvailable){const error=new Error('O JP Biometria deste computador precisa ser atualizado para recadastrar com imagem. Instale a atualização abaixo e tente novamente. A digital anterior foi preservada.');error.code='BIO_AGENT_IMAGE_UPDATE';throw error;}
+        if(ficha&&!status.documentHashAvailable)throw new Error('Atualize o JP Biometria para confirmar o conteúdo completo da ficha.');
+        if(!status.verificationAvailable)throw new Error('Atualize o JP Biometria para cadastrar e comparar digitais.');
+        const start=ensureSuccess(await api(base+'/biometria/desafio',{method:'POST',body:JSON.stringify({fingerCode,...(ficha&&status.devicePublicKey?{devicePublicKey:status.devicePublicKey}:{})}),signal:controller.signal}));assertOperationContext(context);
         dialogMessage(dialog,'Posicione o '+fingerLabel(fingerCode).toLocaleLowerCase('pt-BR')+' no leitor. Aguarde a captura e a conferência.');
         const response=await client.biometric(start.body.challenge,{signal:controller.signal});assertOperationContext(context);
         if(controller.signal.aborted)throw new Error('Operação cancelada.');
