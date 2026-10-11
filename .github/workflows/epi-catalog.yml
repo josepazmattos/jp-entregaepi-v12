@@ -23,7 +23,7 @@ jobs:
       - run: node --test backend/test/epi-report*.test.js backend/test/epis-catalog.test.js backend/test/catalog-concurrency.test.js backend/test/ficha-movimentacoes.test.js backend/test/api.test.js backend/test/auth.test.js backend/test/biometria-login.test.js tests/frontend.test.cjs
       - run: npm ci --prefix tests --no-audit --no-fund
       - run: npm run install-browser --prefix tests
-      - run: node tests/epi-catalog-browser.cjs
+      - run: JP_CATALOG_VISUAL_LOG=1 node tests/epi-catalog-browser.cjs
       - run: node tests/frontend-startup-browser.cjs
       - run: node tests/auto-update-browser.cjs
       - run: node tests/biometria-login-browser.cjs
