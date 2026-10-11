@@ -26,7 +26,7 @@ import (
 	"time"
 )
 
-const version = "12.10.0"
+const version = "12.10.0-cert1"
 const firstPort, lastPort = 8789, 8799
 const installedName, jarName = "JPBiometria.exe", "JPBiometriaAgent.jar"
 
@@ -94,7 +94,7 @@ func main() {
 			_, err = startAgent(dir, key)
 		}
 		if err != nil {
-			failMain("Não foi possível iniciar a ponte JP Biometria. Execute o reparador 12.10.0.\n\n"+err.Error(), quiet)
+			failMain("Não foi possível iniciar a ponte JP Biometria. Execute o reparador 12.10.0-cert1.\n\n"+err.Error(), quiet)
 		}
 		return
 	}
