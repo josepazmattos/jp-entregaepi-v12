@@ -1,0 +1,43 @@
+name: Biometria liberada pelo login da empresa
+on:
+  push:
+    branches: [biometria-login-20261011]
+permissions:
+  contents: read
+jobs:
+  certificate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preservar integralmente agente, driver, SDK e cofre
+        run: git diff --exit-code 3b742f3f8bce64e0f64458dee4d93733b71d7ce7 HEAD -- native backend/src/services/jpged-pki.js backend/src/services/jpged-vault.js backend/src/services/jpged.service.js frontend/EntregaEPI/assets/jpged.js
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: python3 -m pip install cryptography==46.0.3
+      - name: Preparar leitura do PDF no teste de assinatura
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y poppler-utils
+      - run: npm ci --prefix backend --no-audit --no-fund
+      - run: JPGED_LAYOUT_OUTPUT=tests/output/layout node --test backend/test/jpged-*.test.js backend/test/auth.test.js backend/test/biometria-login.test.js backend/test/ficha-capture-api.test.js tests/biometria.test.cjs
+      - run: npm ci --prefix tests --no-audit --no-fund
+      - run: npm run install-browser --prefix tests
+      - run: node tests/jpged-browser.cjs
+      - run: node tests/frontend-startup-browser.cjs
+      - run: node tests/operations-browser.cjs
+      - run: node tests/biometria-login-browser.cjs
+      - name: Guardar somente evidências sintéticas
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: biometria-login-${{ github.sha }}
+          path: |
+            tests/output/jpged/
+            tests/output/layout/
+            tests/output/startup/
+            tests/output/operations/
+            tests/output/biometria-login/
+          retention-days: 14

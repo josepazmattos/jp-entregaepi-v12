@@ -1,5 +1,7 @@
 # Biometria compartilhada entre computadores
 
+Histórico: o procedimento de autorização Master abaixo foi substituído por `BIOMETRIA-LOGIN-20261011.md`.
+
 Versão do agente: 12.10.0-bio2. Base: impressão compacta e certificado funcionando em e1c164d.
 
 ## Funcionamento

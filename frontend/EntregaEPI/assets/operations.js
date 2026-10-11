@@ -171,7 +171,7 @@ function renderBiometricDialog(dialog,worker,ficha){
     }catch(error){
       if(!dialog.isConnected||controller.signal.aborted)return;
       dialogMessage(dialog,error.message||'Não foi possível concluir a operação.','error');
-      if(error.code==='BIO_AGENT_IMAGE_UPDATE'||error.code==='BIOMETRIA_IMAGEM_OBRIGATORIA'){
+      if(error.code==='BIO_AGENT_IMAGE_UPDATE'||error.code==='BIOMETRIA_IMAGEM_OBRIGATORIA'||error.agentCode==='BIOMETRIC_DEVICE_DIFFERENT'){
         const link=dialog.ownerDocument.createElement('a');link.href=document.getElementById('bioRepairLink').href;link.textContent='Instalar / atualizar JP Biometria';link.className='btn btn-secondary';link.setAttribute('download','');dialog.querySelector('.dialog-message').appendChild(dialog.ownerDocument.createElement('br'));dialog.querySelector('.dialog-message').appendChild(link);
       }
       if(error.status&&error.status<500&&error.status!==408){completedBody=null;}
