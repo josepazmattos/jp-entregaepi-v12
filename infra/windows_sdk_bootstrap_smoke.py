@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import subprocess
 import tempfile
 import urllib.request
 import zipfile
@@ -40,5 +41,14 @@ with tempfile.TemporaryDirectory(prefix='jp-sdk-isolated-') as temporary:
     os.environ['LOCALAPPDATA'] = str(root)
     try:
         diagnose_sdk(home)
+        # The A1 runtime is independently testable even when vendor SDK init fails.
+        sys.path.insert(0, str(repo / 'native/biometria'))
+        from build import compile_java, crypto_jar
+        classes = root / 'certificate-test-classes'
+        compile_java(classes, tests=True)
+        fixtures = root / 'synthetic-certificates'
+        subprocess.run([sys.executable, str(repo / 'backend/test/helpers/jpged-fixture.py'), str(fixtures)], check=True)
+        private_java = root / 'Programs/Eclipse Adoptium/jp-biometria-jre8u504b01/bin/java.exe'
+        subprocess.run([str(private_java), '-Djava.awt.headless=true', '-cp', str(classes)+os.pathsep+str(crypto_jar()), 'JPBiometriaAgentTest', str(fixtures)], check=True, timeout=60)
     finally:
         os.environ['LOCALAPPDATA'] = previous

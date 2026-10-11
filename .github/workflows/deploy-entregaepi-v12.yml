@@ -37,6 +37,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      - run: python -m pip install cryptography==46.0.3
       - run: python infra/windows_sdk_bootstrap_smoke.py
   test:
     name: Validar código, biometria, ficha e navegador
