@@ -153,7 +153,7 @@ test('biometria: diagnóstico que não termina permanece indisponível após pra
 });
 
 test('biometria: fallback12.10.1 distingue protocolo atualizado de captura indisponível por Java ou SDK',async()=>{
-  for(const errorCode of ['JAVA_NOT_FOUND','JAVA_ARCH_MISMATCH','SDK_NOT_FOUND','SDK_DLL_NOT_FOUND','SDK_ARCH_MISMATCH']){
+  for(const errorCode of ['JAVA_NOT_FOUND','JAVA_ARCH_MISMATCH','SDK_NOT_FOUND','SDK_DLL_NOT_FOUND','SDK_ARCH_MISMATCH','NITGEN_15','NITGEN_24']){
     const fallback={ok:false,version:'12.10.1',service:'JP Biometria Local',sdk:false,reader:false,deviceCount:0,runtime:'diagnostic-only',capabilities:{capture:false,captureMethod:'POST',capturePath:'/api/capture'},errorCode,message:'CAMINHO-PRIVADO-TEMPLATE-NAO-MOSTRAR'};
     const {instance,requests}=client(url=>url.port==='8789'?json(fallback):refused());
     const status=await instance.discover();assert.equal(status.compatible,true);assert.equal(status.upgradeRequired,false);assert.equal(status.captureAvailable,false);assert.equal(status.ready,false);assert.equal(status.code,errorCode);assert.equal(status.runtimeCode,errorCode);assert.ok(status.runtimeMessage.length>20);assert.ok(!status.runtimeMessage.includes('PRIVADO'));
@@ -181,7 +181,7 @@ test('desempenho: cancelamento interrompe as duas buscas e não seleciona leitor
  const controller=new AbortController(),pending=instance.discover({signal:controller.signal});setTimeout(()=>controller.abort(),15);await assert.rejects(pending,{code:'BIO_CANCELLED'});assert.equal(instance.getStatus(),null);
 });
 test('agente Java: errorCode preserva divergência e erro do SDK sem expor mensagem arbitrária',async()=>{
- for(const code of ['BIOMETRIA_DIVERGENTE','BIOMETRIC_DEVICE_DIFFERENT','NITGEN_123','SDK_API_INCOMPATIBLE','READER_BUSY']){
+ for(const code of ['BIOMETRIA_DIVERGENTE','BIOMETRIC_DEVICE_DIFFERENT','NITGEN_123','NITGEN_15','NITGEN_24','SDK_API_INCOMPATIBLE','READER_BUSY']){
   const {instance}=client(url=>url.pathname==='/status'?json({...ready,capabilities:{...ready.capabilities,verify:true,templates:true}}):json({ok:false,errorCode:code,message:'DADOS-PRIVADOS-NAO-EXIBIR'},422));
   await instance.discover();await assert.rejects(instance.biometric({kind:'verify'}),e=>e.code==='BIO_HTTP'&&e.agentCode===code&&!e.message.includes('DADOS-PRIVADOS')&&!e.message.includes('respondeu com erro'));
  }
@@ -206,4 +206,14 @@ test('certificado: não aguarda SDK, leitor ocupado ou verificação para locali
     assert.equal(status.certificatesAvailable,true);assert.equal(status.ready,false);assert.equal(requests.length,1);
     await assert.rejects(instance.capture({fingerCode:'R_INDEX'}));
   }
+});
+
+
+test('NITGEN_15 bloqueia captura com diagnóstico específico e mantém configuração do certificado',async()=>{
+  const status={...ready,ok:false,reader:false,deviceCount:0,errorCode:'NITGEN_15',capabilities:{...ready.capabilities,certificates:true}};
+  const {instance,requests}=client(url=>url.port==='8789'?json(status):refused());
+  const found=await instance.discover({requireCertificates:true});
+  assert.equal(found.ready,false);assert.equal(found.certificatesAvailable,true);assert.equal(found.code,'NITGEN_15');
+  await assert.rejects(instance.capture({fingerCode:'R_INDEX'}),e=>e.code==='BIO_RUNTIME'&&e.message.includes('validação')&&!e.message.includes('Feche'));
+  assert.ok(requests.every(r=>new URL(r.url).pathname==='/status'));
 });

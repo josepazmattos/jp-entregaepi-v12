@@ -15,11 +15,17 @@ public final class JPBiometriaAgentTest {
     private static final String ORIGIN = "https://www.jptreinamentos.com.br";
     private static final String SHA = "1111111111111111111111111111111111111111";
     public static void main(String[] args) throws Exception {
-        jsonTests(); certificateResponseTests(); vaultWrapTests(); imageTests(); httpTests();
+        jsonTests(); certificateResponseTests(); vaultWrapTests(); sdkErrorTests(); imageTests(); httpTests();
         if(args.length==1)pkcs12Tests(args[0]);
         System.out.println("Java native bridge: " + assertions + " assertions passed (synthetic reader; no physical SDK/device).");
     }
     static void check(boolean condition, String label) { assertions++; if (!condition) throw new AssertionError(label); }
+    static void sdkErrorTests() {
+        BioFailure invalid=NitgenReader.sdkFailure(15,"Initialize");
+        check(invalid.code.equals("NITGEN_15") && invalid.getMessage().contains("validação") && invalid.getMessage().contains("Initialize"),"SDK validity failure identifies its operation");
+        check(!invalid.getMessage().contains("Feche") && !invalid.getMessage().contains("posição do dedo"),"SDK validity failure does not claim reader contention");
+        check(NitgenReader.sdkFailure(24,"Initialize").getMessage().contains("expirada"),"expired SDK is distinct from missing USB");
+    }
     interface Checked { void run() throws Exception; }
     static void rejects(Checked action, String label) throws Exception {
         boolean rejected = false; try { action.run(); } catch (Exception e) { rejected = true; } check(rejected, label);

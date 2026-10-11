@@ -9,6 +9,8 @@
   ].map(Object.freeze));
   const MAX_IMAGE_BYTES=150*1024;
   const RUNTIME_DIAGNOSTICS=Object.freeze({
+    NITGEN_15:Object.freeze({title:'SDK NITGEN: falha de validação',message:'O SDK NITGEN recusou sua validação (NITGEN_15). A biometria permanece indisponível. Encaminhe esse código ao suporte JP para conferir a instalação e a versão com a NITGEN/FingerTech. O certificado digital pode ser configurado separadamente.'}),
+    NITGEN_24:Object.freeze({title:'SDK NITGEN: versão expirada',message:'O SDK NITGEN informou versão expirada (NITGEN_24). Solicite ao suporte JP uma versão válida do fabricante. O certificado digital pode ser configurado separadamente.'}),
     JAVA_NOT_FOUND:Object.freeze({title:'Java não localizado',message:'O Java necessário não foi localizado. Em Biometria, use Baixar instalador completo e execute o arquivo. O pacote prepara o Java automaticamente, sem configurações manuais.'}),
     JAVA_ARCH_MISMATCH:Object.freeze({title:'Java e SDK com arquiteturas diferentes',message:'O Java e o SDK instalados não combinam. Em Biometria, execute o instalador completo para preparar os componentes compatíveis automaticamente.'}),
     SDK_NOT_FOUND:Object.freeze({title:'SDK NITGEN não localizado',message:'O SDK eNBioBSP com o componente Java não foi localizado. Em Biometria, use Baixar instalador completo e execute o arquivo. Não é necessário informar serial nem localizar arquivos.'}),
@@ -23,7 +25,7 @@
     BIO_PERMISSION:'O navegador bloqueou o acesso ao leitor local. Nas permissões deste site, permita o acesso à rede local e verifique novamente.',
     BIO_PERMISSION_REQUIRED:'Clique em Permitir e verificar leitor e autorize o acesso local, se o navegador solicitar. Com a permissão concedida, a verificação será automática nos próximos acessos.',
     BIO_PROTOCOL:'Um serviço respondeu, mas não confirmou o protocolo do JP Biometria. Confira se o agente correto está aberto.',
-    BIO_NOT_READY:'O agente respondeu, mas não confirmou um leitor pronto. Feche o diagnóstico NITGEN se ele estiver usando o leitor e verifique novamente.',
+    BIO_NOT_READY:'O agente está aberto, mas a biometria ainda não está pronta. Confira a conexão USB do Hamster DX e os detalhes do diagnóstico. Se outro programa estiver usando o leitor, feche-o e verifique novamente.',
     BIO_AGENT_UPDATE:'O componente local precisa ser atualizado. Em Biometria, use Baixar instalador completo e execute o arquivo. Ao voltar ao site, o indicador será atualizado automaticamente.',
     BIO_CHECKING:'O agente ainda está verificando o leitor. Aguarde alguns segundos e clique em Verificar leitor novamente.',
     BIO_RUNTIME:'O componente local está atualizado, mas a configuração de Java ou SDK impede a captura.',
@@ -116,6 +118,7 @@
           const known={READER_BUSY:'O leitor está em uso. Aguarde a operação atual e tente novamente.',SDK_API_INCOMPATIBLE:'O SDK instalado não oferece a interface esperada pelo JP Biometria. Confira a instalação do componente Java NITGEN.',SDK_LOAD_FAILED:'Não foi possível carregar o SDK NITGEN. Confira Java e bibliotecas da mesma arquitetura.',READER_NOT_FOUND:'O SDK não localizou o leitor NITGEN. Confira a conexão USB.',CAPTURE_FAILED:'O SDK não concluiu a captura. Feche outros programas que estejam usando o leitor e tente novamente.'};
           if(Object.prototype.hasOwnProperty.call(known,agentCode))error.message=known[agentCode];
           if(/^NITGEN_[0-9]{1,10}$/.test(agentCode||''))error.message='O leitor NITGEN não concluiu a operação. Código: '+agentCode+'. Confira a posição do dedo e feche outros programas de captura antes de tentar novamente.';
+          if(Object.prototype.hasOwnProperty.call(RUNTIME_DIAGNOSTICS,agentCode))error.message=RUNTIME_DIAGNOSTICS[agentCode].message;
           throw error;
         }
         const body=await readJson(response,maxBytes,controller.signal);

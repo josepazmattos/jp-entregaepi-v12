@@ -126,3 +126,13 @@ func TestInstallWithoutReaderKeepsCertificateAvailable(t *testing.T) {
 		t.Fatal("Do not claim success without certificate support")
 	}
 }
+
+func TestMissingUSBDoesNotHideSDKValidityFailure(t *testing.T) {
+	for _, expected := range []string{"NITGEN_15", "NITGEN_24"} {
+		s := map[string]any{"sdk": true, "reader": false, "errorCode": expected, "capabilities": map[string]any{"certificates": true}}
+		code, err := withoutReader(s)
+		if code != expected || err == nil || ready(s) || solution(code) == solution("unknown") {
+			t.Fatal("An SDK validation failure must not be hidden by missing USB")
+		}
+	}
+}

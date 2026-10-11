@@ -4,20 +4,20 @@
 
 1. Atualize o **JP Biometria** pelo instalador completo em **Biometria**. Esta versão exige Windows e A1 e-CNPJ ou e-CPF com chave de assinatura.
 2. Entre novamente na conta. O Master seleciona a empresa; o cliente já acessa sua própria empresa.
-3. Abra **Biometria → Certificado digital → Configurar neste computador**. Na janela nativa do Windows, autorize o empregador e escolha o certificado instalado, ou selecione o A1 e informe sua senha **somente nessa janela local**.
+3. No Master, selecione a empresa e abra **Biometria → Certificado digital → Cadastrar ou substituir A1**. Reconfirme a senha do Master. Na janela nativa, selecione o arquivo A1 e informe sua senha **somente nessa janela local**. A chave é protegida antes de ser importada no cofre KMS; o cliente não precisa de uma cópia local.
 4. O serviço verifica posse da chave, assinatura, identificação e-CNPJ/e-CPF, finalidade A1, cadeia confiável, validade e revogação. O cadastro só fica configurado após essa conferência.
 5. Gere a ficha com todas as entregas e devoluções. Na aba da ficha, confira o conteúdo e clique **Confirmar movimentações e assinar**. Uma comparação biométrica positiva confirma o conteúdo completo.
 6. A certificação acontece automaticamente. Se houver falha, a biometria permanece salva: use **Certificar documento** para tentar novamente. Uma ficha só aparece como **Documento certificado** após verificação criptográfica e armazenamento.
 7. Em **JPGED · Documentos**, baixe o **PDF original**. Use esse arquivo para o Drive, envio e validação. Imprimir novamente em PDF produz outra representação e não preserva a assinatura incorporada.
 
-Cada computador/usuário do Windows que assina precisa de configuração local. Ao trocar o certificado, configure os demais computadores novamente. Desvincular no site impede novas certificações, mas preserva os documentos e o certificado do Windows.
+O cadastro no cofre é único por empresa e administrado pelo Master. Os computadores dos clientes usam o leitor para confirmar a biometria; a certificação acontece no serviço. Cadastros locais anteriores continuam utilizáveis até migração: somente nesse fluxo legado cada computador precisa de configuração local. Desativar no site impede novas certificações e preserva os documentos já assinados.
 
 Registros biométricos anteriores à versão 12.10.0 não possuem o hash do conteúdo e não são convertidos retroativamente em documentos certificados. Permanecem disponíveis pelo fluxo anterior, sem alterar seu histórico.
 
 ## Pessoa física, jurídica e CAEPF
 
 - e-CNPJ: o CNPJ do certificado deve coincidir com a empresa selecionada.
-- e-CPF: identifica o CPF do assinante, extraído do certificado. Não há cadastro de representante, aprovação pelo Master nem consulta de responsáveis ou procurações. A configuração é feita localmente pela própria empresa.
+- e-CPF: identifica o CPF do assinante, extraído do certificado. Não há cadastro de representante nem consulta de responsáveis ou procurações. O cadastro no cofre é feito pelo Master para a empresa selecionada.
 - A verificação é criptográfica: demonstra a identidade indicada no certificado e a integridade do documento. Não comprova, por si só, poderes de representação. O sistema não afirma que os consultou ou validou.
 - CAEPF possui tipo próprio no cadastro e na ficha, com 14 dígitos. A validação de formato não consulta a situação cadastral na Receita; o Master confere o comprovante. A chave interna `cnpj` permanece por compatibilidade, acompanhada de `inscricaoTipo: CAEPF`. Cadastros existentes continuam CNPJ, sem migração de identidade. O cadastro manual de trabalhadores funciona; a importação SOC atual continua exigindo CNPJ.
 - A configuração local assina uma autorização restrita às fichas do empregador selecionado; o original CMS fica preservado em evidências privadas.
@@ -25,6 +25,8 @@ Registros biométricos anteriores à versão 12.10.0 não possuem o hash do cont
 - MEI e ME não são tipos de certificado. O uso de e-CPF depende da identidade e dos poderes do titular para aquele empregador.
 
 ## Formas de uso do A1
+
+Novos cadastros na 12.10.1 usam arquivo PFX/P12 no cofre administrado pelo Master. As opções Windows/CSP/KSP abaixo descrevem vínculos locais anteriores, preservados para continuidade. Chaves não exportáveis de nuvem ainda não são importadas no cofre; dependem de integração com o fornecedor.
 
 | Forma | Atendimento nesta versão |
 |---|---|
@@ -100,7 +102,7 @@ Em 10/10/2026 foi criado um objeto sintético identificável e confirmada a repl
 
 O certificado pode ser configurado com o Hamster DX desconectado. O instalador completo conclui a instalação do agente e do assinador e informa separadamente que falta conectar o leitor para capturar digitais. Uma instalação antiga em outra porta não deve impedir a busca pelo assinador atualizado. Instale o pacote 12.10.1 para receber também a correção da leitura das respostas da API pelo agente Java.
 
-No Dashboard, **Certificado digital** apresenta a situação do cadastro da empresa selecionada: Pendente, Configurado, Vencido ou Indisponível. Ao clicar, abre Biometria. “Configurado” indica um certificado cadastrado dentro da validade; o acesso à chave local e a validação criptográfica são conferidos novamente a cada assinatura. A ausência do leitor mantém o indicador de Biometria em atenção, sem bloquear o cadastro do certificado.
+No Dashboard, **Certificado digital** apresenta a situação do cadastro da empresa selecionada: Pendente, Configurado, Vencido ou Indisponível. Ao clicar, abre Biometria. “Configurado” indica um certificado dentro da validade e, no cofre, chave KMS habilitada. A assinatura e a validação criptográfica são conferidas novamente a cada certificação. A ausência do leitor mantém o indicador de Biometria em atenção, sem bloquear o cadastro do certificado.
 
 ## Cofre administrado pelo Master — 12.10.1
 
@@ -140,3 +142,9 @@ Custo de referência: US$ 1/chave/mês no KMS, proporcional ao tempo, mais opera
 armazenamento, API e tributos. Não enviar A1, senha, chave ou templates biométricos
 para GitHub. Cloud A1 não exportável depende da API do fornecedor, não desta importação.
 O protocolo imprimível fica em assets/protocolo-certificado.html.
+
+## Diagnóstico NITGEN_15
+
+O cabeçalho oficial `NBioAPI_Error.h` define 15 (0x0f) como `NBioAPIERROR_VALIDITY_FAIL`: falha de validação BSP. O código não comprova leitor ocupado, ausência de USB nem uma causa específica de licença. A versão 12.10.1 preserva o código e mostra orientação própria, inclusive durante captura e no instalador. Não apresenta a biometria como pronta nem esconde essa falha quando o USB está ausente. O cadastro A1 é independente. Se persistir, o suporte deve conferir a instalação e a versão com a NITGEN/FingerTech; não há desativação nem contorno da validação do fabricante.
+
+Referência do fabricante/distribuidor: https://www.fingertech.com.br/download/EN_eNBSP_SDK_for_Java_Programmer%27s_Guide_DC1-0085A.pdf
