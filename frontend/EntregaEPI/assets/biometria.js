@@ -115,7 +115,7 @@
           const agentCode=safeCode(body?.errorCode||body?.code);
           const error=failure('BIO_HTTP',{httpStatus:response.status,agentCode});
           if(agentCode==='BIOMETRIA_DIVERGENTE')error.message='A digital não corresponde ao cadastro. A ficha continua sem assinatura.';
-          if(agentCode==='BIOMETRIC_DEVICE_DIFFERENT')error.message='Atualize o JP Biometria e solicite ao Master a autorização deste computador. O cadastro da digital no aplicativo será preservado.';
+          if(agentCode==='BIOMETRIC_DEVICE_DIFFERENT')error.message='Este agente antigo ainda não permite usar digitais de outro computador. Atualize o componente local em Biometria. Os cadastros salvos no aplicativo serão preservados.';
           const known={READER_BUSY:'O leitor está em uso. Aguarde a operação atual e tente novamente.',SDK_API_INCOMPATIBLE:'O SDK instalado não oferece a interface esperada pelo JP Biometria. Confira a instalação do componente Java NITGEN.',SDK_LOAD_FAILED:'Não foi possível carregar o SDK NITGEN. Confira Java e bibliotecas da mesma arquitetura.',READER_NOT_FOUND:'O SDK não localizou o leitor NITGEN. Confira a conexão USB.',CAPTURE_FAILED:'O SDK não concluiu a captura. Feche outros programas que estejam usando o leitor e tente novamente.'};
           if(Object.prototype.hasOwnProperty.call(known,agentCode))error.message=known[agentCode];
           if(/^NITGEN_[0-9]{1,10}$/.test(agentCode||''))error.message='O leitor NITGEN não concluiu a operação. Código: '+agentCode+'. Confira a posição do dedo e feche outros programas de captura antes de tentar novamente.';
@@ -201,11 +201,7 @@
         return body;
       },signal);
     }
-    async function authorizeDevice(challenge,{signal}={}){
-      if(!selected?.sharedEnrollmentAvailable)throw new Error('Atualize o JP Biometria para autorizar este computador.');
-      return locked(async operationSignal=>request(selected.port,'/api/device/authorize',operationSignal,8000,8000,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(challenge)}),signal);
-    }
-    return Object.freeze({discover,capture,biometric,authorizeDevice,cancel(){operation?.abort();},clear(){operation?.abort();selected=null;lastDiagnostics=[];},getStatus:()=>selected,getDiagnostics:()=>lastDiagnostics.map(item=>({...item}))});
+    return Object.freeze({discover,capture,biometric,cancel(){operation?.abort();},clear(){operation?.abort();selected=null;lastDiagnostics=[];},getStatus:()=>selected,getDiagnostics:()=>lastDiagnostics.map(item=>({...item}))});
   }
   function extractImage(body){
     if(!body||body.realFingerImage!==true)throw failure('BIO_IMAGE_MISSING');

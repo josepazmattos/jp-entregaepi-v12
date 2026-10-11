@@ -19,6 +19,24 @@ async function enroll(f){const r=await request('POST',`/api/trabalhadores/${f.wo
 async function verification(f){const r=await request('POST',`/api/fichas/${f.ficha.id}/biometria/desafio`,{fingerCode:'R_INDEX'},f.company.id);assert.equal(r.status,200);return attestation(r.body.challenge);}
 const finish=(f,body,auth=claims,company=f.company.id)=>request('POST',`/api/fichas/${f.ficha.id}/assinar`,body,company,auth);
 
+test('somente login EMPRESA usa digital cadastrada em outro agente, com isolamento e sem senha Master recente',async()=>{
+ const f=await fixture(),other=await fixture();await enroll(f);
+ const client={...claims,sub:'company-login','cognito:groups':['EMPRESA'],'custom:empresa_id':f.company.id};
+ delete client.auth_time;
+ const second=generateKeyPairSync('ec',{namedCurve:'prime256v1'}),secondKey=second.publicKey.export({type:'spki',format:'der'}).toString('base64');
+ const path=`/api/fichas/${f.ficha.id}/biometria/desafio`,input={fingerCode:'R_INDEX',devicePublicKey:secondKey};
+ assert.equal((await request('POST',path,input,f.company.id,null)).status,401);
+ assert.equal((await request('POST',path,input,f.company.id,{...client,exp:'1'})).status,401);
+ assert.equal((await request('POST',path,input,f.company.id,{...client,'custom:empresa_id':other.company.id})).status,403);
+ assert.equal((await request('POST',path,input,other.company.id,client)).status,403);
+ const start=await request('POST',path,input,f.company.id,client);assert.equal(start.status,200);assert.equal(start.body.challenge.publicKey,secondKey);
+ const body=attestation(start.body.challenge);body.publicKey=secondKey;body.proofSignature=sign('sha256',Buffer.from(body.proof),second.privateKey).toString('base64');
+ const signed=await finish(f,body,client);assert.equal(signed.status,200);assert.equal(signed.body.item.assinaturaBiometrica.verificada,true);assert.equal(signed.body.item.assinaturaBiometrica.publicKey,secondKey);
+ const enrolledWorker=await store.get('trabalhador',f.worker.id),enrollment=await store.get('biometria',enrolledWorker.biometrias.R_INDEX.id);assert.equal(enrollment.publicKey,publicKey);assert.equal(enrollment.template,template);
+ assert.equal((await store.list('biometria_dispositivo',f.company.id)).length,0);
+ assert.equal((await request('POST','/api/biometria/dispositivos/desafio',{name:'no-longer-used'},f.company.id,client)).status,404);
+});
+
 test('imagem sem comparação, booleanos forjados e dedo não cadastrado não assinam',async()=>{const f=await fixture();assert.equal((await finish(f,{fingerImageDataUrl:PNG,verificada:true,matched:true})).status,403);assert.equal((await request('POST',`/api/fichas/${f.ficha.id}/biometria/desafio`,{fingerCode:'R_INDEX'},f.company.id)).status,409);assert.equal((await store.get('ficha',f.ficha.id)).status,'pendente');});
 test('cadastro separado da listagem; template não aparece no cadastro de trabalhadores',async()=>{const f=await fixture();const body=await enroll(f);assert.equal((await request('POST',`/api/trabalhadores/${f.worker.id}/biometria`,body,f.company.id)).body.replayed,true);const list=await request('GET','/api/trabalhadores',null,f.company.id);assert.equal(list.body.items[0].biometrias.R_INDEX.id.length,64);assert.equal(JSON.stringify(list.body).includes(template),false);});
 test('conferência positiva assina, preserva prova e permite reenvio idempotente',async()=>{const f=await fixture();await enroll(f);const body=await verification(f);const first=await finish(f,body),again=await finish(f,body);assert.equal(first.status,200);assert.equal(first.body.item.assinaturaBiometrica.verificada,true);assert.equal(first.body.item.assinaturaBiometrica.metodo,'NITGEN_VERIFY_MATCH');assert.equal(again.body.replayed,true);assert.equal(first.body.item._version,again.body.item._version);});
@@ -59,18 +77,4 @@ test('devolução de ativo ou inativo permite assinatura conferida e preserva a 
     const current={...f,ficha:created.body.item};const signed=await finish(current,await verification(current));assert.equal(signed.status,200);assert.equal(signed.body.item.assinaturaBiometrica.verificada,true);
   }
   assert.deepEqual(await store.get('ficha',f.ficha.id),previous);
-});
-
-
-test('autorização de computadores exige Master, empresa existente e autenticação recente',async()=>{
- const f=await fixture(),path='/api/biometria/dispositivos/desafio',recent={...claims,auth_time:String(Math.floor(Date.now()/1000))};
- const client={...recent,'cognito:groups':[], 'custom:empresa_id':f.company.id};
- assert.equal((await request('POST',path,{name:'PC'},f.company.id,client)).status,403);
- assert.equal((await request('POST',path,{name:'PC'},f.company.id,claims)).status,401);
- assert.equal((await request('POST',path,{name:'PC'},'missing',recent)).status,403);
- const start=await request('POST',path,{name:'PC'},f.company.id,recent);assert.equal(start.status,200);
- const proof=JSON.stringify(start.body.challenge),body={publicKey,proof,proofSignature:sign('sha256',Buffer.from(proof),pair.privateKey).toString('base64')};
- assert.equal((await request('POST',path+'/'+start.body.challenge.challengeId,body,f.company.id,recent)).status,200);
- const list=await request('GET','/api/biometria/dispositivos',null,f.company.id,recent);assert.equal(list.body.items.length,1);assert.equal(JSON.stringify(list.body).includes(publicKey),false);
- assert.equal((await request('GET','/api/biometria/dispositivos',null,f.company.id,client)).status,403);
 });
