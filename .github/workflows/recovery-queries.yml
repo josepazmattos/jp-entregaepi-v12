@@ -20,6 +20,8 @@ jobs:
           node-version: '22'
       - run: npm ci --prefix backend --no-audit --no-fund
       - run: python3 scripts/test-epi-report.py
+      - name: Preparar verificação dos PDFs existentes
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
       - run: node --test backend/test/*.test.js tests/frontend.test.cjs tests/list-consistency.test.cjs
       - run: npm ci --prefix tests --no-audit --no-fund
       - run: npm run install-browser --prefix tests
