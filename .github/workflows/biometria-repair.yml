@@ -1,0 +1,74 @@
+name: Recuperar biometria preservando captura
+on:
+  push:
+    branches: [biometria-recuperacao-20261011]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: '1.27.1'
+          cache: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Preservar código de captura, comparação e driver
+        run: git diff --exit-code a1187c5771c9a443b33ef4af7259a1e1b5edd2a4 -- native/biometria/java/NitgenReader.java native/biometria/java/BioReader.java native/biometria/java/BioProof.java native/setup-completo
+      - run: python native/biometria/test_native.py
+      - run: python native/biometria/build.py --output native/biometria/dist --build-sha "$GITHUB_SHA"
+      - run: node --test tests/biometria.test.cjs
+      - run: npm ci --prefix tests --no-audit --no-fund
+      - run: npm --prefix tests run install-browser
+      - run: node tests/frontend-startup-browser.cjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: biometria-repair-${{ github.sha }}
+          path: native/biometria/dist/*
+          if-no-files-found: error
+          retention-days: 14
+  windows:
+    runs-on: windows-latest
+    needs: validate
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: biometria-repair-${{ github.sha }}
+          path: native/biometria/dist
+      - name: Instalar e reinstalar exatamente o EXE aprovado
+        run: |
+          java -XshowSettings:properties -version
+          python infra/windows_runtime_recovery_smoke.py --source native/biometria/dist --commit "$env:GITHUB_SHA"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: biometria-windows-${{ github.sha }}
+          path: .deploy/windows-biometria-report.json
+  vendor:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Inicialização documentada do SDK original x86
+        run: python infra/windows_sdk_architecture_probe.py

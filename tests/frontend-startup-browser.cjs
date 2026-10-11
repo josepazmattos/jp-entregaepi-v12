@@ -112,14 +112,17 @@ async function main(){
   {
     const s=await scenario({version:'12.9.3'});await s.login();await s.done();
     await s.page.evaluate(()=>goScreen('biometria'));
-    assert.match(await s.page.locator('#bioRepairLink').getAttribute('href'),/JP-Biometria-Completo-12\.10\.0\.exe$/);
-    assert.equal(await s.page.locator('#bioRepairLink').innerText(),'Baixar instalador completo');
-    // Preserve the real click listener but avoid downloading the 55 MB installer in a UI test.
+    assert.match(await s.page.locator('#bioRepairLink').getAttribute('href'),/updates\/12\.10\.0-bio1\/JP-Biometria-Setup-12\.10\.0-bio1\.exe$/);
+    assert.equal(await s.page.locator('#bioRepairLink').innerText(),'Reparar biometria');
+    // Preserve the real click listener but avoid downloading the repair installer in a UI test.
     await s.page.locator('#bioRepairLink').evaluate(node=>node.addEventListener('click',event=>event.preventDefault(),{once:true}));
     await s.page.locator('#bioRepairLink').click();
     await s.page.evaluate(()=>resumeInstallationWatch());
     assert.ok(await s.page.evaluate(()=>sessionStorage.getItem('jp-biometria-install-until')),'old working agent must not stop monitoring');
     s.state.version='12.10.0';
+    await s.page.evaluate(()=>resumeInstallationWatch());
+    assert.ok(await s.page.evaluate(()=>sessionStorage.getItem('jp-biometria-install-until')),'old complete package must not be mistaken for the repair');
+    s.state.version='12.10.0-bio1';
     await s.page.evaluate(()=>window.dispatchEvent(new Event('focus')));
     await s.page.waitForFunction(()=>!sessionStorage.getItem('jp-biometria-install-until'));
     assert.equal(await s.page.locator('#startupBioBadge').getAttribute('data-state'),'success');

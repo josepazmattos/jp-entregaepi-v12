@@ -190,3 +190,12 @@ test('agente Java: errorCode preserva divergência e erro do SDK sem expor mensa
 test('cadastro com imagem exige agente compatível sem impedir assinatura de digitais antigas',()=>{assert.equal(bio.normalizeStatus({...ready,version:'12.9.0',capabilities:{...ready.capabilities,templates:true,verify:true}},8789).enrollmentImageAvailable,false);assert.equal(bio.normalizeStatus({...ready,version:'12.9.1',capabilities:{...ready.capabilities,templates:true,verify:true}},8789).enrollmentImageAvailable,true);});
 
 test('recadastro encontra agente com imagem mesmo quando versão antiga responde primeiro',async()=>{const {instance}=client(url=>json({...ready,version:url.port==='8789'?'12.9.0':'12.10.0',capabilities:{...ready.capabilities,templates:true,verify:true}}));assert.equal((await instance.discover({requireEnrollmentImage:true})).port,8790);});
+
+
+test('SDK: erro 15 aparece com código próprio e nunca como leitor pronto',()=>{
+  const status=bio.normalizeStatus({...ready,errorCode:'NITGEN_15',ok:false,reader:false,deviceCount:0},8789);
+  assert.equal(status.ready,false);assert.equal(status.code,'NITGEN_15');
+  assert.match(bio.unavailableError(status).message,/NITGEN_15/);
+  assert.doesNotMatch(bio.unavailableError(status).message,/posição do dedo/);
+  assert.equal(bio.normalizeStatus({...ready,errorCode:'NITGEN_15'},8789).ready,false);
+});

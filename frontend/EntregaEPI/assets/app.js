@@ -1108,8 +1108,8 @@ function stopInstallationWatch(){
   sessionStorage.removeItem(installationWatchKey);
 }
 function installedVersionReady(status){
-  const parts=String(status?.version||'').split('.').map(Number);
-  const recent=parts[0]>12||(parts[0]===12&&(parts[1]>9||(parts[1]===9&&parts[2]>=4)));
+  const version=String(status?.version||''),parts=version.split(/[.+-]/).slice(0,3).map(Number);
+  const recent=version==='12.10.0-bio1'||parts[0]>12||(parts[0]===12&&(parts[1]>10||(parts[1]===10&&parts[2]>=1)));
   return recent&&status?.ready&&status?.verificationAvailable;
 }
 async function resumeInstallationWatch(){
