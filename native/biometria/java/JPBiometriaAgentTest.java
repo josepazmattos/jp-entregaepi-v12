@@ -16,6 +16,7 @@ public final class JPBiometriaAgentTest {
     private static final String SHA = "1111111111111111111111111111111111111111";
     public static void main(String[] args) throws Exception {
         jsonTests(); certificateResponseTests(); vaultWrapTests(); imageTests(); httpTests();
+        if(args.length==1)pkcs12Tests(args[0]);
         System.out.println("Java native bridge: " + assertions + " assertions passed (synthetic reader; no physical SDK/device).");
     }
     static void check(boolean condition, String label) { assertions++; if (!condition) throw new AssertionError(label); }
@@ -30,6 +31,17 @@ public final class JPBiometriaAgentTest {
         for (String invalid : new String[]{"{\"a\":1,\"a\":2}", "{\"a\":false}x", "{\"a\":{}}", "{\"a\":[]}", "{\"a\":01}", "{\"a\":\"\\u+123\"}", "{\"a\":\"\\u-123\"}", "{\"a\":\"\\u١٢٣٤\"}", "{\"a\":true,}"}) rejects(() -> Json.object(invalid), "strict JSON rejects " + invalid);
         check(Json.encode(JPBiometriaAgent.map("s", "\n\"\\")).equals("{\"s\":\"\\n\\\"\\\\\"}"), "JSON escaping");
         check(JPBiometriaAgent.hmac(KEY, "abc").equals("_XrbFSwF74Dcz1Ch-kwF1aPsbalVdfwxKufF0JGDY1E"), "stable HMAC-SHA256 test vector");
+    }
+    static void pkcs12Tests(String folder) throws Exception {
+        for(String file:new String[]{"synthetic.pfx","pf.pfx","chain.pfx"}) {
+            java.security.KeyStore store=java.security.KeyStore.getInstance("PKCS12");
+            try(InputStream input=new FileInputStream(new File(folder,file))){store.load(input,"synthetic-test-only".toCharArray());}
+            String alias=store.aliases().nextElement();java.security.Key key=store.getKey(alias,"synthetic-test-only".toCharArray());
+            check(key instanceof java.security.interfaces.RSAPrivateKey,"installed Java opens modern A1 PKCS12 "+file);
+            java.security.Signature signer=java.security.Signature.getInstance("SHA256withRSA");signer.initSign((java.security.PrivateKey)key);signer.update("test".getBytes(StandardCharsets.UTF_8));byte[] signature=signer.sign();
+            signer.initVerify(store.getCertificate(alias));signer.update("test".getBytes(StandardCharsets.UTF_8));check(signer.verify(signature),"installed Java verifies A1 proof "+file);
+            rejects(()->{try(InputStream input=new FileInputStream(new File(folder,file))){store.load(input,"wrong".toCharArray());}},"incorrect A1 password rejected "+file);
+        }
     }
     static void vaultWrapTests() throws Exception {
         java.security.KeyPairGenerator generator=java.security.KeyPairGenerator.getInstance("RSA");generator.initialize(2048);
