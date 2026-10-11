@@ -50,12 +50,12 @@ public final class JPBiometriaAgentTest {
         javax.crypto.Cipher rsa=javax.crypto.Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding");
         rsa.init(javax.crypto.Cipher.DECRYPT_MODE,wrapping.getPrivate(),new javax.crypto.spec.OAEPParameterSpec("SHA-256","MGF1",java.security.spec.MGF1ParameterSpec.SHA256,javax.crypto.spec.PSource.PSpecified.DEFAULT));
         byte[] aes=rsa.doFinal(Arrays.copyOf(encrypted,256));
-        byte[] iv=java.nio.ByteBuffer.allocate(8).putInt(0xA65959A6).putInt(raw.length).array();
-        javax.crypto.Cipher kw=javax.crypto.Cipher.getInstance("AESWrap");kw.init(javax.crypto.Cipher.DECRYPT_MODE,new javax.crypto.spec.SecretKeySpec(aes,"AES"),new javax.crypto.spec.IvParameterSpec(iv));
-        byte[] decoded=kw.doFinal(Arrays.copyOfRange(encrypted,256,encrypted.length));
-        check(Arrays.equals(raw,Arrays.copyOf(decoded,raw.length)),"KMS RFC5649 wrapping preserves PKCS8 and OAEP uses SHA256 for MGF1");
+        org.bouncycastle.crypto.engines.RFC5649WrapEngine kw=new org.bouncycastle.crypto.engines.RFC5649WrapEngine(org.bouncycastle.crypto.engines.AESEngine.newInstance());
+        kw.init(false,new org.bouncycastle.crypto.params.KeyParameter(aes));
+        byte[] decoded=kw.unwrap(encrypted,256,encrypted.length-256);
+        check(Arrays.equals(raw,decoded),"KMS RFC5649 wrapping preserves PKCS8 and OAEP uses SHA256 for MGF1");
         encrypted[encrypted.length-1]^=1;
-        rejects(()->kw.doFinal(Arrays.copyOfRange(encrypted,256,encrypted.length)),"modified wrapped key rejected by integrity check");
+        rejects(()->kw.unwrap(encrypted,256,encrypted.length-256),"modified wrapped key rejected by integrity check");
     }
     static void certificateResponseTests() throws Exception {
         Map<String,Object> response=CertificateBridge.decodeApiResponse(200,"{\"ok\":true,\"configuration\":{\"id\":\"config-test\",\"target\":{\"registrationType\":\"CNPJ\",\"registrationNumber\":\"12345678000195\"},\"contentBase64\":\"dGVzdA==\"}}");

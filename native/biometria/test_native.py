@@ -8,21 +8,21 @@ import subprocess
 import tempfile
 import zipfile
 
-from build import ROOT, build_payload, compile_java, go_bin, java_bin
+from build import ROOT, build_payload, compile_java, crypto_jar, go_bin, java_bin
 
 
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="jp-biometria-test-") as temp:
         classes = Path(temp) / "classes"
         compile_java(classes, tests=True)
-        subprocess.run([java_bin(), "-Djava.awt.headless=true", "-cp", str(classes), "JPBiometriaAgentTest"], check=True, cwd=ROOT, timeout=45)
         payload = build_payload(classes)
+        subprocess.run([java_bin(), "-Djava.awt.headless=true", "-cp", str(payload)+os.pathsep+str(classes), "JPBiometriaAgentTest"], check=True, cwd=ROOT, timeout=45)
         with zipfile.ZipFile(payload) as archive:
-            assert not any("Test" in name or "nitgen/" in name.lower() for name in archive.namelist()), "No fake reader or vendor class may ship"
+            assert not any(("Test" in name and not name.startswith("org/bouncycastle/")) or "nitgen/" in name.lower() for name in archive.namelist()), "No fake reader or vendor class may ship"
             for name in archive.namelist():
                 if name.endswith(".class"):
                     data = archive.read(name)
-                    assert data[:4] == b"\xca\xfe\xba\xbe" and int.from_bytes(data[6:8], "big") == 52, f"Java 8 bytecode required: {name}"
+                    assert data[:4] == b"\xca\xfe\xba\xbe" and (int.from_bytes(data[6:8], "big") <= 52 if name.startswith("org/bouncycastle/") else int.from_bytes(data[6:8], "big") == 52), f"Java 8 bytecode required: {name}"
         env = dict(os.environ, CGO_ENABLED="0", GOTOOLCHAIN="local")
         env.pop("GOOS", None)
         env.pop("GOARCH", None)

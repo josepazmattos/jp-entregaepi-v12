@@ -12,11 +12,27 @@ import shutil
 import subprocess
 import tempfile
 import zipfile
+import urllib.request
 
 ROOT = Path(__file__).resolve().parent
 VERSION = "12.10.1"
 FILENAME = f"JP-Biometria-Setup-{VERSION}.exe"
 JAVA_SOURCES = ["Json.java", "BioProof.java", "BioReader.java", "NitgenReader.java", "CertificateBridge.java", "VaultImport.java", "JPBiometriaAgent.java"]
+
+
+def crypto_jar() -> Path:
+    lock = json.loads((ROOT / 'crypto.lock.json').read_text())
+    path = ROOT / 'build' / 'dependencies' / Path(lock['url']).name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        with urllib.request.urlopen(lock['url'], timeout=45) as response:
+            data = response.read(lock['sizeBytes'] + 1)
+        if len(data) != lock['sizeBytes'] or hashlib.sha512(data).hexdigest() != lock['sha512']:
+            raise RuntimeError('Pinned cryptographic dependency integrity failure')
+        path.write_bytes(data)
+    if path.stat().st_size != lock['sizeBytes'] or hashlib.sha512(path.read_bytes()).hexdigest() != lock['sha512']:
+        raise RuntimeError('Pinned cryptographic dependency integrity failure')
+    return path
 
 
 def java_bin() -> str:
@@ -37,7 +53,7 @@ def compile_java(destination: Path, *, tests: bool = False) -> None:
     destination.mkdir(parents=True, exist_ok=True)
     sources = JAVA_SOURCES + (["JPBiometriaAgentTest.java"] if tests else [])
     subprocess.run(
-        [java_bin(), "-m", "jdk.compiler/com.sun.tools.javac.Main", "--release", "8", "-encoding", "UTF-8", "-d", str(destination)]
+        [java_bin(), "-m", "jdk.compiler/com.sun.tools.javac.Main", "--release", "8", "-encoding", "UTF-8", "-classpath", str(crypto_jar()), "-d", str(destination)]
         + [str(ROOT / "java" / source) for source in sources],
         check=True,
         cwd=ROOT,
@@ -49,6 +65,14 @@ def build_payload(classes: Path) -> Path:
     payload = ROOT / "payload" / "JPBiometriaAgent.jar"
     payload.parent.mkdir(parents=True, exist_ok=True)
     entries = {"META-INF/MANIFEST.MF": b"Manifest-Version: 1.0\r\nMain-Class: JPBiometriaAgent\r\n\r\n"}
+    # Flatten only the pinned Java 5-8 class files. We use the lightweight API,
+    # not a globally registered provider; original provider signatures do not
+    # describe this combined JP JAR and are intentionally not copied.
+    with zipfile.ZipFile(crypto_jar()) as crypto:
+        for name in crypto.namelist():
+            if name.startswith('org/bouncycastle/') and name.endswith('.class'):
+                entries[name] = crypto.read(name)
+    entries['META-INF/LICENSE-BOUNCY-CASTLE.txt'] = (ROOT / 'LICENSE-BOUNCY-CASTLE.txt').read_bytes()
     entries["certificates.ps1"] = (ROOT / "certificates.ps1").read_bytes()
     permitted = ("Json", "BioProof", "BioReader", "BioFailure", "NitgenReader", "CertificateBridge", "VaultImport", "JPBiometriaAgent")
     for path in sorted(classes.rglob("*.class")):

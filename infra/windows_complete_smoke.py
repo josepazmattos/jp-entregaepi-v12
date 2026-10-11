@@ -53,14 +53,14 @@ def main():
         # A1 PKCS12 and KMS wrapping. Never use a user's certificate or private key.
         repo = Path(__file__).resolve().parents[1]
         sys.path.insert(0, str(repo / 'native' / 'biometria'))
-        from build import compile_java
+        from build import compile_java, crypto_jar
         with tempfile.TemporaryDirectory(prefix='jpged-runtime-test-') as temporary:
             folder = Path(temporary)
             classes = folder / 'classes'
             compile_java(classes, tests=True)
             subprocess.run([sys.executable, str(repo / 'backend/test/helpers/jpged-fixture.py'), str(folder)], check=True)
             private_java = Path(os.environ['LOCALAPPDATA']) / 'Programs/Eclipse Adoptium/jp-biometria-jre8u504b01/bin/java.exe'
-            subprocess.run([str(private_java), '-Djava.awt.headless=true', '-cp', str(classes), 'JPBiometriaAgentTest', str(folder)], check=True, timeout=60)
+            subprocess.run([str(private_java), '-Djava.awt.headless=true', '-cp', str(classes)+os.pathsep+str(crypto_jar()), 'JPBiometriaAgentTest', str(folder)], check=True, timeout=60)
             report['checks'].append({'privateJavaA1': True, 'kmsWrapping': True, 'syntheticCertificatesOnly': True})
         report['passed'] = True
     finally:

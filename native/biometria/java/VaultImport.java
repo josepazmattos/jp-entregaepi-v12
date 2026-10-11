@@ -52,16 +52,15 @@ final class VaultImport {
     }
     static byte[] wrap(byte[] pkcs8,byte[] wrappingSpki) throws Exception {
         byte[] aes=new byte[32];new SecureRandom().nextBytes(aes);
-        byte[] padded=Arrays.copyOf(pkcs8,((pkcs8.length+7)/8)*8);
+
         try {
-            // RFC 5649: RFC 3394's JCE implementation with the alternative IV.
-            byte[] iv=java.nio.ByteBuffer.allocate(8).putInt(0xA65959A6).putInt(pkcs8.length).array();
-            Cipher kw=Cipher.getInstance("AESWrap");kw.init(Cipher.ENCRYPT_MODE,new SecretKeySpec(aes,"AES"),new IvParameterSpec(iv));
-            byte[] wrapped=kw.doFinal(padded);
+            org.bouncycastle.crypto.engines.RFC5649WrapEngine kw=new org.bouncycastle.crypto.engines.RFC5649WrapEngine(org.bouncycastle.crypto.engines.AESEngine.newInstance());
+            kw.init(true,new org.bouncycastle.crypto.params.KeyParameter(aes));
+            byte[] wrapped=kw.wrap(pkcs8,0,pkcs8.length);
             PublicKey publicKey=KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(wrappingSpki));
             Cipher rsa=Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding");
             rsa.init(Cipher.ENCRYPT_MODE,publicKey,new OAEPParameterSpec("SHA-256","MGF1",MGF1ParameterSpec.SHA256,PSource.PSpecified.DEFAULT));
             byte[] secret=rsa.doFinal(aes),result=Arrays.copyOf(secret,secret.length+wrapped.length);System.arraycopy(wrapped,0,result,secret.length,wrapped.length);return result;
-        }finally{Arrays.fill(aes,(byte)0);Arrays.fill(padded,(byte)0);}
+        }finally{Arrays.fill(aes,(byte)0);}
     }
 }
