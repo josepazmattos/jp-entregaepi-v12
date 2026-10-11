@@ -13,10 +13,11 @@ from complete_release import verify, FILENAME
 from windows_biometria_smoke import LocalControl, read_test_key
 
 
-def diagnose_sdk(home):
+def diagnose_sdk(home, jar=None, label_prefix=''):
     """Compare documented SDK startup in isolated CI without capturing a finger."""
     sdk = home / 'sdk-5.2.0.6'
     binary = sdk / 'Bin/x64'
+    jar = jar or sdk / 'Lib/NBioBSPJNI.jar'
     java = Path(os.environ['LOCALAPPDATA']) / 'Programs/Eclipse Adoptium/jp-biometria-jre8u504b01/bin/java.exe'
     source = '''import com.nitgen.SDK.BSP.NBioBSPJNI;
 public class NitgenBootstrapSmoke {
@@ -35,15 +36,15 @@ public class NitgenBootstrapSmoke {
     with tempfile.TemporaryDirectory(prefix='jp-sdk-bootstrap-') as temp:
         folder = Path(temp); path = folder / 'NitgenBootstrapSmoke.java'; path.write_text(source)
         compiler = Path(os.environ['JAVA_HOME']) / 'bin/javac.exe'
-        subprocess.run([str(compiler), '--release', '8', '-cp', str(sdk / 'Lib/NBioBSPJNI.jar'), str(path)], check=True)
+        subprocess.run([str(compiler), '--release', '8', '-cp', str(jar), str(path)], check=True)
         env = dict(os.environ); env['PATH'] = str(binary) + os.pathsep + os.environ.get('PATH', '')
         for label, cwd, preload in [('agent-directory', home, True), ('sdk-directory', binary, True), ('sdk-default-loader', binary, False)]:
-            command = [str(java), '-Djava.library.path='+str(binary), '-cp', str(folder)+os.pathsep+str(sdk / 'Lib/NBioBSPJNI.jar'), 'NitgenBootstrapSmoke']
+            command = [str(java), '-Djava.library.path='+str(binary), '-cp', str(folder)+os.pathsep+str(jar), 'NitgenBootstrapSmoke']
             if preload: command += [str(binary / 'NBioBSP.dll')]
             probe = subprocess.run(command, cwd=cwd, env=env, capture_output=True, timeout=30)
             # This sample only returns error codes and count; no templates, secrets or capture.
             lines = [line for line in probe.stdout.decode('utf-8', errors='replace').splitlines() if line.startswith(('initialize=', 'enumerate='))]
-            print(json.dumps({'sdkBootstrap': label, 'exit': probe.returncode, 'result': lines}))
+            print(json.dumps({'sdkBootstrap': label_prefix+label, 'exit': probe.returncode, 'result': lines}), flush=True)
 
 
 def main():
