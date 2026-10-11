@@ -40,6 +40,15 @@ export function ok(res, data = {}) {
   res.json({ ok: true, ...data });
 }
 
+export function recentListIds(req) {
+  const value = req.query?.recentIds;
+  if (value == null) return [];
+  if (typeof value !== 'string' || value.length > 12900) throw httpError(400, 'Identificadores de consulta inválidos.', 'CONSULTA_INVALIDA');
+  const ids = [...new Set(value.split(',').filter(Boolean))];
+  if (ids.length > 100 || ids.some(id => id.length > 128)) throw httpError(400, 'Identificadores de consulta inválidos.', 'CONSULTA_INVALIDA');
+  return ids;
+}
+
 export function fail(res, status, error, extra = {}) {
   res.status(status).json({ ok: false, error, ...extra });
 }

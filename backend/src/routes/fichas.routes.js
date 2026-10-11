@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { create, list, get, remove, update } from '../db/store.js';
-import { ok, fail, empresaIdFrom, objectBody, assertRecordAccess, textField } from './_helpers.js';
+import { create, listForDisplay, get, remove, update } from '../db/store.js';
+import { ok, fail, empresaIdFrom, objectBody, assertRecordAccess, textField, recentListIds } from './_helpers.js';
 import * as storage from '../db/store.js';
 import { httpError } from '../middleware/auth.js';
 import { createBiometricsService } from '../services/biometria.service.js';
@@ -9,7 +9,7 @@ import { reportCatalog } from '../services/epi-report.js';
 
 const router = Router();
 
-router.get('/', async (req, res) => ok(res, { items: await list('ficha', empresaIdFrom(req)) }));
+router.get('/', async (req, res) => ok(res, { items: await listForDisplay('ficha', empresaIdFrom(req), recentListIds(req)) }));
 
 router.post('/', async (req, res) => {
   const body = objectBody(req);

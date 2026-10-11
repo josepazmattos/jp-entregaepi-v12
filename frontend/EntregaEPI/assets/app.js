@@ -207,7 +207,16 @@ function finishLogin(authentication,username){
   if(!authentication?.IdToken)throw new Error("O serviço não confirmou a autenticação. Entre novamente.");
   saveAuth(authentication,username);rememberLogin(username);resetFirstAccess();$("password").value="";showApp();
 }
-async function api(path,opts={}){const requestSession=sessionGeneration,requestCompany=companyGeneration;const scoped=/^\/api\/(trabalhadores|fichas|jpged|biometria)(\/|$)|^\/api\/empresas\//.test(path);const cfg=window.JP_CONFIG;const auth=getAuth();const headers=Object.assign({},opts.headers||{});if(auth&&auth.idToken)headers.Authorization="Bearer "+auth.idToken;if(activeEmpresaId)headers["x-empresa-id"]=activeEmpresaId;if(opts.body&&!headers["content-type"])headers["content-type"]="application/json";let res;try{res=await fetch(cfg.apiBaseUrl+path,Object.assign({},opts,{headers}));}catch(error){if(requestSession!==sessionGeneration||(scoped&&requestCompany!==companyGeneration))error.code="SESSION_CHANGED";throw error;}const text=await res.text();let body=text;try{body=JSON.parse(text)}catch(e){}if(requestSession!==sessionGeneration||(scoped&&requestCompany!==companyGeneration)){const error=new Error("A sessão ou a empresa mudou durante a consulta.");error.code="SESSION_CHANGED";throw error;}return {status:res.status,body}}
+const recentListWrites=new Map();
+function listReadContext(path,opts={}){
+  const match=path.match(/^\/api\/(empresas|trabalhadores|fichas|epis)(?:\?|$)/);
+  if(!match)return {path};
+  const group=match[1],key=[sessionGeneration,['empresas','epis'].includes(group)?'*':activeEmpresaId,group].join(':');
+  const now=Date.now();for(const [k,value] of recentListWrites)if(now-value.at>120000)recentListWrites.delete(k);
+  const ids=recentListWrites.get(key)?.ids||[];
+  return {key,path:(!opts.method||opts.method==='GET')&&ids.length?path+(path.includes('?')?'&':'?')+'recentIds='+encodeURIComponent(ids.join(',')):path};
+}
+async function api(path,opts={}){const requestSession=sessionGeneration,requestCompany=companyGeneration;const scoped=/^\/api\/(trabalhadores|fichas|jpged|biometria)(\/|$)|^\/api\/empresas\//.test(path);const cfg=window.JP_CONFIG;const auth=getAuth();const headers=Object.assign({},opts.headers||{});if(auth&&auth.idToken)headers.Authorization="Bearer "+auth.idToken;if(activeEmpresaId)headers["x-empresa-id"]=activeEmpresaId;if(opts.body&&!headers["content-type"])headers["content-type"]="application/json";const listContext=listReadContext(path,opts);let res;try{res=await fetch(cfg.apiBaseUrl+listContext.path,Object.assign({},opts,{headers}));}catch(error){if(requestSession!==sessionGeneration||(scoped&&requestCompany!==companyGeneration))error.code="SESSION_CHANGED";throw error;}const text=await res.text();let body=text;try{body=JSON.parse(text)}catch(e){}if(requestSession!==sessionGeneration||(scoped&&requestCompany!==companyGeneration)){const error=new Error("A sessão ou a empresa mudou durante a consulta.");error.code="SESSION_CHANGED";throw error;}if(listContext.key&&opts.method==='POST'&&res.status>=200&&res.status<300&&body?.ok!==false&&body?.item?.id){const ids=[body.item.id,...(recentListWrites.get(listContext.key)?.ids||[])];recentListWrites.set(listContext.key,{ids:[...new Set(ids)].slice(0,50),at:Date.now()});}return {status:res.status,body}}
 function write(data){$("apiOutput").textContent=typeof data==="string"?data:JSON.stringify(data,null,2)}function asArray(resp){return resp&&resp.body&&Array.isArray(resp.body.items)?resp.body.items:[]}function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
 function ensureSuccess(result, fallback="Não foi possível concluir a operação.") {
   if (result.status < 200 || result.status >= 300 || result.body?.ok === false) {
@@ -221,6 +230,7 @@ function ensureSuccess(result, fallback="Não foi possível concluir a operaçã
   return result;
 }
 function clearSessionData(clearDrafts=false) {
+  recentListWrites.clear();
   workerListPage=1;if($("trabalhadorSearch"))$("trabalhadorSearch").value="";if($("workerStatusFilter"))$("workerStatusFilter").value="Ativo";
   workerRegistrationCompany="";if($("workerRegistrationMethod"))$("workerRegistrationMethod").value="";
   clearCompanyPdf();

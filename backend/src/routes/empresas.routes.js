@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as defaultStorage from '../db/store.js';
-import { ok, objectBody } from './_helpers.js';
+import { ok, objectBody, recentListIds } from './_helpers.js';
 import { assertCompanyAccess, requireMaster, httpError } from '../middleware/auth.js';
 import { createCompanyService, publicCompany } from '../services/empresa.service.js';
 import { companyAccounts } from '../services/company-accounts.js';
@@ -11,7 +11,7 @@ export function createEmpresasRouter({ storage = defaultStorage, accounts = comp
 
   router.get('/', async (req, res) => {
     const items = req.auth.master
-      ? await storage.list('empresa')
+      ? await (storage.listForDisplay || storage.list)('empresa', null, recentListIds(req))
       : (await Promise.all(req.auth.empresaIds.map(id => storage.get('empresa', id)))).filter(Boolean);
     ok(res, { items: items.filter(item => !item.excluidaEm).map(publicCompany) });
   });
