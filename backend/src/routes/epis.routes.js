@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { list, get, listWithRevision, transact } from '../db/store.js';
-import { ok, empresaIdFrom, objectBody } from './_helpers.js';
+import { list, listForDisplay, get, listWithRevision, transact } from '../db/store.js';
+import { ok, empresaIdFrom, objectBody, recentListIds } from './_helpers.js';
 import { consultarCA, normalizarCA } from '../services/caepi.service.js';
 import { normalizeEquipment, listEquipmentCatalog, publicEquipment, equipmentKey, findEquipment, findRegisteredCA } from '../services/epis.service.js';
 import { reportCatalog } from '../services/epi-report.js';
@@ -14,12 +14,12 @@ const registered=(records,ca)=>{const existing=findRegisteredCA(records,ca);retu
 
 router.get('/', async (req, res) => {
   empresaIdFrom(req); // Validate a supplied company context, even though only technical catalog fields are shared.
-  const records=await list('epi');
+  const records=await listForDisplay('epi',null,recentListIds(req));
   ok(res, { items: listEquipmentCatalog(records), compartilhado: true, catalogo:reportCatalog.summary(records) });
 });
-router.get('/catalogo',async(req,res)=>{empresaIdFrom(req);res.set('Cache-Control','private, no-store');ok(res,reportCatalog.search(await list('epi'),req.query));});
+router.get('/catalogo',async(req,res)=>{empresaIdFrom(req);res.set('Cache-Control','private, no-store');ok(res,reportCatalog.search(await listForDisplay('epi',null,recentListIds(req)),req.query));});
 router.get('/catalogo/:id',async(req,res)=>{empresaIdFrom(req);res.set('Cache-Control','private, no-store');const existing=await get('epi',req.params.id);const item=existing?publicEquipment(existing):reportCatalog.get(req.params.id,{allowAmbiguous:true});if(!item)throw httpError(404,'Equipamento não encontrado.','EPI_NAO_ENCONTRADO');ok(res,{item});});
-router.get('/cadastrado/:ca',async(req,res)=>{empresaIdFrom(req);const ca=normalizarCA(req.params.ca);if(!ca)throw httpError(400,'Informe um CA válido.','CA_INVALIDO');const item=registered(await list('epi'),ca);ok(res,{item,cadastrado:Boolean(item),message:item?'EPI já cadastrado':''});});
+router.get('/cadastrado/:ca',async(req,res)=>{empresaIdFrom(req);const ca=normalizarCA(req.params.ca);if(!ca)throw httpError(400,'Informe um CA válido.','CA_INVALIDO');const item=registered(await listForDisplay('epi',null,recentListIds(req)),ca);ok(res,{item,cadastrado:Boolean(item),message:item?'EPI já cadastrado':''});});
 router.get('/ca/:ca', async (req, res) => ok(res, { item: await consultarCA(req.params.ca) }));
 
 router.post('/', async (req, res) => {

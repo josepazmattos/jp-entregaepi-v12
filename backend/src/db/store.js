@@ -1,6 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, GetCommand, DeleteCommand, TransactWriteCommand, paginateScan } from '@aws-sdk/lib-dynamodb';
+import { createIndexedLists } from './indexed-lists.js';
 
 function storageError(message, code, status = 409) {
   return Object.assign(new Error(message), { code, status });
@@ -41,7 +42,7 @@ function transactionName(value, field, max = 300) {
   return value;
 }
 
-export function createStore({ tableName = '', client = null, allowMemory = false } = {}) {
+export function createStore({ tableName = '', client = null, allowMemory = false, entityIndex = '', companyIndex = '' } = {}) {
   const memory = new Map();
   const status = () => ({ mode: tableName && client ? 'dynamodb' : allowMemory && !tableName ? 'memory' : 'unconfigured', durable: Boolean(tableName && client), configured: Boolean(tableName && client) || (allowMemory && !tableName) });
   function assertReady() {
@@ -105,6 +106,12 @@ export function createStore({ tableName = '', client = null, allowMemory = false
     if (!tableName) return structuredClone(memory.get(recordKey(entity, id).pk) || null);
     const result = await send(new GetCommand({ TableName: tableName, Key: recordKey(entity, id), ConsistentRead: true }));
     return result.Item || null;
+  }
+  const indexedLists = tableName && client && entityIndex && companyIndex
+    ? createIndexedLists({ client, tableName, entityIndex, companyIndex }) : null;
+  async function listForDisplay(entity, empresaId = null, recentIds = []) {
+    assertReady();
+    return indexedLists ? indexedLists(entity, empresaId, recentIds) : list(entity, empresaId);
   }
   async function create(entity, data = {}) {
     assertReady();
@@ -340,7 +347,7 @@ export function createStore({ tableName = '', client = null, allowMemory = false
       return { ...state, ready: false };
     }
   }
-  return { status, probe, list, get, create, update, remove, readScope, listWithRevision, getReceipt, transact, getCompanyRegistration, reserveCompanyRegistration, getCompanyByLogin, changeCompanyLogin };
+  return { status, probe, list, listForDisplay, get, create, update, remove, readScope, listWithRevision, getReceipt, transact, getCompanyRegistration, reserveCompanyRegistration, getCompanyByLogin, changeCompanyLogin };
 }
 
 const tableName = (process.env.TABLE_NAME || '').trim();
@@ -349,6 +356,8 @@ const client = tableName ? DynamoDBDocumentClient.from(new DynamoDBClient({ regi
 const store = createStore({
   tableName,
   client,
+  entityIndex: process.env.LIST_ENTITY_INDEX || '',
+  companyIndex: process.env.LIST_COMPANY_INDEX || '',
   allowMemory: process.env.DATA_MODE === 'memory' && process.env.NODE_ENV !== 'production' && !process.env.AWS_LAMBDA_FUNCTION_NAME
 });
-export const { list, create, get, update, remove, readScope, listWithRevision, getReceipt, transact, getCompanyRegistration, reserveCompanyRegistration, getCompanyByLogin, changeCompanyLogin, status: storageStatus, probe: probeStorage } = store;
+export const { list, listForDisplay, create, get, update, remove, readScope, listWithRevision, getReceipt, transact, getCompanyRegistration, reserveCompanyRegistration, getCompanyByLogin, changeCompanyLogin, status: storageStatus, probe: probeStorage } = store;

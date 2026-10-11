@@ -1,0 +1,29 @@
+{
+  "region": "sa-east-1",
+  "primaryTable": "jp-entregaepi-v12",
+  "gedTable": "JPGED",
+  "tableProtection": {"DeletionProtectionEnabled": true, "PointInTimeRecoverySpecification": {"PointInTimeRecoveryEnabled": true, "RecoveryPeriodInDays": 35}},
+  "indexes": [
+    {"IndexName":"list-entity-pk","KeySchema":[{"AttributeName":"entity","KeyType":"HASH"},{"AttributeName":"pk","KeyType":"RANGE"}],"Projection":{"ProjectionType":"KEYS_ONLY"}},
+    {"IndexName":"list-company-pk","KeySchema":[{"AttributeName":"empresaId","KeyType":"HASH"},{"AttributeName":"pk","KeyType":"RANGE"}],"Projection":{"ProjectionType":"KEYS_ONLY"}}
+  ],
+  "lambdaEnvironmentAdditions": {"LIST_ENTITY_INDEX":"list-entity-pk","LIST_COMPANY_INDEX":"list-company-pk"},
+  "lambdaReadPolicy": {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["dynamodb:BatchGetItem"],"Resource":"arn:aws:dynamodb:sa-east-1:003020057405:table/jp-entregaepi-v12"}]},
+  "backupPlan": {
+    "BackupPlanName":"JPGED-Mensal-Sem-Expiracao",
+    "Rules":[{"RuleName":"HistoricoMensalPermanente","TargetBackupVaultName":"JPGED-Historico-Permanente","ScheduleExpression":"cron(0 8 1 * ? *)","StartWindowMinutes":60,"CompletionWindowMinutes":360,"EnableContinuousBackup":false,"RecoveryPointTags":{"Application":"JPGED","Retention":"NoAutomaticExpiration"}}]
+  },
+  "backupSelection": {
+    "SelectionName":"Somente-JPGED-e-EntregaEPI",
+    "IamRoleArn":"arn:aws:iam::003020057405:role/JPGEDPermanentBackupRole",
+    "Resources":["arn:aws:dynamodb:sa-east-1:003020057405:table/JPGED","arn:aws:dynamodb:sa-east-1:003020057405:table/jp-entregaepi-v12"]
+  },
+  "permanentS3Prefixes":["documents/","evidence/","validation/"],
+  "temporaryS3Prefix":"staging/",
+  "notes":[
+    "Omit Lifecycle/DeleteAfterDays to retain monthly recovery points indefinitely.",
+    "Keep S3 current and noncurrent document/evidence/validation versions without expiration; only signing staging expires.",
+    "Enable query environment variables only after both indexes are ACTIVE and IAM batch reads are verified.",
+    "DynamoDB permits one index creation at a time; change deletion protection in a separate UpdateTable request."
+  ]
+}

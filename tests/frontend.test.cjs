@@ -157,7 +157,7 @@ function appHarness(route){
     addEventListener(event,listener){(windowListeners[event]||=[]).push(listener)},
     FormData:class {constructor(form){this.form=form}entries(){return Object.entries(this.form.fields||{})}},
     document,
-    fetch:async(url,options={})=>{requests.push({url,options});const answer=url.endsWith("/auth/resolver")?{body:{ok:true,username:JSON.parse(options.body).login}}:await route(url,options);return {status:answer.status||200,ok:(answer.status||200)<400,text:async()=>JSON.stringify(answer.body),json:async()=>answer.body}}
+    fetch:async(url,options={})=>{requests.push({url,options});let fixtureUrl=url;if(url.includes('recentIds=')){const parsed=new URL(url);parsed.searchParams.delete('recentIds');fixtureUrl=parsed.toString();}const answer=url.endsWith("/auth/resolver")?{body:{ok:true,username:JSON.parse(options.body).login}}:await route(fixtureUrl,options);return {status:answer.status||200,ok:(answer.status||200)<400,text:async()=>JSON.stringify(answer.body),json:async()=>answer.body}}
   });
   context.window=context;
   context.JP_CONFIG={apiBaseUrl:'https://api.example.test',version:'12.10.0'};

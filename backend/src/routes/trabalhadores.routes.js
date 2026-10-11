@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import * as storage from '../db/store.js';
-import { list, get, create, update, listWithRevision, transact } from '../db/store.js';
-import { ok, fail, empresaIdFrom, objectBody, assertRecordAccess } from './_helpers.js';
+import { list, listForDisplay, get, create, update, listWithRevision, transact } from '../db/store.js';
+import { ok, fail, empresaIdFrom, objectBody, assertRecordAccess, recentListIds } from './_helpers.js';
 import { httpError, requireMaster } from '../middleware/auth.js';
 import { createBiometricsService } from '../services/biometria.service.js';
 import { sortWorkers } from '../services/trabalhadores.service.js';
@@ -19,7 +19,7 @@ async function selectedCompany(req, res) {
 
 router.get('/', async (req, res) => {
   const empresaId = await selectedCompany(req, res);
-  if (empresaId) ok(res, { items: sortWorkers(await list('trabalhador', empresaId)) });
+  if (empresaId) ok(res, { items: sortWorkers(await listForDisplay('trabalhador', empresaId, recentListIds(req))) });
 });
 
 router.post('/', async (req, res) => {
