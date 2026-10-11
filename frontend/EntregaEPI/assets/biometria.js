@@ -9,6 +9,8 @@
   ].map(Object.freeze));
   const MAX_IMAGE_BYTES=150*1024;
   const RUNTIME_DIAGNOSTICS=Object.freeze({
+    NITGEN_15:Object.freeze({title:'SDK NITGEN não inicializou',message:'O SDK instalado recusou a inicialização (NITGEN_15). Use Reparar biometria para localizar e verificar as instalações existentes. Se o código continuar, o suporte precisa conferir o SDK; repetir a captura não resolve esse erro.'}),
+    NITGEN_24:Object.freeze({title:'SDK NITGEN expirado',message:'O SDK informou versão expirada (NITGEN_24). É necessário um SDK válido do fabricante para continuar.'}),
     JAVA_NOT_FOUND:Object.freeze({title:'Java não localizado',message:'O Java necessário não foi localizado. Em Biometria, use Baixar instalador completo e execute o arquivo. O pacote prepara o Java automaticamente, sem configurações manuais.'}),
     JAVA_ARCH_MISMATCH:Object.freeze({title:'Java e SDK com arquiteturas diferentes',message:'O Java e o SDK instalados não combinam. Em Biometria, execute o instalador completo para preparar os componentes compatíveis automaticamente.'}),
     SDK_NOT_FOUND:Object.freeze({title:'SDK NITGEN não localizado',message:'O SDK eNBioBSP com o componente Java não foi localizado. Em Biometria, use Baixar instalador completo e execute o arquivo. Não é necessário informar serial nem localizar arquivos.'}),

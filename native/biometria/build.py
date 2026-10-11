@@ -14,9 +14,9 @@ import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parent
-VERSION = "12.10.0"
+VERSION = "12.10.0-bio1"
 FILENAME = f"JP-Biometria-Setup-{VERSION}.exe"
-JAVA_SOURCES = ["Json.java", "BioProof.java", "BioReader.java", "NitgenReader.java", "CertificateBridge.java", "JPBiometriaAgent.java"]
+JAVA_SOURCES = ["Json.java", "BioProof.java", "BioReader.java", "NitgenReader.java", "RuntimeProbe.java", "CertificateBridge.java", "JPBiometriaAgent.java"]
 
 
 def java_bin() -> str:
@@ -50,7 +50,7 @@ def build_payload(classes: Path) -> Path:
     payload.parent.mkdir(parents=True, exist_ok=True)
     entries = {"META-INF/MANIFEST.MF": b"Manifest-Version: 1.0\r\nMain-Class: JPBiometriaAgent\r\n\r\n"}
     entries["certificates.ps1"] = (ROOT / "certificates.ps1").read_bytes()
-    permitted = ("Json", "BioProof", "BioReader", "BioFailure", "NitgenReader", "CertificateBridge", "JPBiometriaAgent")
+    permitted = ("Json", "BioProof", "BioReader", "BioFailure", "NitgenReader", "RuntimeProbe", "CertificateBridge", "JPBiometriaAgent")
     for path in sorted(classes.rglob("*.class")):
         name = path.relative_to(classes).as_posix()
         if "$" in name:

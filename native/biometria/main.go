@@ -26,7 +26,7 @@ import (
 	"time"
 )
 
-const version = "12.10.0"
+const version = "12.10.0-bio1"
 const firstPort, lastPort = 8789, 8799
 const installedName, jarName = "JPBiometria.exe", "JPBiometriaAgent.jar"
 
@@ -94,7 +94,7 @@ func main() {
 			_, err = startAgent(dir, key)
 		}
 		if err != nil {
-			failMain("Não foi possível iniciar a ponte JP Biometria. Execute o reparador 12.10.0.\n\n"+err.Error(), quiet)
+			failMain("Não foi possível iniciar a ponte JP Biometria. Execute o reparador 12.10.0-bio1.\n\n"+err.Error(), quiet)
 		}
 		return
 	}
@@ -106,7 +106,18 @@ func main() {
 		json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": true, "version": version, "buildSha": buildSHA, "port": result.Port})
 		return
 	}
+	// Installation completion is different from reader readiness. Wait for the
+	// first short status check so the dialog does not hide an SDK error.
+	for until := time.Now().Add(3 * time.Second); result.Status["checking"] == true && time.Now().Before(until); {
+		time.Sleep(150 * time.Millisecond)
+		if status, e := readStatus(result.Port); e == nil {
+			result.Status = status
+		}
+	}
 	message, _ := result.Status["message"].(string)
+	if result.Status["errorCode"] == "NITGEN_15" {
+		message = "O SDK NITGEN recusou a inicialização (NITGEN_15). As instalações existentes foram verificadas, mas nenhuma confirmou funcionamento. O driver não foi alterado. O suporte precisa conferir o SDK do fabricante; repetir a captura ou este reparo não corrige esse código."
+	}
 	if message == "" {
 		message = "A verificação do SDK e do leitor ainda está em andamento."
 	}
@@ -371,7 +382,7 @@ func startAgent(dir, key string) (launchResult, error) {
 	if _, err := os.Stat(filepath.Join(dir, jarName)); err != nil {
 		return launchResult{}, errors.New("O agente Java do aplicativo não está instalado. Execute o reparador.")
 	}
-	selection := discoverRuntime()
+	selection := discoverVerifiedRuntime(dir)
 	port, err := availablePort()
 	if err != nil {
 		return launchResult{}, err
@@ -462,6 +473,9 @@ func sdkRoots() []string {
 			roots = append(roots, filepath.Join(base, "NITGEN", sdk, "SDK"))
 		}
 		roots = append(roots, filepath.Join(base, "NITGEN", "SDK"))
+		for _, folder := range []string{"NITGEN eNBSP x64", "NITGEN eNBSP", "NITGEN eNBioBSP"} {
+			roots = append(roots, filepath.Join(base, folder, "SDK"))
+		}
 	}
 	return uniquePaths(roots)
 }

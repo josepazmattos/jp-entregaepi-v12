@@ -75,7 +75,7 @@ final class CertificateBridge {
         if(body!=null){connection.setDoOutput(true);connection.setRequestProperty("Content-Type","application/json");try(OutputStream stream=connection.getOutputStream()){stream.write(Json.encode(body).getBytes(StandardCharsets.UTF_8));}}
         try {
             int status=connection.getResponseCode();InputStream stream=status<400?connection.getInputStream():connection.getErrorStream();
-            Map<String,Object> result;try(InputStream source=stream){result=Json.object(new String(read(source,LIMIT),StandardCharsets.UTF_8));}
+            Map<String,Object> result;try(InputStream source=stream){result=Json.responseObject(new String(read(source,LIMIT),StandardCharsets.UTF_8));}
             if(status!=200||!Boolean.TRUE.equals(result.get("ok")))throw new BioFailure(value(result,"code"),value(result,"error"),status>=400?status:503);
             return result;
         }finally{connection.disconnect();}

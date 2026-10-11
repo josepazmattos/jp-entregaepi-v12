@@ -57,13 +57,18 @@ func searchSDKRoots(bases []string, maxEntries int, budget time.Duration) []stri
 
 func discoverInstalledSDK() ([]sdkLocation, string) {
 	roots := sdkRoots()
-	locations, problem := discoverSDK(roots)
-	if len(locations) > 0 {
-		return locations, problem
-	}
-	// Keep all candidates so an incomplete installation cannot hide a complete one.
+	// A bundled SDK can exist but fail its own initialization. It must not hide
+	// a vendor installation that worked before this package was installed.
 	roots = append(roots, searchSDKRoots(sdkSearchBases(), 50000, 2*time.Second)...)
-	return discoverSDK(roots)
+	managed := filepath.Join(os.Getenv("LOCALAPPDATA"), "JP", "Biometria", "sdk-5.2.0.6")
+	var ordered []string
+	for _, root := range roots {
+		if !samePath(root, managed) {
+			ordered = append(ordered, root)
+		}
+	}
+	ordered = append(ordered, managed)
+	return discoverSDK(ordered)
 }
 
 func runtimeNeedsRefresh(status map[string]any) bool {
