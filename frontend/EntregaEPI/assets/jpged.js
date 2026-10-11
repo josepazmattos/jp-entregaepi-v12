@@ -90,10 +90,11 @@ async function updateJpgedLayout(button){
   if(button.disabled)return;
   const context=operationContext(),id=button.dataset.layout;
   if(!confirm('Criar uma nova versão com a impressão compacta?\n\nOs dados e a biometria serão preservados, sem nova leitura. O cofre aplicará uma nova certificação. O PDF anterior continuará disponível.'))return;
-  const controller=new AbortController();operationControllers.add(controller);button.disabled=true;button.textContent='Atualizando impressão…';
+  const controller=new AbortController();operationControllers.add(controller);clearAppError();button.disabled=true;button.textContent='Atualizando impressão…';
   try{
-    ensureSuccess(await api('/api/jpged/documentos/'+encodeURIComponent(id)+'/atualizar-layout',{method:'POST',body:'{}',signal:controller.signal}));assertOperationContext(context);
-    await loadJpged();assertOperationContext(context);
+    const result=ensureSuccess(await api('/api/jpged/documentos/'+encodeURIComponent(id)+'/atualizar-layout',{method:'POST',body:'{}',signal:controller.signal}));assertOperationContext(context);
+    jpgedItems=jpgedItems.map(item=>item.id===id?{...item,layoutVersion:'compact-1',compactRevision:result.body.revision||item.compactRevision}:item);renderJpged();
+    setText('appMessage','Impressão atualizada. Baixe o PDF atualizado; o original anterior foi preservado.');$('appMessage').className='message success';
   }catch(error){try{assertOperationContext(context);handleAppError(error);}catch{}}
   finally{operationControllers.delete(controller);button.disabled=false;button.textContent='Atualizar impressão';}
 }
