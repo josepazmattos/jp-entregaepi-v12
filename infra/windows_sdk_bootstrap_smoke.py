@@ -57,18 +57,23 @@ with tempfile.TemporaryDirectory(prefix='jp-sdk-isolated-') as temporary:
         diagnose_sdk(home, label_prefix='full-system-')
         # Compare the documented C initialization entry point to isolate the JNI layer.
         # This does not replace the production API or bypass its validation.
-        import ctypes
         binary = home / 'sdk-5.2.0.6/Bin/x64'
-        with os.add_dll_directory(str(binary)):
-            sdk = ctypes.WinDLL(str(binary / 'NBioBSP.dll'))
-            sdk.NBioAPI_Init.argtypes = [ctypes.POINTER(ctypes.c_size_t)]
-            sdk.NBioAPI_Init.restype = ctypes.c_uint32
-            sdk.NBioAPI_Terminate.argtypes = [ctypes.c_size_t]
-            sdk.NBioAPI_Terminate.restype = ctypes.c_uint32
-            handle = ctypes.c_size_t()
-            code = sdk.NBioAPI_Init(ctypes.byref(handle))
-            print(json.dumps({'sdkBootstrap': 'documented-c-api', 'initialize': code}), flush=True)
-            if code == 0: sdk.NBioAPI_Terminate(handle)
+        # A separate process releases the loaded Windows DLL before temp cleanup.
+        native_probe = '''import ctypes, json, os, sys
+from pathlib import Path
+binary = Path(sys.argv[1])
+with os.add_dll_directory(str(binary)):
+    sdk = ctypes.WinDLL(str(binary / 'NBioBSP.dll'))
+    sdk.NBioAPI_Init.argtypes = [ctypes.POINTER(ctypes.c_size_t)]
+    sdk.NBioAPI_Init.restype = ctypes.c_uint32
+    sdk.NBioAPI_Terminate.argtypes = [ctypes.c_size_t]
+    sdk.NBioAPI_Terminate.restype = ctypes.c_uint32
+    handle = ctypes.c_size_t()
+    code = sdk.NBioAPI_Init(ctypes.byref(handle))
+    print(json.dumps({'sdkBootstrap': 'documented-c-api', 'initialize': code}), flush=True)
+    if code == 0: sdk.NBioAPI_Terminate(handle)
+'''
+        subprocess.run([sys.executable, '-c', native_probe, str(binary)], check=True, timeout=30)
         # The A1 runtime is independently testable even when vendor SDK init fails.
         sys.path.insert(0, str(repo / 'native/biometria'))
         from build import compile_java, crypto_jar

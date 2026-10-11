@@ -4,7 +4,7 @@ Data: 10/10/2026, horário de Cuiabá. Produto: JP EntregaEPI / JP Biometria.
 
 ## Resultado confirmado
 
-O instalador 12.10.0 informado pelo usuário retorna `NITGEN_15`. A mesma falha foi reproduzida em Windows limpo no GitHub Actions, sem leitor físico e sem certificados ou digitais reais. O agente HTTP responde, mas a inicialização do SDK Java falha. O teste do pacote completo bloqueia a publicação da 12.10.1.
+Ao investigar o aviso informado pelo usuário (agente respondeu, mas não confirmou leitor pronto), o runtime usado pelo instalador retornou `NITGEN_15` em Windows limpo no GitHub Actions, sem leitor físico e sem certificados ou digitais reais. Nesse ambiente, o agente HTTP responde, mas a inicialização do SDK Java falha. A causa exata no computador do cliente ainda precisa ser confirmada. O teste do pacote completo bloqueia a publicação da 12.10.1.
 
 O SDK oficial define `NBioAPIERROR_VALIDITY_FAIL = 0x0f`, ou 15 decimal. Esse resultado não comprova leitor ocupado, driver ausente nem uma causa específica de licença.
 
@@ -33,6 +33,32 @@ eNBioBSP 5.2.0.6 fornecido para esta integração. As cópias x64 das pastas Bin
 | NBioBSPJNI.jar | `4d03b6eea2ff806f990129c2f28d8e03508e48faab5b313574834694bcbabe8e` |
 
 ## Solicitação técnica à NITGEN / FingerTech
+
+### Verificação dos novos arquivos enviados em 10/10/2026
+
+O executável dentro de `eNBioBSP_v5.2.0.6_Windows (1).zip` é idêntico ao executável anterior: 280.375.104 bytes, SHA-256 `f97a7249ecacc7feaeb2da776d3f4fab9f7122c1b0a36575cf129747eb0fb6b5`. Não é uma atualização de runtime.
+
+O `Java.zip` contém exemplos e duas versões diferentes de `NBioBSPJNI.jar`. Foram selecionados apenas os componentes do fabricante; imagens, templates biométricos, dados dos exemplos e serial não foram publicados ou incluídos nos testes.
+
+| Teste adicional no Windows x64 sem leitor | Resultado |
+|---|---|
+| JAR do exemplo IndexSearch, 3 combinações de diretório/carregador | Inicialização 15 nos 3 casos |
+| JAR do exemplo Busca 1-N, 3 combinações de diretório/carregador | Inicialização 15 nos 3 casos |
+| JAR original com NSearch.dll do System64 original, 3 combinações | Inicialização 15 nos 3 casos |
+| Entrada pública C `NBioAPI_Init`, com dependências originais | Inicialização 15 |
+| Certificado sintético A1, Java privado do instalador | 108 verificações aprovadas |
+
+Hashes dos componentes adicionais:
+
+- IndexSearch JAR: `823550c6acf7cd3ac3b0fd1a6b2199576e0c6fe5b95ae4697a2f0433a4209fb6`.
+- Busca 1-N JAR: `f72e671384656db384f58ee70632ddaa5b9f85abac06c00d2d1232066f7c19d5`.
+- NSearch.dll x64: `69b6ba791fe2e8fa226de49ab4b85567ab3b996d1e400604d283cb87b6dd1dbc`.
+
+[Logs da verificação dos anexos](https://github.com/josepazmattos/jp-entregaepi-v12/actions/runs/38102546907/job/114361299535). A execução registrou todos os resultados acima; depois, a limpeza temporária falhou porque o processo Python ainda mantinha a DLL carregada. O diagnóstico C foi movido para um processo separado para liberar a DLL no encerramento. Nenhuma verificação de validação do SDK foi alterada.
+
+Conclusão limitada ao ambiente testado: trocar o JAR ou acrescentar NSearch.dll não resolve a recusa. A falha também ocorre na API C, portanto não é exclusiva do adaptador Java do aplicativo. Não foi testado o instalador interativo do fabricante, com serial, em um computador com o Hamster DX conectado. A execução do demo oficial nesse computador é o próximo passo para distinguir configuração local de incompatibilidade do runtime/ambiente.
+
+### Dados para o suporte
 
 Solicitamos a análise de `NBioAPIERROR_VALIDITY_FAIL (15)` na inicialização Java com os componentes acima e um conjunto de runtime x64 compatível com o Hamster DX HFDU06, incluindo JAR/JNI/DLLs correspondentes. Favor informar os pré-requisitos de implantação e de validação aplicáveis ao runtime e o procedimento oficial para instalação automatizada em máquinas de clientes. O objetivo é um pacote único, preservando as verificações do fabricante.
 
