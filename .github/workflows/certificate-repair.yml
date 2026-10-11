@@ -32,6 +32,8 @@ jobs:
       - run: python native/biometria/build.py --output native/biometria/dist --build-sha "$GITHUB_SHA"
       - run: python -m pip install cryptography==46.0.3
       - run: npm ci --prefix backend --no-audit --no-fund
+      - name: Preparar leitura independente do PDF certificado
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y poppler-utils
       - run: node --test backend/test/jpged-pki.test.js backend/test/jpged-routes.test.js backend/test/jpged-service.test.js backend/test/ficha-capture-api.test.js
       - run: npm ci --prefix tests --no-audit --no-fund
       - run: npm --prefix tests run install-browser
@@ -64,7 +66,9 @@ jobs:
           name: certificate-repair-${{ github.sha }}
           path: native/biometria/dist
       - name: Instalar e reinstalar o mesmo EXE aprovado
-        run: python infra/windows_biometria_smoke.py --source native/biometria/dist --commit "$env:GITHUB_SHA"
+        run: |
+          java -XshowSettings:properties -version
+          python infra/windows_biometria_smoke.py --source native/biometria/dist --commit "$env:GITHUB_SHA"
       - run: python -m pip install cryptography==46.0.3
       - run: npm ci --prefix backend --no-audit --no-fund
       - name: Resposta API, Java, A1 Windows e validação CMS independente
