@@ -29,7 +29,6 @@ public class NitgenBootstrapSmoke {
    NBioBSPJNI.DEVICE_ENUM_INFO devices=sdk.new DEVICE_ENUM_INFO();
    sdk.EnumerateDevice(devices);
    System.out.println("enumerate="+sdk.GetErrorCode()+";devices="+devices.DeviceCount);
-   devices.dispose();
   }finally{sdk.dispose();}
  }
 }'''
