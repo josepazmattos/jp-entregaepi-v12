@@ -58,7 +58,7 @@ export function createVaultService({ged,vault,validate=verifyCompanyCms,audit}){
       const built=cms(item),proof=built.complete(await vault.sign(item.keyArn,built.signedBytes));
       const result=await validate(proof,content(item),item.target);
       const previous=await ged.get(company.id,'CERT','current');
-      const saved=await ged.put(company.id,'CERT','current',{...result.certificate,mode:'vault',keyArn:item.keyArn,chain:item.chain,target:item.target,authorizationPath:`evidence/${company.id}/vault/${id}.json`,active:true,configuredAt:new Date().toISOString(),configuredBy:actor},item.previousVersion);
+      const saved=await ged.put(company.id,'CERT','current',{...result.certificate,mode:'vault',keyArn:item.keyArn,chain:result.evidence.certificates,target:item.target,authorizationPath:`evidence/${company.id}/vault/${id}.json`,active:true,configuredAt:new Date().toISOString(),configuredBy:actor},item.previousVersion);
       committed=true;
       await ged.put(company.id,'IMPORT','current',{...item,used:true,importToken:null},item.version);
       await audit(company.id,actor,'COFRE_ATIVADO',{fingerprint:saved.fingerprint});

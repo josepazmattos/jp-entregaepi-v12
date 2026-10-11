@@ -149,7 +149,7 @@ function setSidebarOpen(open,returnFocus=false){
 }
 function activateScreen(screen,focusContent=true){
   if(!Object.prototype.hasOwnProperty.call(screenLabels,screen))return;
-  if(["empresas","empresas-cadastradas"].includes(screen)&&!isMaster())return;
+  if(["empresas","empresas-cadastradas","certificado"].includes(screen)&&!isMaster())return;
   if(screen==="trabalhadores"&&!isMaster()){cancelWorkerEdit();renderWorkerRegistration();}
   if(screen!=="biometria"&&biometricCapture)resetBiometricCapture();
   document.querySelectorAll(".nav button").forEach(button=>{

@@ -2,10 +2,15 @@ let jpgedItems=[],jpgedCursor='',jpgedGeneration=0,certificateGeneration=0;
 function certificateIndicator(label,state,detail=''){
   const chip=$('healthCertificate');if(!chip)return;
   chip.dataset.state=state;chip.querySelector('span').textContent=label;
-  chip.title=(detail||label)+' — Abrir configuração do certificado';
+  chip.title=(detail||label)+(isMaster()?' — Abrir administração do certificado':' — Consultar situação do certificado');
 }
 function resetJpged(){if(typeof certificateCleanup==='function')certificateCleanup();jpgedItems=[];jpgedCursor='';jpgedGeneration++;certificateGeneration++;certificateIndicator('Não verificado','idle');setText('jpgedList','Selecione uma empresa.');setText('certificateDetail','Consulte o certificado da empresa em uso.');setText('certificateState','Não consultado');$('certificateDisconnect')?.classList.add('hidden');}
 function jpgedCompanyName(){return cache.empresas.find(x=>x.id===activeEmpresaId)?.nome||'Selecione uma empresa';}
+function openCertificateStatus(){
+  if(isMaster()){goScreen('certificado');return;}
+  const dialog=dialogShell(document,'Situação do certificado',jpgedCompanyName());
+  dialog.querySelector('.dialog-content').textContent='Certificado: '+$('healthCertificate').querySelector('span').textContent+'. A instalação e a manutenção são realizadas pelo administrador Master.';
+}
 async function loadCompanyCertificate(){
   const context=operationContext(),generation=++certificateGeneration;setText('certificateCompany',jpgedCompanyName());$('certificateConfigure')?.classList.toggle('hidden',!isMaster());
   if(!activeEmpresaId){certificateIndicator('Selecione empresa','idle');setText('certificateDetail','Selecione uma empresa no topo da página.');return;}

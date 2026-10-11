@@ -50,5 +50,8 @@ cert=b.sign(ikey,hashes.SHA256())
 (out/'chain.key').write_bytes(key.private_bytes(serialization.Encoding.PEM,serialization.PrivateFormat.PKCS8,serialization.NoEncryption()))
 (out/'chain-ca.pem').write_bytes(intermediate.public_bytes(serialization.Encoding.PEM)+root.public_bytes(serialization.Encoding.PEM))
 (out/'intermediate.der').write_bytes(intermediate.public_bytes(serialization.Encoding.DER))
+# Same issuer/key, genuinely signed but expired: the leaf itself remains valid.
+expired_intermediate=x509.CertificateBuilder().subject_name(iname).issuer_name(name).public_key(ikey.public_key()).serial_number(32).not_valid_before(now-timedelta(days=2)).not_valid_after(now-timedelta(hours=1)).add_extension(x509.BasicConstraints(ca=True,path_length=0),True).add_extension(x509.KeyUsage(False,False,False,False,False,True,True,False,False),True).sign(rootkey,hashes.SHA256())
+(out/'intermediate-expired.der').write_bytes(expired_intermediate.public_bytes(serialization.Encoding.DER))
 (out/'chain.pfx').write_bytes(serialize_key_and_certificates(b'Synthetic chain',key,cert,[intermediate,root],serialization.BestAvailableEncryption(b'synthetic-test-only')))
 (out/'intermediate.crl').write_bytes(x509.CertificateRevocationListBuilder().issuer_name(iname).last_update(now-timedelta(hours=1)).next_update(now+timedelta(days=1)).sign(ikey,hashes.SHA256()).public_bytes(serialization.Encoding.DER))

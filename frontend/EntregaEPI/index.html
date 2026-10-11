@@ -108,7 +108,7 @@
         </div>
         <div class="nav-group"><p class="nav-label">Sistema</p>
           <button type="button" class="nav-button" data-screen="biometria"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-fingerprint"></use></svg><span>Biometria</span></button>
-          <button type="button" class="nav-button" data-screen="certificado"><svg class="icon" aria-hidden="true"><use href="#icon-shield"></use></svg><span>Certificado Digital</span></button>
+          <button type="button" class="nav-button hidden" data-screen="certificado" data-master-only><svg class="icon" aria-hidden="true"><use href="#icon-shield"></use></svg><span>Certificado Digital</span></button>
           <button type="button" class="nav-button" data-screen="config"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-settings"></use></svg><span>Configurações</span></button>
         </div>
       </nav>
@@ -128,7 +128,7 @@
       <main id="mainContent" class="main" tabindex="-1">
         <div id="appMessage" class="message hidden" role="alert" aria-live="polite"></div>
         <section id="screen-dashboard" class="screen active" aria-labelledby="title-dashboard">
-          <div class="topbar"><div><span class="kicker">Painel de gestão</span><h1 id="title-dashboard">Dashboard</h1><p>Acompanhe os cadastros e as movimentações da sua operação.</p></div><div class="dashboard-tools"><div class="health-indicators" aria-label="Estado dos serviços"><button type="button" id="healthSystem" class="health-chip" data-state="idle" onclick="goScreen('config')">Sistema <span>Verificando</span></button><button type="button" id="healthCA" class="health-chip" data-state="idle" onclick="goScreen('config')">CA <span>Verificando</span></button><button type="button" id="healthBio" class="health-chip" data-state="idle" onclick="goScreen('config')">Biometria <span>Verificando</span></button><button type="button" id="healthCertificate" class="health-chip" data-state="idle" onclick="goScreen('certificado')">Certificado <span>Verificando</span></button></div><button id="refreshButton" class="btn btn-secondary" type="button"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Atualizar</button></div></div>
+          <div class="topbar"><div><span class="kicker">Painel de gestão</span><h1 id="title-dashboard">Dashboard</h1><p>Acompanhe os cadastros e as movimentações da sua operação.</p></div><div class="dashboard-tools"><div class="health-indicators" aria-label="Estado dos serviços"><button type="button" id="healthSystem" class="health-chip" data-state="idle" onclick="goScreen('config')">Sistema <span>Verificando</span></button><button type="button" id="healthCA" class="health-chip" data-state="idle" onclick="goScreen('config')">CA <span>Verificando</span></button><button type="button" id="healthBio" class="health-chip" data-state="idle" onclick="goScreen('config')">Biometria <span>Verificando</span></button><button type="button" id="healthCertificate" class="health-chip" data-state="idle" onclick="openCertificateStatus()">Certificado <span>Verificando</span></button></div><button id="refreshButton" class="btn btn-secondary" type="button"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Atualizar</button></div></div>
           <div id="actionBanner" class="action-banner hidden"><div><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-info"></use></svg><p><strong>Comece pela empresa.</strong><span>Cadastre ou selecione uma empresa para organizar os trabalhadores, EPIs e fichas.</span></p></div><button class="btn btn-secondary" type="button" onclick="goScreen('empresas')"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-plus"></use></svg>Cadastrar empresa</button></div>
           <div class="metrics">
             <article class="metric-card" data-master-only><div class="metric-top"><span>Empresas</span><span class="metric-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg></span></div><strong id="metricEmpresas">0</strong><p>Empresas cadastradas</p></article>
@@ -306,7 +306,7 @@
           <div class="context-note"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-file"></use></svg><div><strong>Fichas e registros de assinatura</strong><p>Acesse as fichas para consultar os documentos e os registros de assinatura disponíveis.</p></div><button class="text-button" type="button" onclick="goScreen('fichas')">Ver fichas <svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-arrow"></use></svg></button></div>
         </section>
 
-        <section id="screen-certificado" class="screen" aria-labelledby="title-certificado">
+        <section id="screen-certificado" class="screen hidden" data-master-only aria-labelledby="title-certificado">
           <div class="topbar"><div><span class="kicker">Sistema · Proteção de documentos</span><h1 id="title-certificado">Certificado Digital</h1><p>Instale o A1 uma vez. O cofre certifica as fichas confirmadas pelos trabalhadores.</p></div></div>
           <div class="card certificate-card" id="certificateCard">
             <div class="section-heading"><div><h2>Certificado da empresa</h2><p id="certificateCompany">Selecione uma empresa</p></div><span id="certificateState" class="status-badge" data-state="idle">Não consultado</span></div>
@@ -347,9 +347,9 @@
   </section>
   <script src="/__APP_PREFIX__/assets/ficha.js?v=20261010-movimentos"></script>
   <script src="/__APP_PREFIX__/assets/biometria.js?v=jpged-1294"></script>
-  <script src="/__APP_PREFIX__/assets/app.js?v=20261011-cert1"></script>
+  <script src="/__APP_PREFIX__/assets/app.js?v=20261011-cert2"></script>
   <script src="/__APP_PREFIX__/assets/operations.js?v=20261010-jpged"></script>
-  <script src="/__APP_PREFIX__/assets/jpged.js?v=20261011-cert1"></script>
+  <script src="/__APP_PREFIX__/assets/jpged.js?v=20261011-cert2"></script>
   <script src="/__APP_PREFIX__/assets/certificate-install.js?v=20261011-cert1"></script>
 </body>
 </html>

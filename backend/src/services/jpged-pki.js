@@ -20,6 +20,32 @@ export function trustRoots() {
   if(!files.length)reject('A cadeia oficial ICP-Brasil ainda não está disponível.','ICP_TRUST_UNAVAILABLE',503);
   return files.map(name=>{const cert=new X509Certificate(readFileSync(new URL(name,directory)));return new pki.Certificate({schema:parse(cert.raw)});});
 }
+export function issuerCertificates() {
+  const directory=new URL('../data/icp-brasil/intermediates/',import.meta.url);
+  // Public issuer candidates shipped from the CA repository. Never trust them
+  // as roots: every path is still validated to the existing ICP-Brasil anchors.
+  return readdirSync(directory).filter(name=>name.endsWith('.pem')).map(name=>{
+    const cert=new X509Certificate(readFileSync(new URL(name,directory)));
+    return new pki.Certificate({schema:parse(cert.raw)});
+  });
+}
+export async function verifyIcpPath(signer,provided=[],{roots=trustRoots(),intermediates=issuerCertificates(),now=new Date()}={}) {
+  const date=d=>d.toLocaleString('pt-BR',{timeZone:'America/Cuiaba'});
+  if(signer.notAfter.value<now)reject(`O certificado do titular venceu em ${date(signer.notAfter.value)}. Instale o A1 renovado.`,'CERTIFICADO_VENCIDO');
+  if(signer.notBefore.value>now)reject(`O certificado do titular só será válido a partir de ${date(signer.notBefore.value)}.`,'CERTIFICADO_AINDA_NAO_VALIDO');
+  const leafHash=sha256(der(signer)),unique=new Map();
+  for(const cert of [...provided,...intermediates])if(cert instanceof pki.Certificate){const hash=sha256(der(cert));if(hash!==leafHash)unique.set(hash,cert);}
+  const certs=[...unique.values(),signer];
+  const initial=await new pki.CertificateChainValidationEngine({trustedCerts:roots,certs,checkDate:now}).verify();
+  if(!initial.result){
+    if(initial.resultCode===8)reject('Um certificado da cadeia emissora está vencido ou ainda não está válido. O A1 do titular está dentro da validade; atualize a cadeia da emissora.','CERTIFICADO_EMISSORA_FORA_VALIDADE');
+    const missing=[60,97].includes(initial.resultCode)||/No valid certificate paths found|Unable to find certificate path/.test(initial.resultMessage||'');
+    if(missing)reject('O A1 está dentro da validade, mas não foi possível completar sua cadeia até a ICP-Brasil. Instale o arquivo exportado com a cadeia completa ou solicite a atualização da cadeia da emissora.','CERTIFICADO_CADEIA_INCOMPLETA');
+    reject('A cadeia emissora não passou na validação criptográfica ICP-Brasil. Confira o arquivo original e a cadeia da emissora.','CERTIFICADO_CADEIA_INVALIDA');
+  }
+  if(!initial.certificatePath||initial.certificatePath.length<2)reject('Cadeia ICP-Brasil incompleta.','CERTIFICADO_CADEIA_INCOMPLETA');
+  return {path:initial.certificatePath,certs};
+}
 export function publicAddress(address) {try{return ipaddr.process(address).range()==='unicast';}catch{return false;}}
 // Download only CRLs from a cryptographically trusted chain. Resolve and pin DNS;
 // no redirects, credentials, arbitrary ports, loopback, metadata or private ranges.
@@ -61,7 +87,7 @@ function certificateIdentity(cert) {
   let cpf;try{cpf=normalizeCpf(serial||legacyCpf);}catch{reject('CPF ausente ou inválido no certificado.','CERTIFICADO_IDENTIDADE');}
   return {kind:'e-CPF',cpf};
 }
-export async function verifyCompanyCms(cmsBytes, content, companyIdentity, { roots = null, loadCrl = fetchCrl, now = new Date() } = {}) {
+export async function verifyCompanyCms(cmsBytes, content, companyIdentity, { roots = null, intermediates = null, loadCrl = fetchCrl, now = new Date() } = {}) {
   if(!Buffer.isBuffer(cmsBytes)||cmsBytes.length>32768||cmsBytes.length<100)reject('Assinatura digital ausente ou muito grande.');
   let signed, signer;
   try {
@@ -90,11 +116,7 @@ export async function verifyCompanyCms(cmsBytes, content, companyIdentity, { roo
   if(!usage||!(usage[0]&0xc0))reject('O certificado não permite assinatura de documentos.');
   const policies=signer.extensions?.find(x=>x.extnID==='2.5.29.32')?.parsedValue?.certificatePolicies||[];
   if(!policies.some(x=>/^2\.16\.76\.1\.2\.1\.\d+$/.test(x.policyIdentifier)))reject('Nesta versão, utilize um certificado ICP-Brasil A1 e-CPF ou e-CNPJ.','CERTIFICADO_TIPO');
-  const trusted=roots||trustRoots(),certs=signed.certificates.filter(x=>x instanceof pki.Certificate&&x!==signer).concat(signer);
-  const initial=await new pki.CertificateChainValidationEngine({trustedCerts:trusted,certs,checkDate:now}).verify();
-  if(!initial.result)reject('Certificado vencido, inválido ou sem cadeia ICP-Brasil confiável.','CERTIFICADO_CADEIA_INVALIDA');
-  const path=initial.certificatePath;
-  if(!path||path.length<2)reject('Cadeia ICP-Brasil incompleta.');
+  const trusted=roots||trustRoots(),{path,certs}=await verifyIcpPath(signer,signed.certificates,{roots:trusted,intermediates:intermediates||issuerCertificates(),now});
   const evidence=await Promise.all(path.slice(0,-1).map(async(cert,index)=>{
     const urls=(cert.extensions?.find(x=>x.extnID==='2.5.29.31')?.parsedValue?.distributionPoints||[]).flatMap(point=>Array.isArray(point.distributionPoint)?point.distributionPoint.filter(x=>x.type===6).map(x=>x.value):[]).slice(0,3);
     if(!urls.length)reject('O certificado não fornece consulta de revogação.','CERTIFICADO_REVOGACAO_INDISPONIVEL');
