@@ -1,35 +1,60 @@
-let jpgedItems=[],jpgedCursor='',jpgedGeneration=0;
-function resetJpged(){jpgedItems=[];jpgedCursor='';jpgedGeneration++;setText('jpgedList','Selecione uma empresa.');setText('certificateDetail','Consulte o certificado da empresa em uso.');setText('certificateState','Não consultado');$('certificateDisconnect')?.classList.add('hidden');}
+let jpgedItems=[],jpgedCursor='',jpgedGeneration=0,certificateGeneration=0;
+function certificateIndicator(label,state,detail=''){
+  const chip=$('healthCertificate');if(!chip)return;
+  chip.dataset.state=state;chip.querySelector('span').textContent=label;
+  chip.title=(detail||label)+' — Abrir configuração do certificado';
+}
+function resetJpged(){if(typeof certificateCleanup==='function')certificateCleanup();jpgedItems=[];jpgedCursor='';jpgedGeneration++;certificateGeneration++;certificateIndicator('Não verificado','idle');setText('jpgedList','Selecione uma empresa.');setText('certificateDetail','Consulte o certificado da empresa em uso.');setText('certificateState','Não consultado');$('certificateDisconnect')?.classList.add('hidden');}
 function jpgedCompanyName(){return cache.empresas.find(x=>x.id===activeEmpresaId)?.nome||'Selecione uma empresa';}
 async function loadCompanyCertificate(){
-  const context=operationContext();setText('certificateCompany',jpgedCompanyName());
-  if(!activeEmpresaId){setText('certificateDetail','Selecione uma empresa no topo da página.');return;}
-  try{const r=ensureSuccess(await api('/api/jpged/certificado'));assertOperationContext(context);const cert=r.body.certificate;
-    setText('certificateState',cert?(new Date(cert.validTo)>new Date()?(cert.kind==='e-CPF'?'e-CPF configurado':'Configurado'):'Vencido'):'Não configurado');
-    setText('certificateDetail',cert?`${cert.subject.replaceAll('\n',' · ')} · Validade: ${new Date(cert.validTo).toLocaleDateString('pt-BR')}`:'Configure o A1 e-CNPJ ou e-CPF para este empregador.');
-    $('certificateDisconnect').classList.toggle('hidden',!cert);
+  const context=operationContext(),generation=++certificateGeneration;setText('certificateCompany',jpgedCompanyName());$('certificateConfigure')?.classList.toggle('hidden',!isMaster());
+  if(!activeEmpresaId){certificateIndicator('Selecione empresa','idle');setText('certificateDetail','Selecione uma empresa no topo da página.');return;}
+  certificateIndicator('Verificando','loading');
+  try{const r=ensureSuccess(await diagnosticApi('/api/jpged/certificado'));assertOperationContext(context);if(generation!==certificateGeneration)return;const cert=r.body.certificate;
+    const vaultReady=!cert||cert.mode!=='vault'||cert.vaultState==='Enabled';
+    const expired=cert&&new Date(cert.validTo)<=new Date(),valid=cert&&vaultReady&&new Date(cert.validTo)>new Date()&&(!cert.validFrom||new Date(cert.validFrom)<=new Date());
+    certificateIndicator(!cert?'Pendente':expired?'Vencido':valid?'Configurado':'Verificar',valid?'success':'warning',valid?`Certificado cadastrado para ${jpgedCompanyName()}, válido até ${new Date(cert.validTo).toLocaleDateString('pt-BR')}. ${cert.mode==='vault'?'Chave protegida no cofre; uso automático nas fichas.':'Configuração local anterior; solicite ao Master a migração para o cofre.'}`:'');
+    setText('certificateState',!cert?'Não configurado':expired?'Vencido':valid?(cert.mode==='vault'?'Protegido no cofre':cert.kind==='e-CPF'?'e-CPF configurado':'Configurado'):!vaultReady?'Cofre indisponível':'Verificar validade');
+    setText('certificateDetail',cert?`${cert.subject.replaceAll('\n',' · ')} · Validade: ${new Date(cert.validTo).toLocaleDateString('pt-BR')}`:(isMaster()?'Cadastre uma vez o A1 e-CNPJ ou e-CPF no cofre desta empresa.':'Solicite ao administrador o cadastro do certificado. Você não precisa instalar o A1 neste computador.'));
+    $('certificateDisconnect').classList.toggle('hidden',!cert||!isMaster());
 
-  }catch(error){try{assertOperationContext(context);setText('certificateMessage',error.message);}catch{}}
+  }catch(error){try{assertOperationContext(context);if(generation!==certificateGeneration)return;certificateIndicator('Indisponível','error');setText('certificateMessage',error.message);}catch{}}
 }
 async function certificateAgent(action,jobId,context){
   const status=await getBiometricClient().discover();assertOperationContext(context);
-  if(!status.certificatesAvailable)throw new Error('Instale a atualização do JP Biometria disponível em Biometria para usar certificados.');
+  if(!status.certificatesAvailable)throw new Error(status.runtimeMessage?`JP Biometria ${status.version}: ${status.runtimeMessage}`:`O JP Biometria ${status.version} encontrado neste computador não oferece certificados. Solicite ao Master o cadastro em Sistema → Certificado Digital para usar o cofre.`);
   const controller=new AbortController();operationControllers.add(controller);const timer=setTimeout(()=>controller.abort(),190000);
   try{
     const response=await fetch(`http://127.0.0.1:${status.port}/api/certificate/${action}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:getAuth().idToken,empresaId:context.empresa,...(jobId?{jobId}:{})}),credentials:'omit',cache:'no-store',redirect:'error',targetAddressSpace:'loopback',signal:controller.signal});
     const body=await response.json();assertOperationContext(context);if(!response.ok||body.ok===false)throw new Error(body.message||body.error||'A certificação não foi concluída.');return body;
   }finally{clearTimeout(timer);operationControllers.delete(controller);}
 }
+function authorizeCertificateChange(context){
+  if(!isMaster())return Promise.reject(new Error('Somente o Master pode alterar certificados.'));
+  return new Promise((resolve,reject)=>{
+    const dialog=dialogShell(document,'Autorizar alteração do certificado',jpgedCompanyName()+' · Confirme sua senha de Master.');
+    dialog.querySelector('.dialog-content').innerHTML='<form><label for="vaultMasterPassword">Senha do Master</label><input id="vaultMasterPassword" type="password" autocomplete="current-password" required><button type="submit" class="btn btn-primary">Autorizar esta alteração</button></form>';
+    let done=false;const form=dialog.querySelector('form'),field=dialog.querySelector('input');field.focus();
+    dialog.addEventListener('close',()=>{field.value='';if(!done)reject(new Error('Alteração cancelada.'));},{once:true});
+    form.onsubmit=async event=>{event.preventDefault();const button=form.querySelector('button');if(button.disabled)return;button.disabled=true;
+      try{assertOperationContext(context);const auth=getAuth(),result=await cognitoLogin(auth.username,field.value);field.value='';assertOperationContext(context);
+        const payload=parseJwt(result.AuthenticationResult?.IdToken||'');if(!result.AuthenticationResult?.IdToken||payload.sub!==auth.payload.sub||!payload['cognito:groups']?.includes('MASTER'))throw new Error('A senha não confirmou o mesmo usuário Master.');
+        saveAuth(result.AuthenticationResult,auth.username);done=true;dialog.close();resolve();
+      }catch(error){field.value='';dialogMessage(dialog,error.message,'error');button.disabled=false;}
+    };
+  });
+}
 async function configureCompanyCertificate(){
-  if(!activeEmpresaId){setText('certificateMessage','Selecione uma empresa.');return;}
+  if(!isMaster()||!activeEmpresaId){setText('certificateMessage','Entre como Master e selecione uma empresa.');return;}
   const context=operationContext(),button=$('certificateConfigure');if(button.disabled)return;button.disabled=true;
-  setText('certificateMessage','Confira a janela do Windows para selecionar e autorizar o certificado.');
-  try{await certificateAgent('configure','',context);assertOperationContext(context);setText('certificateMessage','Certificado configurado neste computador. As próximas fichas poderão ser certificadas após a biometria.');await loadCompanyCertificate();}
+  try{await authorizeCertificateChange(context);assertOperationContext(context);setText('certificateMessage','Escolha o arquivo A1 e confira o certificado para esta empresa.');
+    await installCertificateA1(context);assertOperationContext(context);setText('certificateMessage','Certificado protegido no cofre. Os clientes já podem certificar as fichas após a biometria, sem instalar o A1.');await loadCompanyCertificate();}
   catch(error){try{assertOperationContext(context);setText('certificateMessage',error.message);}catch{}}finally{button.disabled=false;}
 }
 async function disconnectCompanyCertificate(){
-  const context=operationContext();if(!confirm('Desvincular o certificado desta empresa? Os documentos já certificados serão preservados.'))return;
-  try{ensureSuccess(await api('/api/jpged/certificado/desvincular',{method:'POST',body:'{}'}));assertOperationContext(context);await loadCompanyCertificate();setText('certificateMessage','Certificado desvinculado do aplicativo. O certificado instalado no Windows foi preservado.');}
+  if(!isMaster())return;
+  const context=operationContext();if(!confirm('Desativar o certificado desta empresa? Novas certificações serão bloqueadas. Os PDFs já certificados serão preservados.'))return;
+  try{await authorizeCertificateChange(context);assertOperationContext(context);ensureSuccess(await api('/api/jpged/certificado/desvincular',{method:'POST',body:'{}'}));assertOperationContext(context);await loadCompanyCertificate();setText('certificateMessage','Certificado desativado. Os documentos anteriores foram preservados.');}
   catch(error){setText('certificateMessage',error.message);}
 }
 async function certifyFicha(id,preview,context=operationContext()){
@@ -37,7 +62,7 @@ async function certifyFicha(id,preview,context=operationContext()){
   const message=text=>{if(preview&&!preview.closed)preview.document.getElementById('printSignatureStatus').textContent=text;};
   message('Biometria confirmada · Preparando o documento certificado...');
   const r=ensureSuccess(await api('/api/jpged/fichas/'+encodeURIComponent(id)+'/preparar',{method:'POST',body:'{}'}));assertOperationContext(context);
-  if(!r.body.completed){message('Biometria confirmada · Assinando com o certificado da empresa...');await certificateAgent('sign',r.body.jobId,context);}
+  if(!r.body.completed){message('Biometria confirmada · Assinando com o certificado da empresa...');if(r.body.mode==='vault')ensureSuccess(await api('/api/jpged/assinaturas/'+encodeURIComponent(r.body.jobId)+'/certificar',{method:'POST',body:'{}'}));else await certificateAgent('sign',r.body.jobId,context);}
   await refreshFichas(false);assertOperationContext(context);
   const ficha=cache.fichas.find(x=>x.id===id);if(preview&&ficha)updatePrintWindow(preview,ficha);
   return ficha;
