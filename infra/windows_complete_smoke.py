@@ -30,7 +30,7 @@ def main():
                                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             output, _ = process.communicate(timeout=240)
             result = json.loads(output.decode('utf-8').strip().splitlines()[-1])
-            assert result['code'] in ('USB_ABSENT', 'READER_NOT_FOUND', 'HVCI_DRIVER', 'DRIVER_FAILED', 'SECURITY_UNKNOWN', 'REBOOT_REQUIRED'), result
+            assert process.returncode == 0 and result.get('ok') is True and result['code'] == 'INSTALLED_WITHOUT_READER', result
             key = read_test_key(home / 'control.key')
             digest = hashlib.sha256(key).hexdigest()
             if key_hash: assert key_hash == digest, 'Reinstall must preserve station identity'
@@ -45,6 +45,7 @@ def main():
             assert status.get('sdk') is True, {k: status.get(k) for k in ('sdk', 'reader', 'errorCode')}
             assert status.get('reader') is False and status.get('ok') is False, 'No physical reader may be reported'
             assert status.get('javaArch') in ('amd64', 'x86_64')
+            assert status.get('capabilities', {}).get('certificates') is True, 'Certificate setup must be available without USB'
             report['checks'].append({'attempt': attempt + 1, 'result': result['code'], 'sdkLoaded': True, 'reader': False})
         report['passed'] = True
     finally:

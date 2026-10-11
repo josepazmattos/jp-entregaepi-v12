@@ -55,6 +55,7 @@ async function scenario(options={}){
     if(url.pathname==='/api/caepi/365')return json({ok:true,item:{found:true,officialSnapshot:true,downloadedAt:'2026-10-06T16:00:00Z',ambiguous:state.ca!=='ready',autofillAllowed:state.ca==='ready'}});
     if(url.pathname==='/api/empresas')return json({ok:true,items:[{id:'EMPRESA-A',nome:'EMPRESA DE DEMONSTRAÇÃO',cnpj:'00000000000000'},{id:'EMPRESA-B',nome:'SEGUNDA EMPRESA SINTÉTICA',cnpj:'11111111111111'}].slice(0,state.username==='MASTER-TESTE'?2:1)});
     if(['/api/trabalhadores','/api/fichas','/api/epis'].includes(url.pathname))return json({ok:true,items:[]});
+    if(url.pathname==='/api/jpged/certificado')return json({ok:true,certificate:null});
     throw new Error('Unexpected route '+url.pathname);
   });
   const login=async(user='MASTER-TESTE')=>{await page.locator('#username').fill(user);await page.locator('#password').fill('SENHA-SINTETICA');await page.locator('#loginButton').click();};
@@ -119,7 +120,7 @@ async function main(){
     await s.page.locator('#bioRepairLink').click();
     await s.page.evaluate(()=>resumeInstallationWatch());
     assert.ok(await s.page.evaluate(()=>sessionStorage.getItem('jp-biometria-install-until')),'old working agent must not stop monitoring');
-    s.state.version='12.10.0';
+    s.state.version='12.10.1';
     await s.page.evaluate(()=>window.dispatchEvent(new Event('focus')));
     await s.page.waitForFunction(()=>!sessionStorage.getItem('jp-biometria-install-until'));
     assert.equal(await s.page.locator('#startupBioBadge').getAttribute('data-state'),'success');

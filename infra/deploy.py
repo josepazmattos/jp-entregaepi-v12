@@ -28,7 +28,7 @@ from fetch_ca_snapshot import read_source, verify_installed
 from biometria_release import verify_release, ReleaseError, EXECUTABLE, MANIFEST
 from complete_release import verify as verify_complete, FILENAME as COMPLETE_EXECUTABLE, MANIFEST as COMPLETE_MANIFEST
 
-VERSION = "12.10.0"
+VERSION = "12.10.1"
 REPOSITORY = "josepazmattos/jp-entregaepi-v12"
 ACCOUNT = "003020057405"
 REGION = "sa-east-1"

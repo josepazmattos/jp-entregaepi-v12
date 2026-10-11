@@ -15,7 +15,7 @@ public final class JPBiometriaAgentTest {
     private static final String ORIGIN = "https://www.jptreinamentos.com.br";
     private static final String SHA = "1111111111111111111111111111111111111111";
     public static void main(String[] args) throws Exception {
-        jsonTests(); imageTests(); httpTests();
+        jsonTests(); certificateResponseTests(); imageTests(); httpTests();
         System.out.println("Java native bridge: " + assertions + " assertions passed (synthetic reader; no physical SDK/device).");
     }
     static void check(boolean condition, String label) { assertions++; if (!condition) throw new AssertionError(label); }
@@ -30,6 +30,21 @@ public final class JPBiometriaAgentTest {
         for (String invalid : new String[]{"{\"a\":1,\"a\":2}", "{\"a\":false}x", "{\"a\":{}}", "{\"a\":[]}", "{\"a\":01}", "{\"a\":\"\\u+123\"}", "{\"a\":\"\\u-123\"}", "{\"a\":\"\\u١٢٣٤\"}", "{\"a\":true,}"}) rejects(() -> Json.object(invalid), "strict JSON rejects " + invalid);
         check(Json.encode(JPBiometriaAgent.map("s", "\n\"\\")).equals("{\"s\":\"\\n\\\"\\\\\"}"), "JSON escaping");
         check(JPBiometriaAgent.hmac(KEY, "abc").equals("_XrbFSwF74Dcz1Ch-kwF1aPsbalVdfwxKufF0JGDY1E"), "stable HMAC-SHA256 test vector");
+    }
+    static void certificateResponseTests() throws Exception {
+        Map<String,Object> response=CertificateBridge.decodeApiResponse(200,"{\"ok\":true,\"configuration\":{\"id\":\"config-test\",\"target\":{\"registrationType\":\"CNPJ\",\"registrationNumber\":\"12345678000195\"},\"contentBase64\":\"dGVzdA==\"}}");
+        Map<?,?> configuration=(Map<?,?>)response.get("configuration");
+        check("CNPJ".equals(((Map<?,?>)configuration.get("target")).get("registrationType")), "configuration response reaches local signer with employer target");
+        response=CertificateBridge.decodeApiResponse(200,"{\"ok\":true,\"certificate\":{\"fingerprint\":\"test-fingerprint\",\"thumbprint\":\"test-thumbprint\",\"target\":{\"companyId\":\"company-test\"}}}");
+        check("test-fingerprint".equals(((Map<?,?>)response.get("certificate")).get("fingerprint")), "configuration confirmation parses binding metadata");
+        response=CertificateBridge.decodeApiResponse(200,"{\"ok\":true,\"completed\":true,\"item\":{\"itens\":[{\"quantidade\":1.5,\"datasMovimentacao\":{\"entrega\":\"10/10/2026\"}}]}}");
+        check(Boolean.TRUE.equals(response.get("completed")), "signed ficha response accepts nested items");
+        try {CertificateBridge.decodeApiResponse(401,"{\"ok\":false,\"code\":\"CERTIFICADO_REAUTENTICAR\",\"error\":\"Entre novamente.\"}");throw new AssertionError("401 accepted");}
+        catch(BioFailure error){check(error.httpStatus==401 && "CERTIFICADO_REAUTENTICAR".equals(error.code), "authentication failures remain actionable");}
+        for(String invalid:new String[]{"{\"x\":{\"a\":1,\"a\":2}}","{\"x\":[1,]}","{\"x\":1.}","{\"x\":01}","{\"x\":[]}trailing"}) rejects(()->Json.responseObject(invalid),"malformed nested response rejected");
+        String nested="{}";for(int i=0;i<20;i++)nested="{\"x\":"+nested+"}";final String tooDeep=nested;
+        rejects(()->Json.responseObject(tooDeep),"response nesting bounded");
+        rejects(()->Json.object("{\"token\":{\"nested\":true}}"),"browser certificate request remains flat");
     }
     public static class Audit { public int ImageWidth, ImageHeight; public Finger[] FingerData; Audit(int width, int height, byte[] data) { ImageWidth=width; ImageHeight=height; FingerData=new Finger[]{new Finger(data)}; } }
     public static class Finger { public Template[] Template; Finger(byte[] data) { Template=new Template[]{new Template(data)}; } }

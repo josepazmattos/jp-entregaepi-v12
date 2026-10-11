@@ -1,19 +1,27 @@
-let jpgedItems=[],jpgedCursor='',jpgedGeneration=0;
-function resetJpged(){jpgedItems=[];jpgedCursor='';jpgedGeneration++;setText('jpgedList','Selecione uma empresa.');setText('certificateDetail','Consulte o certificado da empresa em uso.');setText('certificateState','Não consultado');$('certificateDisconnect')?.classList.add('hidden');}
+let jpgedItems=[],jpgedCursor='',jpgedGeneration=0,certificateGeneration=0;
+function certificateIndicator(label,state,detail=''){
+  const chip=$('healthCertificate');if(!chip)return;
+  chip.dataset.state=state;chip.querySelector('span').textContent=label;
+  chip.title=(detail||label)+' — Abrir configuração do certificado';
+}
+function resetJpged(){jpgedItems=[];jpgedCursor='';jpgedGeneration++;certificateGeneration++;certificateIndicator('Não verificado','idle');setText('jpgedList','Selecione uma empresa.');setText('certificateDetail','Consulte o certificado da empresa em uso.');setText('certificateState','Não consultado');$('certificateDisconnect')?.classList.add('hidden');}
 function jpgedCompanyName(){return cache.empresas.find(x=>x.id===activeEmpresaId)?.nome||'Selecione uma empresa';}
 async function loadCompanyCertificate(){
-  const context=operationContext();setText('certificateCompany',jpgedCompanyName());
-  if(!activeEmpresaId){setText('certificateDetail','Selecione uma empresa no topo da página.');return;}
-  try{const r=ensureSuccess(await api('/api/jpged/certificado'));assertOperationContext(context);const cert=r.body.certificate;
-    setText('certificateState',cert?(new Date(cert.validTo)>new Date()?(cert.kind==='e-CPF'?'e-CPF configurado':'Configurado'):'Vencido'):'Não configurado');
+  const context=operationContext(),generation=++certificateGeneration;setText('certificateCompany',jpgedCompanyName());
+  if(!activeEmpresaId){certificateIndicator('Selecione empresa','idle');setText('certificateDetail','Selecione uma empresa no topo da página.');return;}
+  certificateIndicator('Verificando','loading');
+  try{const r=ensureSuccess(await diagnosticApi('/api/jpged/certificado'));assertOperationContext(context);if(generation!==certificateGeneration)return;const cert=r.body.certificate;
+    const expired=cert&&new Date(cert.validTo)<=new Date(),valid=cert&&new Date(cert.validTo)>new Date()&&(!cert.validFrom||new Date(cert.validFrom)<=new Date());
+    certificateIndicator(!cert?'Pendente':expired?'Vencido':valid?'Configurado':'Verificar',valid?'success':'warning',valid?`Certificado cadastrado para ${jpgedCompanyName()}, válido até ${new Date(cert.validTo).toLocaleDateString('pt-BR')}. A chave local será conferida ao assinar.`:'');
+    setText('certificateState',!cert?'Não configurado':expired?'Vencido':valid?(cert.kind==='e-CPF'?'e-CPF configurado':'Configurado'):'Verificar validade');
     setText('certificateDetail',cert?`${cert.subject.replaceAll('\n',' · ')} · Validade: ${new Date(cert.validTo).toLocaleDateString('pt-BR')}`:'Configure o A1 e-CNPJ ou e-CPF para este empregador.');
     $('certificateDisconnect').classList.toggle('hidden',!cert);
 
-  }catch(error){try{assertOperationContext(context);setText('certificateMessage',error.message);}catch{}}
+  }catch(error){try{assertOperationContext(context);if(generation!==certificateGeneration)return;certificateIndicator('Indisponível','error');setText('certificateMessage',error.message);}catch{}}
 }
 async function certificateAgent(action,jobId,context){
-  const status=await getBiometricClient().discover();assertOperationContext(context);
-  if(!status.certificatesAvailable)throw new Error('Instale a atualização do JP Biometria disponível em Biometria para usar certificados.');
+  const status=await getBiometricClient().discover({requireCertificates:true});assertOperationContext(context);
+  if(!status.certificatesAvailable)throw new Error(status.runtimeMessage?`JP Biometria ${status.version}: ${status.runtimeMessage}`:`O JP Biometria ${status.version} encontrado neste computador não oferece certificados. Baixe e execute o instalador completo disponível abaixo e clique novamente em Configurar neste computador. O leitor USB não é necessário para esta configuração.`);
   const controller=new AbortController();operationControllers.add(controller);const timer=setTimeout(()=>controller.abort(),190000);
   try{
     const response=await fetch(`http://127.0.0.1:${status.port}/api/certificate/${action}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:getAuth().idToken,empresaId:context.empresa,...(jobId?{jobId}:{})}),credentials:'omit',cache:'no-store',redirect:'error',targetAddressSpace:'loopback',signal:controller.signal});

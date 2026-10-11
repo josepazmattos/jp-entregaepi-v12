@@ -94,3 +94,10 @@ Infraestrutura: stack CloudFormation **JPGED**, tabela JPGED, buckets jpged-docu
 Para recuperar um original, um administrador separado da aplicação lê a versão no backup, confere o SHA-256 registrado e recupera em uma nova chave; nunca sobrescreve o original. Restaure o banco por PITR em uma tabela nova, valide o período e os vínculos por empresa antes de mudar o destino da API. Retenha o banco anterior durante a conferência. Não apague fichas por economia sem política formal de retenção.
 
 Em 10/10/2026 foi criado um objeto sintético identificável e confirmada a replicação (COMPLETED na origem, REPLICA no backup, mesmo tamanho/ETag), além da leitura do conteúdo preservado no backup. Isso verifica replicação e recuperação desse objeto, não uma restauração completa do banco. Nenhum arquivo real de cliente foi utilizado nesse teste.
+
+
+### Correção 12.10.1 — configuração sem leitor
+
+O certificado pode ser configurado com o Hamster DX desconectado. O instalador completo conclui a instalação do agente e do assinador e informa separadamente que falta conectar o leitor para capturar digitais. Uma instalação antiga em outra porta não deve impedir a busca pelo assinador atualizado. Instale o pacote 12.10.1 para receber também a correção da leitura das respostas da API pelo agente Java.
+
+No Dashboard, **Certificado digital** apresenta a situação do cadastro da empresa selecionada: Pendente, Configurado, Vencido ou Indisponível. Ao clicar, abre Biometria. “Configurado” indica um certificado cadastrado dentro da validade; o acesso à chave local e a validação criptográfica são conferidos novamente a cada assinatura. A ausência do leitor mantém o indicador de Biometria em atenção, sem bloquear o cadastro do certificado.

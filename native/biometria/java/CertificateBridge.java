@@ -75,10 +75,13 @@ final class CertificateBridge {
         if(body!=null){connection.setDoOutput(true);connection.setRequestProperty("Content-Type","application/json");try(OutputStream stream=connection.getOutputStream()){stream.write(Json.encode(body).getBytes(StandardCharsets.UTF_8));}}
         try {
             int status=connection.getResponseCode();InputStream stream=status<400?connection.getInputStream():connection.getErrorStream();
-            Map<String,Object> result;try(InputStream source=stream){result=Json.object(new String(read(source,LIMIT),StandardCharsets.UTF_8));}
-            if(status!=200||!Boolean.TRUE.equals(result.get("ok")))throw new BioFailure(value(result,"code"),value(result,"error"),status>=400?status:503);
-            return result;
+            try(InputStream source=stream){return decodeApiResponse(status,new String(read(source,LIMIT),StandardCharsets.UTF_8));}
         }finally{connection.disconnect();}
+    }
+    static Map<String,Object> decodeApiResponse(int status,String text) throws BioFailure {
+        Map<String,Object> result=Json.responseObject(text);
+        if(status!=200||!Boolean.TRUE.equals(result.get("ok")))throw new BioFailure(value(result,"code"),value(result,"error"),status>=400?status:503);
+        return result;
     }
     private static byte[] read(InputStream stream,int max) throws IOException {if(stream==null)throw new IOException();ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] buffer=new byte[8192];int n;while((n=stream.read(buffer))!=-1){if(out.size()+n>max)throw new IOException();out.write(buffer,0,n);}return out.toByteArray();}
     @SuppressWarnings("unchecked") private static Map<String,Object> object(Map<String,Object> in,String key){Object value=in.get(key);if(!(value instanceof Map))throw new IllegalArgumentException();return (Map<String,Object>)value;}

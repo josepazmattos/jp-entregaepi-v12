@@ -63,7 +63,7 @@
     const busy=body.busy===true,checking=body.checking===true;
     const ready=body.ok===true&&captureAvailable&&detected&&!busy&&!checking&&!runtimeIssue;
     return Object.freeze({port,service:'JP Biometria',version:validVersion?version:'Não informada',recognized:true,
-      ready,compatible,captureAvailable,certificatesAvailable:body.capabilities?.certificates===true,documentHashAvailable:body.capabilities?.documentHash===true,enrollmentImageAvailable:compatible&&versionAtLeast(version,'12.9.1')&&body.capabilities?.templates===true,verificationAvailable:compatible&&body.capabilities?.verify===true&&body.capabilities?.templates===true,upgradeRequired:!compatible,busy,checking,readerDetected:detected,sdkMissing,
+      ready,compatible,captureAvailable,certificatesAvailable:jp&&validVersion&&versionAtLeast(version,'12.10.1')&&body.capabilities?.certificates===true,documentHashAvailable:body.capabilities?.documentHash===true,enrollmentImageAvailable:compatible&&versionAtLeast(version,'12.9.1')&&body.capabilities?.templates===true,verificationAvailable:compatible&&body.capabilities?.verify===true&&body.capabilities?.templates===true,upgradeRequired:!compatible,busy,checking,readerDetected:detected,sdkMissing,
       runtimeCode,runtimeTitle:runtimeIssue?.title||'',runtimeMessage:runtimeIssue?.message||'',
       deviceName:nitgen&&device.length<=80&&/^[\w .()\/-]+$/.test(device)?device:'Leitor NITGEN',
       code:ready?'LEITOR_DETECTADO':!compatible?'AGENTE_REQUER_ATUALIZACAO':runtimeCode|| (busy?'LEITOR_OCUPADO':checking?'VERIFICANDO_LEITOR':sdkMissing?'SDK_INDISPONIVEL':!captureAvailable?'CAPTURA_INDISPONIVEL':body.ok!==true?'AGENTE_REQUER_ATENCAO':'LEITOR_NAO_DETECTADO')});
@@ -129,7 +129,7 @@
         throw failure('BIO_NETWORK');
       }finally{clearTimeout(timer);signal.removeEventListener('abort',abort);}
     }
-    async function discover({signal,automatic=false,requireEnrollmentImage=false}={}){
+    async function discover({signal,automatic=false,requireEnrollmentImage=false,requireCertificates=false}={}){
       return locked(async operationSignal=>{
         const ports=selected?[selected.port,...PORTS.filter(port=>port!==selected.port)]:PORTS;
         const diagnostics=[],deadline=Date.now()+discoveryTimeout;let recognized=null,winner=null,fatal=null;selected=null;
@@ -142,10 +142,11 @@
             const fetchStatus=()=>request(port,'/status?ts='+Date.now(),search.signal,Math.max(1,Math.min(port===8789?primaryStatusTimeout:statusTimeout,deadline-Date.now())),16384);
             let status=normalizeStatus(await fetchStatus(),port);
             const checkingDeadline=Math.min(deadline,Date.now()+checkingTimeout);
-            while(status.compatible&&status.checking&&!status.busy&&!search.signal.aborted&&Date.now()+pollInterval<checkingDeadline){await pause(pollInterval);if(search.signal.aborted)return null;status=normalizeStatus(await fetchStatus(),port);}
+            while(!requireCertificates&&status.compatible&&status.checking&&!status.busy&&!search.signal.aborted&&Date.now()+pollInterval<checkingDeadline){await pause(pollInterval);if(search.signal.aborted)return null;status=normalizeStatus(await fetchStatus(),port);}
             if(search.signal.aborted)return null;
             diagnostics.push({port,code:status.code});
-            if(status.ready&&(!requireEnrollmentImage||status.enrollmentImageAvailable)){winner=status;search.abort();return status;}
+            // Certificate setup uses the Windows signer, independently of the USB reader.
+            if(requireCertificates?status.certificatesAvailable:status.ready&&(!requireEnrollmentImage||status.enrollmentImageAvailable)){winner=status;search.abort();return status;}
             if(!recognized||(!recognized.compatible&&status.compatible)||(requireEnrollmentImage&&!recognized.enrollmentImageAvailable&&status.enrollmentImageAvailable))recognized=status;
           }catch(error){
             if(search.signal.aborted)return null;

@@ -27,7 +27,7 @@ app.get('/health', async (req, res) => {
   res.status(storage.ready ? 200 : 503).json({
     ok: storage.ready,
     service: 'JP EntregaEPI V12 API',
-    version: process.env.APP_VERSION || '12.10.0',
+    version: process.env.APP_VERSION || '12.10.1',
     buildSha: process.env.BUILD_SHA || null,
     mode: storage.mode,
     durable: storage.durable,

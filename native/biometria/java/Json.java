@@ -34,16 +34,24 @@ final class Json {
         return out.append('"').toString();
     }
     static Map<String, Object> object(String text) {
-        Parser p = new Parser(text); Map<String, Object> result = p.object(); p.ws();
+        return parseObject(text, false);
+    }
+    // Server responses contain configuration, target, certificate and item objects.
+    // Browser requests keep the original flat-only grammar.
+    static Map<String, Object> responseObject(String text) { return parseObject(text, true); }
+    private static Map<String, Object> parseObject(String text, boolean containers) {
+        Parser p = new Parser(text, containers); Map<String, Object> result = p.object(); p.ws();
         if (p.i != p.s.length()) throw new IllegalArgumentException("JSON_TRAILING_DATA");
         return result;
     }
     static final class Parser {
-        final String s; int i;
-        Parser(String s) { this.s = s; }
+        final String s; final boolean containers; int i, depth, nodes;
+        Parser(String s, boolean containers) { this.s = s; this.containers = containers; }
+        void enter() { if (++depth > 16) throw new IllegalArgumentException("JSON_DEPTH_LIMIT"); }
         void ws() { while (i < s.length() && " \n\r\t".indexOf(s.charAt(i)) >= 0) i++; }
         void require(char c) { ws(); if (i >= s.length() || s.charAt(i++) != c) throw new IllegalArgumentException("JSON_INVALID"); }
         Map<String, Object> object() {
+            enter(); try {
             require('{'); Map<String, Object> m = new LinkedHashMap<>(); ws();
             if (i < s.length() && s.charAt(i) == '}') { i++; return m; }
             for (;;) {
@@ -52,14 +60,35 @@ final class Json {
                 if (i >= s.length()) throw new IllegalArgumentException("JSON_INVALID");
                 char c = s.charAt(i++); if (c == '}') return m; if (c != ',') throw new IllegalArgumentException("JSON_INVALID");
             }
+            } finally { depth--; }
+        }
+        List<Object> array() {
+            enter(); try {
+                require('['); List<Object> out = new ArrayList<>(); ws();
+                if (i < s.length() && s.charAt(i) == ']') { i++; return out; }
+                for (;;) {
+                    out.add(value()); ws(); if (i >= s.length()) throw new IllegalArgumentException("JSON_INVALID");
+                    char c = s.charAt(i++); if (c == ']') return out; if (c != ',') throw new IllegalArgumentException("JSON_INVALID");
+                }
+            } finally { depth--; }
         }
         Object value() {
+            if (++nodes > 100000) throw new IllegalArgumentException("JSON_NODE_LIMIT");
             ws(); if (i >= s.length()) throw new IllegalArgumentException("JSON_INVALID");
+            if (containers && s.charAt(i) == '{') return object();
+            if (containers && s.charAt(i) == '[') return array();
             if (s.charAt(i) == '"') return string();
             for (String v : new String[]{"true", "false", "null"}) {
                 if (s.startsWith(v, i)) { i += v.length(); return v.equals("null") ? null : Boolean.valueOf(v); }
             }
-            int start = i; if (s.charAt(i) == '-') i++;
+            int start = i;
+            if (containers) {
+                while (i < s.length() && "-+0123456789.eE".indexOf(s.charAt(i)) >= 0) i++;
+                String n = s.substring(start, i);
+                if (n.length() > 128 || !n.matches("-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]{1,4})?")) throw new IllegalArgumentException("JSON_NUMBER_INVALID");
+                return new java.math.BigDecimal(n);
+            }
+            if (s.charAt(i) == '-') i++;
             while (i < s.length() && Character.isDigit(s.charAt(i))) i++;
             String n = s.substring(start, i);
             if (!n.matches("-?(0|[1-9][0-9]*)")) throw new IllegalArgumentException("JSON_SCALAR_REQUIRED");
