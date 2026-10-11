@@ -113,7 +113,7 @@ async function main(){
   {
     const s=await scenario({version:'12.9.3'});await s.login();await s.done();
     await s.page.evaluate(()=>goScreen('biometria'));
-    assert.match(await s.page.locator('#bioRepairLink').getAttribute('href'),/JP-Biometria-Completo-12\.10\.0\.exe$/);
+    assert.match(await s.page.locator('#bioRepairLink').getAttribute('href'),/JP-Biometria-Completo-12\.10\.1\.exe$/);
     assert.equal(await s.page.locator('#bioRepairLink').innerText(),'Baixar instalador completo');
     // Preserve the real click listener but avoid downloading the 55 MB installer in a UI test.
     await s.page.locator('#bioRepairLink').evaluate(node=>node.addEventListener('click',event=>event.preventDefault(),{once:true}));
