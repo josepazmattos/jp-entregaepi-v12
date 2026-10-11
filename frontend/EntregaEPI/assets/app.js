@@ -15,7 +15,7 @@ const installationWatchKey='jp-biometria-install-until';
 let installationWatchTimer=null,installationWatchRunning=false,installationWatchEpoch=0;
 const diagnosticRequests=new Set();
 const startupMirrors={apiStatusBadge:'startupApiBadge',caStatusBadge:'startupCaBadge',bioStatusBadge:'startupBioBadge',apiStatusText:'startupApiText',caStatusText:'startupCaText',bioStatusText:'startupBioText'};
-const screenLabels={dashboard:"Dashboard",empresas:"Empresas","empresas-cadastradas":"Empresas Cadastradas",trabalhadores:"Trabalhadores",epis:"EPIs e CA",entrega:"Entrega de EPI",fichas:"Fichas de EPI",jpged:"JPGED",biometria:"Biometria",config:"Configurações"};
+const screenLabels={dashboard:"Dashboard",empresas:"Empresas","empresas-cadastradas":"Empresas Cadastradas",trabalhadores:"Trabalhadores",epis:"EPIs e CA",entrega:"Entrega de EPI",fichas:"Fichas de EPI",jpged:"JPGED",certificado:"Certificado Digital",biometria:"Biometria",config:"Configurações"};
 const navigationMedia=typeof window.matchMedia==="function"?window.matchMedia("(max-width: 1024px)"):null;
 function setText(id,value){const node=$(id);if(node)node.textContent=value;const mirror=$(startupMirrors[id]);if(mirror)mirror.textContent=value;}
 function setStatusBadge(id,label,state){const node=$(id);if(node){node.textContent=label;node.dataset.state=state;}const mirror=$(startupMirrors[id]);if(mirror){mirror.textContent=label;mirror.dataset.state=state;renderStartupProgress();}}
@@ -149,7 +149,7 @@ function setSidebarOpen(open,returnFocus=false){
 }
 function activateScreen(screen,focusContent=true){
   if(!Object.prototype.hasOwnProperty.call(screenLabels,screen))return;
-  if(["empresas","empresas-cadastradas"].includes(screen)&&!isMaster())return;
+  if(["empresas","empresas-cadastradas","certificado"].includes(screen)&&!isMaster())return;
   if(screen==="trabalhadores"&&!isMaster()){cancelWorkerEdit();renderWorkerRegistration();}
   if(screen!=="biometria"&&biometricCapture)resetBiometricCapture();
   document.querySelectorAll(".nav button").forEach(button=>{
@@ -159,7 +159,7 @@ function activateScreen(screen,focusContent=true){
   document.querySelectorAll(".screen").forEach(section=>section.classList.toggle("active",section.id==="screen-"+screen));
   setText("currentSectionLabel",screenLabels[screen]);setSidebarOpen(false);
   if(screen==="jpged"&&typeof loadJpged==="function")loadJpged();
-  if(screen==="biometria"&&typeof loadCompanyCertificate==="function")loadCompanyCertificate();
+  if(screen==="certificado"&&typeof loadCompanyCertificate==="function")loadCompanyCertificate();
   if(focusContent)$("mainContent")?.focus({preventScroll:true});
 }
 function setMsg(type,text){const el=$("loginMessage");el.className="message "+type;el.textContent=text}function hideMsg(){$("loginMessage").className="message hidden";$("loginMessage").textContent=""}
@@ -295,6 +295,7 @@ async function refreshAll(){
   clearAppError();
   await Promise.all([refreshEpis(false),(async()=>{
   await refreshEmpresas(false);
+  if(typeof loadCompanyCertificate==='function')loadCompanyCertificate();
   if(activeEmpresaId){
     await Promise.all([refreshTrabalhadores(false),refreshFichas(false)]);
   }else{
@@ -949,7 +950,7 @@ async function changeActiveCompany(id){
   saveActiveCompany(id);cache.trabalhadores=[];cache.fichas=[];$("trabalhadoresList").textContent="Carregando...";$("fichasList").textContent="Carregando...";$("dashboardFichas").textContent="";renderEntregaOptions();
   await refreshAllSafe();
   if(document.querySelector("#screen-jpged.active"))loadJpged();
-  if(document.querySelector("#screen-biometria.active"))loadCompanyCertificate();
+  if(document.querySelector("#screen-certificado.active"))loadCompanyCertificate();
 }
 $("empresaAtivaSelect").addEventListener("change",event=>changeActiveCompany(event.target.value));
 $("entregaEmpresa").addEventListener("change",event=>{const id=event.target.value;if(!isMaster()||!cache.empresas.some(item=>String(item.id)===String(id))){renderEntregaOptions();return;}if(id!==activeEmpresaId)changeActiveCompany(id);});

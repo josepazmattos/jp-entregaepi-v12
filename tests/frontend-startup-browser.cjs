@@ -29,7 +29,7 @@ async function scenario(options={}){
   await context.route(url=>url.origin!==origin,async route=>{
     const request=route.request(),url=new URL(request.url());
     const json=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)}).catch(()=>{});
-    if(url.pathname==='/api/jpged/certificado')return json({ok:true,certificate:null});
+    if(url.pathname==='/api/jpged/certificado')return json({ok:true,certificate:state.certificate||null});
     state.requests.push({path:url.pathname,host:url.hostname,port:url.port,method:request.method(),headers:request.headers()});
     if(url.pathname==='/auth/resolver')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,username:request.postDataJSON().login})});
     if(url.hostname.startsWith('cognito-idp.')){
@@ -73,6 +73,14 @@ async function scenario(options={}){
 async function main(){
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));origin=`http://127.0.0.1:${server.address().port}`;
   browser=await chromium.launch({...(process.env.JP_TEST_CHROMIUM?{executablePath:process.env.JP_TEST_CHROMIUM}:{}),headless:true,args:['--no-sandbox']});report.browser=browser.version();
+  {
+    const certificate={mode:'vault',vaultState:'Enabled',subject:'SYNTHETIC COMPANY',validTo:'2099-01-01T00:00:00Z'};
+    const a=await scenario({version:'12.10.0-bio1',certificate}),b=await scenario({version:'12.10.0-bio1',certificate});
+    await Promise.all([a.login('CLIENTE-TESTE'),b.login('CLIENTE-TESTE')]);await Promise.all([a.done(),b.done()]);
+    for(const s of [a,b]){assert.equal(await s.page.locator('#healthCertificate span').textContent(),'Configurado');assert.equal(await s.page.locator('#startupBioBadge').getAttribute('data-state'),'success');assert.ok(s.state.requests.some(r=>r.host==='127.0.0.1'&&r.path==='/status'));}
+    await a.page.locator('#logoutButton').click();await b.page.reload();await b.done();assert.equal(await b.page.locator('#appShell').isVisible(),true);assert.equal(await b.page.locator('#healthCertificate span').textContent(),'Configurado');assert.equal(await a.page.locator('#loginButton').isVisible(),true);
+    pass('duas máquinas simuladas com o mesmo login: sessões e agentes locais independentes, cofre compartilhado da empresa; sair em uma não encerra a outra');await a.close();await b.close();
+  }
   for(const user of ['MASTER-TESTE','CLIENTE-TESTE']){
     const s=await scenario();assert.equal(s.state.requests.length,0);await s.login(user);await s.done();
     for(const id of ['startupApiBadge','startupCaBadge','startupBioBadge'])assert.equal(await s.page.locator('#'+id).getAttribute('data-state'),'success');

@@ -7,7 +7,7 @@ import dns from 'node:dns/promises';import https from 'node:https';import {Event
 import {execFileSync} from 'node:child_process';
 import * as asn1 from 'asn1js';
 import * as pki from 'pkijs';
-import {verifyCompanyCms,publicAddress,trustRoots,fetchCrl} from '../src/services/jpged-pki.js';
+import {verifyCompanyCms,publicAddress,trustRoots,fetchCrl,issuerCertificates,verifyIcpPath} from '../src/services/jpged-pki.js';
 import {buildSigningPdf,embedCms,signingBytes} from '../src/services/jpged-pdf.js';
 const dir=mkdtempSync(join(tmpdir(),'jpged-crypto-'));after(()=>rmSync(dir,{recursive:true,force:true}));
 execFileSync('python3',[new URL('./helpers/jpged-fixture.py',import.meta.url).pathname,dir]);
@@ -17,7 +17,7 @@ function sign(content,variant='leaf'){writeFileSync(join(dir,'content'),content)
 const content=Buffer.from('JPGED SYNTHETIC DOCUMENT'),cms=sign(content);
 test('CAdES real verifica assinatura, CNPJ, cadeia, ESS e revogação',async()=>{const r=await verifyCompanyCms(cms,content,'12345678000195',options);assert.equal(r.certificate.cnpj,'12345678000195');assert.equal(r.evidence.crls.length,1);assert.equal(r.evidence.certificates.length,2);});
 test('documento adulterado e CNPJ de outra empresa são recusados',async()=>{await assert.rejects(verifyCompanyCms(cms,Buffer.from('changed'),'12345678000195',options),{code:'CERTIFICADO_ASSINATURA_INVALIDA'});await assert.rejects(verifyCompanyCms(cms,content,'99999999000199',options),{code:'CERTIFICADO_EMPRESA_DIVERGENTE'});});
-test('certificado não confiável ou vencido é recusado antes de buscar LCR',async()=>{let fetched=false;await assert.rejects(verifyCompanyCms(cms,content,'12345678000195',{roots:[],loadCrl:async()=>{fetched=true;}}),{code:'CERTIFICADO_CADEIA_INVALIDA'});assert.equal(fetched,false);await assert.rejects(verifyCompanyCms(cms,content,'12345678000195',{...options,now:new Date(Date.now()+60*86400000)}),{code:'CERTIFICADO_CADEIA_INVALIDA'});});
+test('certificado não confiável ou vencido é recusado antes de buscar LCR',async()=>{let fetched=false;await assert.rejects(verifyCompanyCms(cms,content,'12345678000195',{roots:[],loadCrl:async()=>{fetched=true;}}),{code:'CERTIFICADO_CADEIA_INCOMPLETA'});assert.equal(fetched,false);await assert.rejects(verifyCompanyCms(cms,content,'12345678000195',{...options,now:new Date(Date.now()+60*86400000)}),{code:'CERTIFICADO_VENCIDO'});});
 test('revogado, LCR vencida e rede indisponível não concluem',async()=>{await assert.rejects(verifyCompanyCms(cms,content,'12345678000195',{...options,loadCrl:async()=>readFileSync(join(dir,'revoked.crl'))}),{code:'CERTIFICADO_REVOGADO'});for(const loadCrl of [async()=>readFileSync(join(dir,'expired.crl')),async()=>{throw new Error('NETWORK');}])await assert.rejects(verifyCompanyCms(cms,content,'12345678000195',{...options,loadCrl}),{code:'CERTIFICADO_REVOGACAO_INDISPONIVEL'});});
 test('endereços privados, loopback, metadata e IPv4 mapeado são bloqueados',()=>{for(const ip of ['127.0.0.1','10.0.0.1','169.254.169.254','192.168.1.1','::1','::ffff:127.0.0.1','fc00::1'])assert.equal(publicAddress(ip),false,ip);assert.equal(publicAddress('8.8.8.8'),true);});
 test('raízes de produção são oficiais e excluem CA sintética',()=>{assert.ok(trustRoots().length>=2);for(const cert of trustRoots())assert.notEqual(Buffer.from(cert.toSchema(true).toBER(false)).toString('hex'),readFileSync(join(dir,'root.der')).toString('hex'));});
@@ -31,3 +31,28 @@ test('e-CPF atende empregador CAEPF sem pesquisa de representante; e-CNPJ diverg
 test('identidades conflitantes e certificado A3 não são tratados como A1',async()=>{await assert.rejects(verifyCompanyCms(sign(content,'pf-conflict'),content,pfTarget,options),{code:'CERTIFICADO_IDENTIDADE'});await assert.rejects(verifyCompanyCms(sign(content,'pf-a3'),content,pfTarget,options),{code:'CERTIFICADO_TIPO'});});
 
 test('cadeia com intermediária exige validação e LCR de todos os níveis',async()=>{const result=await verifyCompanyCms(sign(content,'chain'),content,'12345678000195',{...options,loadCrl:async url=>readFileSync(join(dir,url.endsWith('/intermediate.crl')?'intermediate.crl':'fresh.crl'))});assert.equal(result.evidence.certificates.length,3);assert.equal(result.evidence.crls.length,2);await assert.rejects(verifyCompanyCms(sign(content,'chain'),content,'12345678000195',options),{code:'CERTIFICADO_REVOGACAO_INDISPONIVEL'});});
+
+test('A1 sem intermediária completa cadeia e preserva validação criptográfica e revogação',async()=>{
+  const intermediate=new pki.Certificate({schema:asn1.fromBER(readFileSync(join(dir,'intermediate.der'))).result});
+  const info=new pki.ContentInfo({schema:asn1.fromBER(sign(content,'chain')).result}),signed=new pki.SignedData({schema:info.content});
+  signed.certificates=signed.certificates.filter(cert=>!cert.extensions?.find(x=>x.extnID==='2.5.29.19')?.parsedValue?.cA);
+  info.content=signed.toSchema(true);const leafOnly=Buffer.from(info.toSchema().toBER(false));
+  await assert.rejects(verifyCompanyCms(leafOnly,content,'12345678000195',{...options,intermediates:[]}),{code:'CERTIFICADO_CADEIA_INCOMPLETA'});
+  const config={...options,intermediates:[intermediate],loadCrl:async url=>readFileSync(join(dir,url.endsWith('/intermediate.crl')?'intermediate.crl':'fresh.crl'))};
+  const result=await verifyCompanyCms(leafOnly,content,'12345678000195',config);assert.equal(result.evidence.certificates.length,3);assert.equal(result.evidence.crls.length,2);
+  await assert.rejects(verifyCompanyCms(leafOnly,content,'12345678000195',{...config,roots:[]}),{code:'CERTIFICADO_CADEIA_INCOMPLETA'});
+  await assert.rejects(verifyCompanyCms(leafOnly,Buffer.from('changed'),'12345678000195',config),{code:'CERTIFICADO_ASSINATURA_INVALIDA'});
+});
+
+test('mensagens distinguem A1 vencido, ainda não válido e cadeia emissora vencida',async()=>{
+  const leaf=new pki.Certificate({schema:asn1.fromBER(readFileSync(join(dir,'chain.der'))).result});
+  const expired=new pki.Certificate({schema:asn1.fromBER(readFileSync(join(dir,'intermediate-expired.der'))).result});
+  await assert.rejects(verifyIcpPath(leaf,[],{roots:[root],intermediates:[expired]}),{code:'CERTIFICADO_EMISSORA_FORA_VALIDADE'});
+  await assert.rejects(verifyIcpPath(leaf,[],{roots:[root],intermediates:[],now:new Date(Date.now()-3*86400000)}),{code:'CERTIFICADO_AINDA_NAO_VALIDO'});
+  await assert.rejects(verifyIcpPath(leaf,[],{roots:[root],intermediates:[],now:new Date(Date.now()+60*86400000)}),{code:'CERTIFICADO_VENCIDO'});
+});
+
+test('intermediárias oficiais SAFEWEB/RFB validam até raiz ICP-Brasil existente',async()=>{
+  const candidates=issuerCertificates();assert.equal(candidates.length,2);
+  for(const cert of candidates){const result=await verifyIcpPath(cert,[],{now:new Date('2026-10-11T03:00:00Z')});assert.ok(result.path.length>=2);assert.ok(trustRoots().some(root=>Buffer.from(root.toSchema(true).toBER(false)).equals(Buffer.from(result.path.at(-1).toSchema(true).toBER(false)))));}
+});

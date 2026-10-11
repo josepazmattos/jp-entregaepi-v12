@@ -15,3 +15,11 @@ test('cursor de outra empresa e substituição de registro são bloqueados',asyn
 test('duas preparações concluem em um único documento e uma confirmação biométrica',async()=>{const f=await fixture(),a=await f.service.prepare(f.ficha,'actor'),b=await f.service.prepare(f.ficha,'actor');const done=await f.service.finish(f.company.id,'actor',a.jobId,body);assert.equal((await f.service.finish(f.company.id,'actor',b.jobId,body)).documentId,done.documentId);assert.equal((await f.service.documents(f.company.id)).items.length,1);assert.deepEqual((await f.store.get('ficha',f.ficha.id)).assinaturaBiometrica,f.ficha.assinaturaBiometrica);});
 
 test('e-CPF permite configuração local e certificação sem cadastro de representante',async()=>{const f=await fixture('e-CPF'),job=await f.service.prepare(f.ficha,'actor'),result=await f.service.finish(f.company.id,'actor',job.jobId,body);const doc=await f.ged.get(f.company.id,'DOC',result.documentId),evidence=JSON.parse((await f.ged.readBlob(doc.evidencePath)).toString());assert.equal(evidence.certificate.cpf,'12345678909');assert.equal(evidence.certificate.kind,'e-CPF');assert.ok(evidence.authorizationPath.includes('/configuration/'));assert.equal(evidence.representation,undefined);});
+test('reordenação de mapa pelo DynamoDB não altera empregador nem bytes autorizados',async()=>{
+ const ged=createGedStorage({memory:true});let expected;
+ const service=createGedService({ged,store:{},validate:async(cms,content)=>{assert.equal(content.toString('base64'),expected);return {certificate,evidence:{checkedAt:new Date().toISOString()}};}});
+ const company={id:'order',nome:'SYNTHETIC',cnpj:certificate.cnpj},c=await service.configure(company,'master');expected=c.contentBase64;
+ const saved=await ged.get(company.id,'CONFIG',c.id);await ged.put(company.id,'CONFIG',c.id,{...saved,target:Object.fromEntries(Object.entries(saved.target).reverse())},saved.version);
+ await service.confirmConfiguration(company,'master',c.id,body);
+ const changed=await service.configure(company,'master');await assert.rejects(service.confirmConfiguration({...company,cnpj:'98765432000198'},'master',changed.id,body),{code:'CERTIFICADO_EMPREGADOR_ALTERADO'});
+});

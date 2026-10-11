@@ -1,0 +1,16 @@
+{
+  "verifiedAt": "2026-10-11",
+  "source": "https://repositorio.acsafeweb.com.br/ac-safewebrfb/ac-safewebrfbv5.p7b",
+  "officialListing": "https://www.gov.br/iti/pt-br/assuntos/repositorio/ac-safeweb-rfb-de-2deg-nivel",
+  "certificates": [
+    {
+      "file": "ac-rfb-v4.pem",
+      "sha256": "5347dc3594255a4e57fd0ad31c13a8a021d132fc9ea35d321d7a0b159504aa98"
+    },
+    {
+      "file": "ac-safeweb-rfb-v5.pem",
+      "sha256": "946e26b4a7f203d08236e7acceb36d43122623a28554f51485ec7a890389ecc8"
+    }
+  ],
+  "trust": "Only existing ICP-Brasil root anchors remain trusted; these are intermediate candidates."
+}

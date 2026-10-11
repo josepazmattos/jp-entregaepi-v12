@@ -50,3 +50,10 @@ test('requisição não pode misturar empresa de header, query e body', () => {
   req.body = { empresaId: 'company-B' };
   assert.throws(() => empresaIdFrom(req), error => error.status === 400);
 });
+
+test('sessões válidas do mesmo login em IPs distintos permanecem independentes',()=>{
+  const sessions=['198.51.100.10','203.0.113.20','192.0.2.30'].map((ip,i)=>authorize({...base,auth_time:Date.now()/1000-i,jti:'session-'+i,'cognito:groups':'EMPRESA','custom:empresa_id':'company-A'},auth,{ip}));
+  for(const {req,error} of sessions){assert.equal(error,undefined);assert.equal(req.auth.sub,base.sub);assert.equal(empresaIdFrom(req),'company-A');}
+  assert.equal(authorize({...base,exp:1,'cognito:groups':'EMPRESA','custom:empresa_id':'company-A'}).error.status,401);
+  assert.equal(sessions[1].req.auth.sub,base.sub);
+});

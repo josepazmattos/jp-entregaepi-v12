@@ -1,0 +1,1 @@
+{"name":"jp-certificate-import","private":true,"type":"module","scripts":{"build":"esbuild worker.js --bundle --platform=browser --format=iife --minify --legal-comments=eof --outfile=../frontend/EntregaEPI/assets/certificate-worker.js","test":"node --test test/*.test.js"},"dependencies":{"node-forge":"1.4.0","@noble/ciphers":"2.4.0"},"devDependencies":{"esbuild":"0.28.2"}}

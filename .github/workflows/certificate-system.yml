@@ -1,0 +1,46 @@
+name: Certificado Digital sem alterar biometria
+on:
+  push:
+    branches: [certificado-sistema-20261011]
+permissions:
+  contents: read
+jobs:
+  certificate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Impedir alterações no leitor que já funciona
+        run: |
+          test -z "$(git diff --name-only b7b89cacebc9bb3cd7ee327f80dfcba77832946f HEAD -- native frontend/EntregaEPI/assets/biometria.js frontend/EntregaEPI/assets/operations.js backend/src/routes/fichas.routes.js backend/src/routes/trabalhadores.routes.js)"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: python3 -m pip install cryptography==46.0.3
+      - name: Preparar leitura do PDF no teste de assinatura
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y poppler-utils
+      - run: npm ci --prefix backend --no-audit --no-fund
+      - run: npm ci --prefix certificate-import --ignore-scripts --no-audit --no-fund
+      - name: Verificar pacote criptográfico reproduzível
+        run: |
+          npm run build --prefix certificate-import
+          git diff --exit-code -- frontend/EntregaEPI/assets/certificate-worker.js
+          npm test --prefix certificate-import
+      - run: JPGED_LAYOUT_OUTPUT=tests/output/layout node --test backend/test/jpged-*.test.js backend/test/auth.test.js
+      - run: npm ci --prefix tests --no-audit --no-fund
+      - run: npm run install-browser --prefix tests
+      - run: node tests/jpged-browser.cjs
+      - run: node tests/frontend-startup-browser.cjs
+      - name: Guardar somente evidências sintéticas
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: certificado-sistema-${{ github.sha }}
+          path: |
+            tests/output/jpged/
+            tests/output/layout/
+            tests/output/startup/
+          retention-days: 14

@@ -9,3 +9,11 @@ export function normalizeCpf(value) {
 export function employerIdentity(company) {
   return {companyId:company.id,registrationType:company.inscricaoTipo==='CAEPF'?'CAEPF':'CNPJ',registrationNumber:String(company.cnpj||'').replace(/[^A-Za-z0-9]/g,'').toUpperCase()};
 }
+// DynamoDB maps do not retain insertion order. Signed content must use a fixed
+// field order; identity equality must compare values, never JSON map order.
+export function canonicalEmployerTarget(target) {
+  return {companyId:target?.companyId,registrationType:target?.registrationType,registrationNumber:target?.registrationNumber};
+}
+export function sameEmployerTarget(left,right) {
+  return ['companyId','registrationType','registrationNumber'].every(key=>typeof left?.[key]==='string'&&left[key]===right?.[key]);
+}

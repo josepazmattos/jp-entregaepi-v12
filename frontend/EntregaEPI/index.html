@@ -10,6 +10,7 @@
   <link rel="icon" type="image/svg+xml" href="/__APP_PREFIX__/assets/favicon-jp.svg?v=20261010" sizes="any" />
   <script src="/__APP_PREFIX__/config.js?v=1294"></script>
   <link rel="stylesheet" href="/__APP_PREFIX__/assets/styles.css?v=20261010-jpged" />
+  <link rel="stylesheet" href="/__APP_PREFIX__/assets/certificate.css?v=20261011-cert1">
 </head>
 <body>
   <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
@@ -107,6 +108,7 @@
         </div>
         <div class="nav-group"><p class="nav-label">Sistema</p>
           <button type="button" class="nav-button" data-screen="biometria"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-fingerprint"></use></svg><span>Biometria</span></button>
+          <button type="button" class="nav-button hidden" data-screen="certificado" data-master-only><svg class="icon" aria-hidden="true"><use href="#icon-shield"></use></svg><span>Certificado Digital</span></button>
           <button type="button" class="nav-button" data-screen="config"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-settings"></use></svg><span>Configurações</span></button>
         </div>
       </nav>
@@ -126,7 +128,7 @@
       <main id="mainContent" class="main" tabindex="-1">
         <div id="appMessage" class="message hidden" role="alert" aria-live="polite"></div>
         <section id="screen-dashboard" class="screen active" aria-labelledby="title-dashboard">
-          <div class="topbar"><div><span class="kicker">Painel de gestão</span><h1 id="title-dashboard">Dashboard</h1><p>Acompanhe os cadastros e as movimentações da sua operação.</p></div><div class="dashboard-tools"><div class="health-indicators" aria-label="Estado dos serviços"><button type="button" id="healthSystem" class="health-chip" data-state="idle" onclick="goScreen('config')">Sistema <span>Verificando</span></button><button type="button" id="healthCA" class="health-chip" data-state="idle" onclick="goScreen('config')">CA <span>Verificando</span></button><button type="button" id="healthBio" class="health-chip" data-state="idle" onclick="goScreen('config')">Biometria <span>Verificando</span></button></div><button id="refreshButton" class="btn btn-secondary" type="button"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Atualizar</button></div></div>
+          <div class="topbar"><div><span class="kicker">Painel de gestão</span><h1 id="title-dashboard">Dashboard</h1><p>Acompanhe os cadastros e as movimentações da sua operação.</p></div><div class="dashboard-tools"><div class="health-indicators" aria-label="Estado dos serviços"><button type="button" id="healthSystem" class="health-chip" data-state="idle" onclick="goScreen('config')">Sistema <span>Verificando</span></button><button type="button" id="healthCA" class="health-chip" data-state="idle" onclick="goScreen('config')">CA <span>Verificando</span></button><button type="button" id="healthBio" class="health-chip" data-state="idle" onclick="goScreen('config')">Biometria <span>Verificando</span></button><button type="button" id="healthCertificate" class="health-chip" data-state="idle" onclick="openCertificateStatus()">Certificado <span>Verificando</span></button></div><button id="refreshButton" class="btn btn-secondary" type="button"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg>Atualizar</button></div></div>
           <div id="actionBanner" class="action-banner hidden"><div><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-info"></use></svg><p><strong>Comece pela empresa.</strong><span>Cadastre ou selecione uma empresa para organizar os trabalhadores, EPIs e fichas.</span></p></div><button class="btn btn-secondary" type="button" onclick="goScreen('empresas')"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-plus"></use></svg>Cadastrar empresa</button></div>
           <div class="metrics">
             <article class="metric-card" data-master-only><div class="metric-top"><span>Empresas</span><span class="metric-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-building"></use></svg></span></div><strong id="metricEmpresas">0</strong><p>Empresas cadastradas</p></article>
@@ -285,13 +287,6 @@
         </section>
         <section id="screen-biometria" class="screen" aria-labelledby="title-biometria">
           <div class="topbar"><div><span class="kicker">Conexão local</span><h1 id="title-biometria">Biometria</h1><p>Conecte o leitor deste computador e registre a captura na ficha selecionada.</p></div></div>
-          <div class="card certificate-card" id="certificateCard">
-            <div class="section-heading"><div><h2>Certificado digital da empresa</h2><p id="certificateCompany">Empresa em uso</p></div><span id="certificateState" class="status-badge" data-state="idle">Não consultado</span></div>
-            <p id="certificateDetail">Configure o A1 e-CNPJ ou e-CPF neste computador para certificar suas fichas.</p>
-            <div class="item-actions"><button id="certificateConfigure" class="btn btn-primary" type="button" onclick="configureCompanyCertificate()">Configurar neste computador</button><button class="btn btn-secondary" type="button" onclick="loadCompanyCertificate()">Atualizar situação</button><button id="certificateDisconnect" class="text-button hidden" type="button" onclick="disconnectCompanyCertificate()">Desvincular</button></div>
-            <p id="certificateMessage" class="message" role="status" aria-live="polite"></p>
-            <details><summary>Como configurar e usar</summary><ol><li>Instale a atualização do JP Biometria disponível abaixo.</li><li>Clique em <strong>Configurar neste computador</strong>. Escolha o A1 e-CPF ou e-CNPJ disponível no Windows (usuário ou computador). Se necessário, selecione o arquivo A1 e digite a senha somente nessa janela.</li><li>Confira o empregador e autorize o uso. Nas próximas fichas, confirme as movimentações com a digital do trabalhador; a certificação ocorrerá em seguida.</li><li>Consulte <strong>JPGED · Documentos</strong> e baixe o PDF original para guardar no seu Drive.</li></ol><p class="field-help">O site não recebe o arquivo A1, sua chave privada ou sua senha. A configuração vale para este usuário do Windows. Para certificado em nuvem, instale o conector oficial do fornecedor que disponibiliza a assinatura no Windows. Serviços que funcionam somente por API exigem integração específica. Renove o certificado antes do vencimento e mantenha o computador protegido.</p></details>
-          </div>
           <div class="connection-grid">
             <div class="card connection-card">
               <div class="connection-heading"><span class="device-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-fingerprint"></use></svg></span><span id="bioStatusBadge" class="status-badge" data-state="idle">Não verificado</span></div>
@@ -309,6 +304,22 @@
             <p class="bio-record-note">O registro associa a imagem à ficha indicada. Esta integração não realiza conferência automática da identidade do trabalhador.</p>
           </div>
           <div class="context-note"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-file"></use></svg><div><strong>Fichas e registros de assinatura</strong><p>Acesse as fichas para consultar os documentos e os registros de assinatura disponíveis.</p></div><button class="text-button" type="button" onclick="goScreen('fichas')">Ver fichas <svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-arrow"></use></svg></button></div>
+        </section>
+
+        <section id="screen-certificado" class="screen hidden" data-master-only aria-labelledby="title-certificado">
+          <div class="topbar"><div><span class="kicker">Sistema · Proteção de documentos</span><h1 id="title-certificado">Certificado Digital</h1><p>Instale o A1 uma vez. O cofre certifica as fichas confirmadas pelos trabalhadores.</p></div></div>
+          <div class="card certificate-card" id="certificateCard">
+            <div class="section-heading"><div><h2>Certificado da empresa</h2><p id="certificateCompany">Selecione uma empresa</p></div><span id="certificateState" class="status-badge" data-state="idle">Não consultado</span></div>
+            <p id="certificateDetail">Consulte o certificado da empresa em uso.</p>
+            <div class="item-actions"><button id="certificateConfigure" class="btn btn-primary hidden" type="button" onclick="configureCompanyCertificate()">Instalar ou substituir A1</button><button class="btn btn-secondary" type="button" onclick="loadCompanyCertificate()">Atualizar situação</button><button id="certificateDisconnect" class="text-button hidden" type="button" onclick="disconnectCompanyCertificate()">Desativar certificado</button></div>
+            <p id="certificateMessage" class="message" role="status" aria-live="polite"></p>
+          </div>
+          <div class="service-grid certificate-guide">
+            <article class="card service-card"><h2>Instalação</h2><p>O Master seleciona a empresa, confirma sua senha e escolhe o arquivo <strong>A1 .pfx ou .p12</strong>. Depois, informa a senha do certificado e confere o titular antes de instalar.</p><p class="field-help">Aceita A1 RSA e-CPF ou e-CNPJ válido. Não exige leitor conectado nem abre o assistente de certificados do Windows.</p></article>
+            <article class="card service-card"><h2>Cofre</h2><p>A chave é protegida para importação no cofre. O aplicativo não oferece download da chave privada e o cliente não pode substituir ou desativar o certificado.</p><p class="field-help">O arquivo A1 original e sua senha não são enviados ao servidor. Guarde sua cópia original com segurança.</p></article>
+            <article class="card service-card"><h2>Documentos certificados</h2><p>Após a confirmação do trabalhador, o certificado protege a ficha completa. O PDF original fica no JPGED, disponível para baixar e guardar no Drive.</p><button class="btn btn-secondary" type="button" onclick="goScreen('jpged')">Abrir JPGED</button></article>
+          </div>
+          <details class="card technical-details"><summary>Ajuda, renovação e protocolo para a empresa</summary><p><strong>Senha incorreta:</strong> use a senha do arquivo A1, que é diferente da senha do Master. Selecione novamente o arquivo original para repetir.</p><p><strong>Certificado vencido:</strong> o Master instala o A1 renovado. O anterior só é substituído após a conclusão da nova instalação.</p><p><strong>Certificado em nuvem:</strong> se o fornecedor permite exportar o A1 em .pfx ou .p12, use esse arquivo. Serviços sem exportação precisam de uma integração específica com o fornecedor.</p><p><strong>Já instalado no Windows:</strong> use o arquivo A1 original. O cadastro no cofre não apaga outras cópias existentes.</p><a href="/__APP_PREFIX__/assets/protocolo-certificado.html" class="link" target="_blank" rel="noopener">Protocolo de proteção e uso · Imprimir para o cliente</a></details>
         </section>
 
         <section id="screen-config" class="screen" aria-labelledby="title-config">
@@ -336,8 +347,9 @@
   </section>
   <script src="/__APP_PREFIX__/assets/ficha.js?v=20261010-movimentos"></script>
   <script src="/__APP_PREFIX__/assets/biometria.js?v=jpged-1294"></script>
-  <script src="/__APP_PREFIX__/assets/app.js?v=20261010-jpged"></script>
+  <script src="/__APP_PREFIX__/assets/app.js?v=20261011-cert2"></script>
   <script src="/__APP_PREFIX__/assets/operations.js?v=20261010-jpged"></script>
-  <script src="/__APP_PREFIX__/assets/jpged.js?v=20261010"></script>
+  <script src="/__APP_PREFIX__/assets/jpged.js?v=20261011-cert2"></script>
+  <script src="/__APP_PREFIX__/assets/certificate-install.js?v=20261011-cert1"></script>
 </body>
 </html>
