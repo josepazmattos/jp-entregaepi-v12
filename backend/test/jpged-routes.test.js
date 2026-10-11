@@ -7,3 +7,22 @@ test('configurar exige autenticação recente e não recebe PFX ou senha',async(
 test('consulta privada desativa cache e restringe referência',async()=>{const r=await call('/documentos');assert.equal(r.headers.get('cache-control'),'private, no-store');assert.equal(r.headers.get('referrer-policy'),'no-referrer');});
 
 test('cliente não configura, remove ou importa certificado mesmo com sessão recente',async()=>{for(const path of ['/certificado/configurar','/certificado/configurar/id','/certificado/desvincular','/cofre/preparar','/cofre/id/comprovar','/cofre/id/concluir','/cofre/id/cancelar'])assert.equal((await call(path,{},{})).status,403,path);assert.equal(calls.length,1);});
+
+test('rota de atualização respeita empresa e não aceita PDF ou senha no corpo',async()=>{
+  const seen=[],isolated=express();isolated.use(express.json());
+  isolated.use((req,res,next)=>{req.auth={sub:'client',empresaIds:['companyA'],master:false};next();});
+  isolated.use('/api/jpged',createGedRouter({database:{get:async(type,id)=>({id})},service:{reissueLayout:async(...args)=>{seen.push(args);return {completed:true};},download:async(...args)=>({original:args[3].original})}}));
+  isolated.use((error,req,res,next)=>res.status(error.status||500).json({code:error.code}));
+  const local=isolated.listen(0,'127.0.0.1');await new Promise(r=>local.once('listening',r));
+  try{
+    const base=`http://127.0.0.1:${local.address().port}/api/jpged/documentos/doc`;
+    const post=(body={},headers={})=>fetch(base+'/atualizar-layout',{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify(body)});
+    assert.equal((await post()).status,200);assert.deepEqual(seen,[['companyA','client','doc']]);
+    assert.equal((await post({}, {'x-empresa-id':'companyB'})).status,403);
+    assert.equal((await post({empresaId:'companyB'})).status,403);
+    for(const body of [{pdf:'fake'},{password:'fake'},{documentHash:'fake'}])assert.equal((await post(body)).status,400);
+    assert.equal(seen.length,1);
+    assert.equal((await(await fetch(base+'/download?versao=original')).json()).original,true);
+    assert.equal((await fetch(base+'/download?versao=other')).status,400);
+  }finally{local.close();}
+});

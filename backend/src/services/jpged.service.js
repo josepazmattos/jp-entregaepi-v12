@@ -9,6 +9,7 @@ import { keyVault } from './jpged-kms.js';
 import { detachedCms } from './jpged-cms.js';
 import { createVaultService } from './jpged-vault.js';
 import { documentFilename } from './document-filename.js';
+import { createLayoutService, COMPACT_LAYOUT } from './jpged-layout.js';
 
 const error=(status,message,code)=>{throw httpError(status,message,code);};
 const seconds=()=>Math.floor(Date.now()/1000);
@@ -16,6 +17,7 @@ const cmsBytes=value=>{if(typeof value!=='string'||value.length>45000||!/^([A-Za
 export function createGedService({ged,store,validate=verifyCompanyCms,buildPdf=buildSigningPdf,vault=keyVault}) {
   async function audit(company,actor,action,details={}) {return ged.put(company,'AUDIT',`${Date.now()}-${randomUUID()}`,{actor,action,at:new Date().toISOString(),...details});}
   const vaultAdmin=createVaultService({ged,vault,validate,audit});
+  const layouts=createLayoutService({ged,store,certificate,confirmedContent,buildPdf,validate,vault,audit});
   async function certificate(company) {const item=await ged.get(company,'CERT','current');return item?.active?item:null;}
   const configurationContent=(companyId,id,item)=>Buffer.from(JSON.stringify({schema:'JPGED-CONFIG-2',companyId,id,identity:canonicalEmployerTarget(item.target),companyName:item.companyName,nonce:item.nonce,scope:'Certificar fichas de EPI desta empresa confirmadas biometricamente',expiresAtEpoch:item.expiresAtEpoch}));
   async function configure(company,actor) {
@@ -88,7 +90,7 @@ export function createGedService({ged,store,validate=verifyCompanyCms,buildPdf=b
     await ged.saveBlob(evidencePath,Buffer.from(JSON.stringify({schema:'JPGED-1',documentHash:job.documentHash,pdfHash,cmsSha256:sha256(cms),certificate:result.certificate,authorizationPath:ctx.cert.authorizationPath,validation:result.evidence})),'application/json');
     const documentId=ficha.id;
     let document=await ged.get(company,'DOC',documentId);
-    if(!document)try{document=await ged.put(company,'DOC',documentId,{fichaId:ficha.id,numero:ficha.numero,trabalhadorId:ficha.trabalhadorId,trabalhadorNome:ficha.trabalhadorSnapshot?.nomeCompleto||ficha.trabalhadorNome,data:ficha.data,tipo:ficha.tipo,path,pdfHash,sizeBytes:final.length,evidencePath,documentHash:job.documentHash,biometricId:job.biometricId,biometricAt:ficha.assinaturaBiometrica.signedAt,certifiedAt:result.evidence.checkedAt,certificate:result.certificate,status:'certificado'});}catch(error){if(error.code!=='JPGED_CONFLICT')throw error;document=await ged.get(company,'DOC',documentId);if(!document)throw error;}
+    if(!document)try{document=await ged.put(company,'DOC',documentId,{fichaId:ficha.id,numero:ficha.numero,trabalhadorId:ficha.trabalhadorId,trabalhadorNome:ficha.trabalhadorSnapshot?.nomeCompleto||ficha.trabalhadorNome,data:ficha.data,tipo:ficha.tipo,path,pdfHash,sizeBytes:final.length,evidencePath,documentHash:job.documentHash,biometricId:job.biometricId,biometricAt:ficha.assinaturaBiometrica.signedAt,certifiedAt:result.evidence.checkedAt,certificate:result.certificate,status:'certificado',layoutVersion:COMPACT_LAYOUT});}catch(error){if(error.code!=='JPGED_CONFLICT')throw error;document=await ged.get(company,'DOC',documentId);if(!document)throw error;}
     const current=await store.get('ficha',ficha.id);
     if(!current.certificacao?.documentId)await store.update('ficha',ficha.id,{certificacao:{documentId,status:'certificado',pdfHash:document.pdfHash,certifiedAt:document.certifiedAt,certificateFingerprint:document.certificate.fingerprint}},{expectedVersion:current._version,expectedUpdatedAt:current.updatedAt});
     await ged.put(company,'JOB',id,{...job,used:true,documentId},job.version);
@@ -103,12 +105,13 @@ export function createGedService({ged,store,validate=verifyCompanyCms,buildPdf=b
     return finish(company,actor,id,{cms:cms.toString('base64')},true);
   }
   async function publicCertificate(company){const cert=await certificate(company);if(!cert)return null;const {keyArn,chain,pk,sk,target,authorizationPath,configuredBy,...publicData}=cert;return {...publicData,...(cert.mode==='vault'?{vaultState:await vault.status(cert.keyArn)}:{})};}
-  async function documents(company,cursor) {const result=await ged.list(company,'DOC',cursor);return {...result,items:result.items.map(({path,evidencePath,pk,sk,...item})=>item)};}
-  async function download(company,actor,id) {
+  async function documents(company,cursor) {const result=await ged.list(company,'DOC',cursor);return {...result,items:await Promise.all(result.items.map(async({path,evidencePath,pk,sk,...item})=>({...item,compactRevision:layouts.summary(await layouts.revision(company,item))})))};}
+  async function download(company,actor,id,{original=false}={}) {
     const item=await ged.get(company,'DOC',id);if(!item)error(404,'Documento não encontrado.','JPGED_DOCUMENTO');
-    await audit(company,actor,'DOCUMENTO_BAIXADO',{documentId:id});
+    const selected=original?item:(await layouts.revision(company,item)||item);
+    await audit(company,actor,'DOCUMENTO_BAIXADO',{documentId:id,pdfHash:selected.pdfHash,version:original?'original':'atual'});
     const filename=documentFilename(item);
-    return {url:await ged.download(item.path,filename),filename,sha256:item.pdfHash,expiresIn:60};
+    return {url:await ged.download(selected.path,filename),filename,sha256:selected.pdfHash,expiresIn:60};
   }
-  return {certificate:publicCertificate,vaultAdmin,certify,configure,confirmConfiguration,disconnect,prepare,signingPackage,finish,documents,download};
+  return {certificate:publicCertificate,vaultAdmin,certify,configure,confirmConfiguration,disconnect,prepare,signingPackage,finish,documents,download,reissueLayout:layouts.reissue};
 }
