@@ -13,6 +13,40 @@ from complete_release import verify, FILENAME
 from windows_biometria_smoke import LocalControl, read_test_key
 
 
+def diagnose_sdk(home):
+    """Compare documented SDK startup in isolated CI without capturing a finger."""
+    sdk = home / 'sdk-5.2.0.6'
+    binary = sdk / 'Bin/x64'
+    java = Path(os.environ['LOCALAPPDATA']) / 'Programs/Eclipse Adoptium/jp-biometria-jre8u504b01/bin/java.exe'
+    source = '''import com.nitgen.SDK.BSP.NBioBSPJNI;
+public class NitgenBootstrapSmoke {
+ public static void main(String[] args) {
+  if(args.length>0)System.load(args[0]);
+  NBioBSPJNI sdk=new NBioBSPJNI();
+  try {
+   System.out.println("initialize="+sdk.GetErrorCode());
+   if(sdk.IsErrorOccured())return;
+   NBioBSPJNI.DEVICE_ENUM_INFO devices=sdk.new DEVICE_ENUM_INFO();
+   sdk.EnumerateDevice(devices);
+   System.out.println("enumerate="+sdk.GetErrorCode()+";devices="+devices.DeviceCount);
+   devices.dispose();
+  }finally{sdk.dispose();}
+ }
+}'''
+    with tempfile.TemporaryDirectory(prefix='jp-sdk-bootstrap-') as temp:
+        folder = Path(temp); path = folder / 'NitgenBootstrapSmoke.java'; path.write_text(source)
+        compiler = Path(os.environ['JAVA_HOME']) / 'bin/javac.exe'
+        subprocess.run([str(compiler), '--release', '8', '-cp', str(sdk / 'Lib/NBioBSPJNI.jar'), str(path)], check=True)
+        env = dict(os.environ); env['PATH'] = str(binary) + os.pathsep + os.environ.get('PATH', '')
+        for label, cwd, preload in [('agent-directory', home, True), ('sdk-directory', binary, True), ('sdk-default-loader', binary, False)]:
+            command = [str(java), '-Djava.library.path='+str(binary), '-cp', str(folder)+os.pathsep+str(sdk / 'Lib/NBioBSPJNI.jar'), 'NitgenBootstrapSmoke']
+            if preload: command += [str(binary / 'NBioBSP.dll')]
+            probe = subprocess.run(command, cwd=cwd, env=env, capture_output=True, timeout=30)
+            # This sample only returns error codes and count; no templates, secrets or capture.
+            lines = [line for line in probe.stdout.decode('utf-8', errors='replace').splitlines() if line.startswith(('initialize=', 'enumerate='))]
+            print(json.dumps({'sdkBootstrap': label, 'exit': probe.returncode, 'result': lines}))
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--source', required=True, type=Path)
@@ -32,6 +66,8 @@ def main():
                                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             output, _ = process.communicate(timeout=240)
             result = json.loads(output.decode('utf-8').strip().splitlines()[-1])
+            if result.get('code') == 'NITGEN_15':
+                diagnose_sdk(home)
             assert process.returncode == 0 and result.get('ok') is True and result['code'] == 'INSTALLED_WITHOUT_READER', result
             key = read_test_key(home / 'control.key')
             digest = hashlib.sha256(key).hexdigest()

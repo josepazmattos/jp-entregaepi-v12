@@ -24,6 +24,20 @@ env:
   AWS_CLI_AUTO_PROMPT: "off"
 
 jobs:
+  sdk-bootstrap:
+    name: Diagnosticar inicialização do SDK NITGEN isoladamente
+    if: github.ref == 'refs/heads/jpged-certificacao-20261010'
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: python infra/windows_sdk_bootstrap_smoke.py
   test:
     name: Validar código, biometria, ficha e navegador
     runs-on: ubuntu-latest
