@@ -4,6 +4,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from 
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { httpError } from '../middleware/auth.js';
 import { sha256 } from '../services/document-integrity.js';
+import { attachmentDisposition } from '../services/document-filename.js';
 
 const region = process.env.AWS_REGION || 'sa-east-1';
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({ region }), { marshallOptions: { removeUndefinedValues: true } });
@@ -41,7 +42,7 @@ export function createGedStorage({ table = process.env.JPGED_TABLE, bucket = pro
     catch(e){if(e.name==='PreconditionFailed'||e.$metadata?.httpStatusCode===412){const existing=await objects.send(new HeadObjectCommand({Bucket:bucket,Key:path}));if(existing.Metadata?.sha256!==hash||existing.ContentLength!==data.length)throw httpError(409,'O original não pode ser substituído.','JPGED_IMMUTABLE');return {hash,versionId:existing.VersionId};}throw e;}
   }
   async function readBlob(path) {ready();if(memory){if(!blobs.has(path))throw httpError(404,'Arquivo não encontrado.');return Buffer.from(blobs.get(path));}const result=await objects.send(new GetObjectCommand({Bucket:bucket,Key:path}));return Buffer.from(await result.Body.transformToByteArray());}
-  async function download(path, filename) {ready();if(memory)return 'https://example.invalid/jpged-test.pdf';return getSignedUrl(objects,new GetObjectCommand({Bucket:bucket,Key:path,ResponseContentDisposition:`attachment; filename="${filename.replace(/[^a-zA-Z0-9._-]/g,'_')}"`,ResponseCacheControl:'private, no-store'}),{expiresIn:60});}
+  async function download(path, filename) {ready();if(memory)return 'https://example.invalid/jpged-test.pdf';return getSignedUrl(objects,new GetObjectCommand({Bucket:bucket,Key:path,ResponseContentDisposition:attachmentDisposition(filename),ResponseCacheControl:'private, no-store'}),{expiresIn:60});}
   return {get,put,list,saveBlob,readBlob,download,configured:()=>memory||Boolean(table&&bucket)};
 }
 export const gedStorage=createGedStorage();

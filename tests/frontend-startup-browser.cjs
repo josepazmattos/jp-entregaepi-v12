@@ -77,8 +77,8 @@ async function main(){
     const certificate={mode:'vault',vaultState:'Enabled',subject:'SYNTHETIC COMPANY',validTo:'2099-01-01T00:00:00Z'};
     const a=await scenario({version:'12.10.0-bio1',certificate}),b=await scenario({version:'12.10.0-bio1',certificate});
     await Promise.all([a.login('CLIENTE-TESTE'),b.login('CLIENTE-TESTE')]);await Promise.all([a.done(),b.done()]);
-    for(const s of [a,b]){assert.equal(await s.page.locator('#healthCertificate span').textContent(),'Configurado');assert.equal(await s.page.locator('#startupBioBadge').getAttribute('data-state'),'success');assert.ok(s.state.requests.some(r=>r.host==='127.0.0.1'&&r.path==='/status'));}
-    await a.page.locator('#logoutButton').click();await b.page.reload();await b.done();assert.equal(await b.page.locator('#appShell').isVisible(),true);assert.equal(await b.page.locator('#healthCertificate span').textContent(),'Configurado');assert.equal(await a.page.locator('#loginButton').isVisible(),true);
+    for(const s of [a,b]){await s.page.waitForFunction(()=>document.querySelector('#healthCertificate span')?.textContent==='Configurado');assert.equal(await s.page.locator('#healthCertificate span').textContent(),'Configurado');assert.equal(await s.page.locator('#startupBioBadge').getAttribute('data-state'),'success');assert.ok(s.state.requests.some(r=>r.host==='127.0.0.1'&&r.path==='/status'));}
+    await a.page.locator('#logoutButton').click();await b.page.reload();await b.done();await b.page.waitForFunction(()=>document.querySelector('#healthCertificate span')?.textContent==='Configurado');assert.equal(await b.page.locator('#appShell').isVisible(),true);assert.equal(await b.page.locator('#healthCertificate span').textContent(),'Configurado');assert.equal(await a.page.locator('#loginButton').isVisible(),true);
     pass('duas máquinas simuladas com o mesmo login: sessões e agentes locais independentes, cofre compartilhado da empresa; sair em uma não encerra a outra');await a.close();await b.close();
   }
   for(const user of ['MASTER-TESTE','CLIENTE-TESTE']){

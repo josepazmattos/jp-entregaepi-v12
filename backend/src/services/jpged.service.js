@@ -8,6 +8,7 @@ import { verifyCompanyCms } from './jpged-pki.js';
 import { keyVault } from './jpged-kms.js';
 import { detachedCms } from './jpged-cms.js';
 import { createVaultService } from './jpged-vault.js';
+import { documentFilename } from './document-filename.js';
 
 const error=(status,message,code)=>{throw httpError(status,message,code);};
 const seconds=()=>Math.floor(Date.now()/1000);
@@ -106,7 +107,8 @@ export function createGedService({ged,store,validate=verifyCompanyCms,buildPdf=b
   async function download(company,actor,id) {
     const item=await ged.get(company,'DOC',id);if(!item)error(404,'Documento não encontrado.','JPGED_DOCUMENTO');
     await audit(company,actor,'DOCUMENTO_BAIXADO',{documentId:id});
-    return {url:await ged.download(item.path,`Ficha-EPI-${item.numero||id}.pdf`),sha256:item.pdfHash,expiresIn:60};
+    const filename=documentFilename(item);
+    return {url:await ged.download(item.path,filename),filename,sha256:item.pdfHash,expiresIn:60};
   }
   return {certificate:publicCertificate,vaultAdmin,certify,configure,confirmConfiguration,disconnect,prepare,signingPackage,finish,documents,download};
 }
