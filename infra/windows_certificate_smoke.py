@@ -2,7 +2,7 @@
 """Exercise the production PowerShell signer with an ephemeral synthetic A1.
 No client certificate, biometric device, or real credentials are used.
 """
-import base64,json,os,subprocess,tempfile
+import base64,json,os,subprocess,tempfile,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 def powershell(script,data=None):
@@ -15,6 +15,12 @@ import_script=script.split('try {\n    $request')[0]
 with tempfile.TemporaryDirectory(prefix='jpged-win-test-') as folder:
  subprocess.run(['python',str(ROOT/'backend/test/helpers/jpged-fixture.py'),folder],check=True)
  path=Path(folder)
+ sys.path.insert(0,str(ROOT/'native/biometria'))
+ from build import compile_java,java_bin
+ classes=path/'classes';compile_java(classes)
+ subprocess.run([java_bin(),'-m','jdk.compiler/com.sun.tools.javac.Main','--release','8','-encoding','UTF-8','-cp',str(classes),'-d',str(classes),str(ROOT/'native/biometria/java/CertificateBridgeWindowsTest.java')],check=True)
+ # Include the exact production signer resource in this test-only classpath.
+ (classes/'certificates.ps1').write_text(script,encoding='utf-8')
  for variant,pfxname in [('leaf','synthetic.pfx'),('pf','pf.pfx'),('chain','chain.pfx')]:
   pfx=str(path/pfxname).replace("'","''")
   setup=import_script+"\n$password=[Security.SecureString]::new();foreach($c in 'synthetic-test-only'.ToCharArray()){$password.AppendChar($c)};$store=[Security.Cryptography.X509Certificates.X509Store]::new('My','CurrentUser');$store.Open('ReadWrite');try {$cert=Import-JpCertificate '"+pfx+"' $password $store; $cert.Thumbprint}finally{$store.Close()}"
@@ -25,6 +31,8 @@ with tempfile.TemporaryDirectory(prefix='jpged-win-test-') as folder:
    answer=json.loads(powershell(script.replace('} catch {\n    # Never','} catch {\n    throw\n    # Never'),{'action':'sign','thumbprint':thumbprint,'contentBase64':base64.b64encode(content).decode()}))
    assert answer.get('ok'),answer
    (path/'signed.der').write_bytes(base64.b64decode(answer['cms']))
+   subprocess.run(['node',str(ROOT/'backend/test/helpers/verify-windows-cms.js'),folder,variant],check=True)
+   subprocess.run([java_bin(),'-cp',str(classes),'CertificateBridgeWindowsTest',folder,thumbprint],env=dict(os.environ,LOCALAPPDATA=str(path/'isolated-profile')),check=True,timeout=90)
    subprocess.run(['node',str(ROOT/'backend/test/helpers/verify-windows-cms.js'),folder,variant],check=True)
   finally:
    powershell("$s=New-Object Security.Cryptography.X509Certificates.X509Store('My','CurrentUser');$s.Open('ReadWrite');foreach($c in $s.Certificates){if($c.Thumbprint -eq '"+thumbprint+"'){$s.Remove($c)}};$s.Close();exit 0")

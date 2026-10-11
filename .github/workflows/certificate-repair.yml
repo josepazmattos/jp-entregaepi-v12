@@ -1,0 +1,77 @@
+name: Corrigir certificado preservando biometria
+on:
+  push:
+    branches: [correcao-certificado-sem-alterar-biometria-20261010]
+permissions:
+  contents: read
+jobs:
+  validate:
+    name: Validar leitura preservada e certificação
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: '1.27.1'
+          cache: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Garantir captura, SDK, driver e assinador Windows inalterados
+        run: |
+          git diff --exit-code a1187c5771c9a443b33ef4af7259a1e1b5edd2a4 -- native/biometria/java/NitgenReader.java native/biometria/sdk_search.go native/biometria/certificates.ps1 native/setup-completo
+      - run: python native/biometria/test_native.py
+      - run: python native/biometria/build.py --output native/biometria/dist --build-sha "$GITHUB_SHA"
+      - run: python -m pip install cryptography==46.0.3
+      - run: npm ci --prefix backend --no-audit --no-fund
+      - run: node --test backend/test/jpged-pki.test.js backend/test/jpged-routes.test.js backend/test/jpged-service.test.js backend/test/ficha-capture-api.test.js
+      - run: npm ci --prefix tests --no-audit --no-fund
+      - run: npm --prefix tests run install-browser
+      - run: node --test tests/biometria.test.cjs
+      - run: node tests/jpged-browser.cjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: certificate-repair-${{ github.sha }}
+          path: native/biometria/dist/*
+          if-no-files-found: error
+          retention-days: 14
+  windows:
+    name: Instalar atualização e certificar no Windows
+    runs-on: windows-latest
+    needs: validate
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: certificate-repair-${{ github.sha }}
+          path: native/biometria/dist
+      - name: Instalar e reinstalar o mesmo EXE aprovado
+        run: python infra/windows_biometria_smoke.py --source native/biometria/dist --commit "$env:GITHUB_SHA"
+      - run: python -m pip install cryptography==46.0.3
+      - run: npm ci --prefix backend --no-audit --no-fund
+      - name: Resposta API, Java, A1 Windows e validação CMS independente
+        run: python infra/windows_certificate_smoke.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: certificate-repair-windows-${{ github.sha }}
+          path: .deploy/windows-biometria-report.json
+          if-no-files-found: ignore
