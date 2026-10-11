@@ -5,6 +5,7 @@ __pycache__/
 .deploy/
 tests/output/
 backend/src/data/caepi/
+backend/src/data/epi-report/
 .env
 .env.*
 !.env.example

@@ -15,6 +15,7 @@
 </head>
 <body>
   <svg class="icon-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+    <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="7.5"/><path d="m16 16 5 5"/></symbol>
     <symbol id="icon-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
     <symbol id="icon-building" viewBox="0 0 24 24"><path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M16 9h3a1 1 0 0 1 1 1v11M2 21h20M8 7h4M8 11h4M8 15h4M9 21v-3h2v3"/></symbol>
     <symbol id="icon-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4v3"/></symbol>
@@ -245,7 +246,7 @@
             <form id="epiForm" class="card form-card">
               <div class="form-heading"><span class="heading-icon"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-shield"></use></svg></span><div><h2>Consulta e cadastro</h2><p>Escolha como identificar o equipamento.</p></div></div>
               <fieldset class="equipment-kind"><legend>Tipo de cadastro</legend><div><label><input type="radio" id="epiComCa" name="tipoCadastro" value="com_ca" checked><span>Com CA</span></label><label><input type="radio" id="epiSemCa" name="tipoCadastro" value="sem_ca"><span>Sem CA</span></label></div></fieldset>
-              <div id="epiCaFields" class="lookup-panel"><div class="inline"><div class="field grow"><label for="caInput">Certificado de Aprovação (CA)</label><input name="ca" id="caInput" required placeholder="Informe o número do CA" inputmode="numeric"></div><button id="consultarCaButton" class="btn btn-secondary" type="button" onclick="consultarCA()">Consultar CA</button></div><div id="caMessage" class="message hidden" role="status"></div><a class="link external-link" href="https://caepi.trabalho.gov.br/internet/ConsultaCAInternet.aspx" target="_blank" rel="noopener noreferrer">Consulta oficial no MTE <svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-external"></use></svg></a></div>
+              <div id="epiCaFields" class="lookup-panel"><div class="inline"><div class="field grow"><label for="caInput">Certificado de Aprovação (CA)</label><input name="ca" id="caInput" required placeholder="Informe o número do CA" inputmode="numeric"></div><button id="consultarCaButton" class="btn btn-secondary" type="button" onclick="consultarCA()">Consultar CA</button></div><div id="caMessage" class="message hidden" role="status"></div><button id="epiUseExisting" class="btn btn-secondary hidden" type="button">Usar EPI cadastrado</button><a class="link external-link" href="https://caepi.trabalho.gov.br/internet/ConsultaCAInternet.aspx" target="_blank" rel="noopener noreferrer">Consulta oficial no MTE <svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-external"></use></svg></a></div>
               <p id="epiSemCaHelp" class="form-note hidden">Use para equipamentos, uniformes ou acessórios sem CA. O cadastro não representa certificação como EPI.</p>
               <div class="field"><label for="epiNome">Nome do equipamento na ficha <span class="required-mark" aria-hidden="true">*</span></label><input name="nomeCurto" id="epiNome" required maxlength="160" placeholder="Ex.: Capacete de segurança"></div><details class="field"><summary>Descrição técnica do CA</summary><label for="epiDescricao">Descrição do equipamento <span class="required-mark" aria-hidden="true">*</span></label><input name="descricao" id="epiDescricao" placeholder="Descrição técnica preservada no catálogo"></details>
               <div class="field"><label for="epiFabricante">Fabricante</label><input name="fabricante" id="epiFabricante" placeholder="Nome do fabricante"></div>
@@ -253,7 +254,7 @@
               <div id="epiCaDetails" class="grid-form two"><div class="field"><label for="epiValidade">Validade do CA</label><input name="validade" id="epiValidade" placeholder="dd/mm/aaaa"></div><div class="field"><label for="epiSituacao">Situação do CA</label><input name="situacao" id="epiSituacao" placeholder="Situação informada na consulta"></div></div>
               <div class="form-actions"><button class="btn btn-primary" type="submit"><svg class="icon " aria-hidden="true" focusable="false"><use href="#icon-plus"></use></svg>Inserir no cadastro</button></div>
             </form>
-            <div class="card list-card"><div class="section-heading"><div><h2>Catálogo compartilhado</h2><p>Dados técnicos disponíveis a todas as empresas, incluindo o Master.</p></div></div><div class="field list-search"><label for="epiSearch">Buscar equipamento</label><input id="epiSearch" type="search" placeholder="Descrição, fabricante ou CA"></div><div id="episList" class="list">Carregando...</div></div>
+            <aside class="card epi-catalog-card"><div class="section-heading"><div><h2>Catálogo de EPIs</h2><p>Encontre um equipamento já disponível e use na entrega.</p></div></div><div id="episList" class="epi-catalog-count" aria-live="polite">Consultando catálogo…</div><p id="epiCatalogSource" class="form-note">Compartilhado com todas as empresas</p><div class="field list-search"><label for="epiSearch">Buscar equipamento</label><input id="epiSearch" type="search" maxlength="160" placeholder="CA, nome, fabricante ou modelo"></div><button id="openEquipmentCatalog" class="btn btn-primary" type="button" onclick="openEquipmentCatalog()"><svg class="icon" aria-hidden="true"><use href="#icon-search"></use></svg>Consultar catálogo</button><p class="form-note">15 equipamentos por página, com filtros e detalhes do cadastro.</p></aside>
           </div>
         </section>
 
@@ -265,7 +266,7 @@
               <div class="grid-form">
                 <div class="field span-two"><label for="entregaEmpresa">Empresa</label><select id="entregaEmpresa" required><option value="">Selecione uma empresa</option></select></div>
                 <div class="field span-two"><label for="entregaTrabalhador">Trabalhador</label><select name="trabalhadorId" id="entregaTrabalhador" required></select></div>
-                <div class="field span-two"><label for="entregaEpi">EPI</label><select name="epiId" id="entregaEpi" required></select></div>
+                <div class="field span-two"><label for="entregaEpi">EPI</label><select name="epiId" id="entregaEpi" required></select><button id="entregaCatalogo" class="btn btn-secondary" type="button" onclick="openEquipmentCatalog('entrega')">Buscar no catálogo completo</button></div>
                 <div class="field"><label for="entregaQuantidade">Quantidade</label><input name="quantidade" id="entregaQuantidade" type="number" min="1" max="100000" step="1" value="1" required></div>
                 <div class="field span-two"><label for="entregaTipo">Tipo de movimentação</label><select name="tipo" id="entregaTipo"><option value="Entrega">Entrega de EPI</option><option value="Devolução">Devolução de EPI</option></select><p id="movementHelp" class="field-help">Preenche a data de entrega deste item.</p></div>
                 <div class="span-two"><button id="entregaAddItem" class="btn btn-secondary" type="button"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-plus"></use></svg>Adicionar à ficha</button></div>
@@ -358,6 +359,7 @@
   <script src="/__APP_PREFIX__/assets/biometria.js?v=20261011-login1&amp;build=__BUILD_SHA__"></script>
   <script src="/__APP_PREFIX__/assets/app.js?v=20261011-downloads1&amp;build=__BUILD_SHA__"></script>
   <script src="/__APP_PREFIX__/assets/operations.js?v=20261011-login1&amp;build=__BUILD_SHA__"></script>
+  <script src="/__APP_PREFIX__/assets/epi-catalog.js?v=20261011-catalogo1&amp;build=__BUILD_SHA__"></script>
   <script src="/__APP_PREFIX__/assets/jpged.js?v=20261011-bio2&amp;build=__BUILD_SHA__"></script>
   <script src="/__APP_PREFIX__/assets/certificate-install.js?v=20261011-cert1&amp;build=__BUILD_SHA__"></script>
   <script src="/__APP_PREFIX__/assets/auto-update.js?v=20261011-cache1&amp;build=__BUILD_SHA__"></script>

@@ -90,6 +90,7 @@ module.exports=async function runTenantBrowser({browser,origin,output}){
       if(url.pathname==='/api/trabalhadores')return json(200,{ok:true,items:workers[selected]||[]});
       if(url.pathname==='/api/fichas')return json(200,{ok:true,items:[]});
       if(url.pathname==='/api/epis'&&request.method()==='GET')return json(200,{ok:true,items:catalog});
+      if(url.pathname==='/api/epis/catalogo')return json(200,{ok:true,items:catalog.map(item=>({...item,nomeCurto:item.nomeCurto||item.descricao})),page:1,pages:1,total:catalog.length});
       if(url.pathname==='/api/epis'&&request.method()==='POST'){
         assert.equal(body.tipo,'sem_ca');assert.equal(body.ca,'');assert.equal(body.validade,'');assert.ok(!Object.hasOwn(body,'empresaId'));
         const item={...body,id:'EQUIPAMENTO-SEM-CA-SINTETICO',semCA:true,catalogoCompartilhado:true};catalog.push(item);return json(200,{ok:true,item,reutilizado:false});
@@ -217,10 +218,9 @@ module.exports=async function runTenantBrowser({browser,origin,output}){
 
     await navigate(second.page,'epis');await second.page.locator('#epiSemCa').check();assert.equal(await second.page.locator('#caInput').isVisible(),false);assert.equal(await second.page.locator('#epiValidade').isVisible(),false);
     await second.page.locator('#epiNome').fill('UNIFORME COMPARTILHADO SINTÉTICO');await second.page.locator('#epiFabricante').fill('FABRICANTE SINTÉTICO');await second.page.locator('#epiModelo').fill('Modelo de teste');await second.page.locator('#epiTamanho').fill('G');
-    await second.page.locator('#epiForm button[type="submit"]').click();await second.page.waitForFunction(()=>document.getElementById('episList').textContent.includes('UNIFORME COMPARTILHADO SINTÉTICO'));await second.page.locator('#epiSemCa').check();await inspect(second.page,'mobile-equipamento-sem-ca');
-    await navigate(beta.page,'epis');await beta.page.locator('#screen-epis .topbar button').click();await beta.page.waitForFunction(()=>document.getElementById('episList').textContent.includes('UNIFORME COMPARTILHADO SINTÉTICO'));
-    await navigate(master.page,'epis');await master.page.locator('#screen-epis .topbar button').click();await master.page.waitForFunction(()=>document.getElementById('episList').textContent.includes('UNIFORME COMPARTILHADO SINTÉTICO'));await inspect(master.page,'desktop-catalogo-compartilhado');
-    assert.ok(!(await beta.page.locator('#episList').innerText()).includes(companyA.nome));passed('equipamento sem CA entra no catálogo comum e fica disponível à outra empresa e ao Master sem autoria');
+    await second.page.locator('#epiForm button[type="submit"]').click();await second.page.waitForFunction(()=>document.getElementById('appMessage').textContent.includes('Equipamento incluído'));await second.page.locator('#epiSemCa').check();await inspect(second.page,'mobile-equipamento-sem-ca');
+    for(const target of [second.page,beta.page,master.page]){await navigate(target,'epis');await target.locator('#openEquipmentCatalog').click();await target.waitForFunction(()=>document.getElementById('epiCatalogRows').textContent.includes('UNIFORME COMPARTILHADO SINTÉTICO'));assert.ok(!(await target.locator('#epiCatalogRows').innerText()).includes(companyA.nome));await target.locator('.epi-catalog-dialog .dialog-close').click();}
+    await inspect(master.page,'desktop-catalogo-compartilhado');passed('equipamento sem CA entra no catálogo comum e fica disponível à outra empresa e ao Master sem autoria');
 
     await alpha.page.locator('#logoutButton').click();assert.equal(await alpha.page.evaluate(()=>sessionStorage.getItem('jp-v12-auth')),null);
     assert.equal(await alpha.page.locator('#userAvatarImage').getAttribute('src'),null);

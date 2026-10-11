@@ -1,0 +1,12 @@
+{
+  "sourceFile": "RelatorioCA_20261011_100737.csv.gz",
+  "sourceDate": "2026-10-11",
+  "sourceSha256": "5d6da7554ba65e3ebae6b7e82547170de050b37199a29e691e3269ec4d1bc4d6",
+  "sourceGzipSha256": "fbc1887a22f3d4d47761666db5805c2032197af612d79ff92bfcd26c063e326c",
+  "sourceRows": 123873,
+  "distinctCAs": 42474,
+  "ambiguousCAs": 24,
+  "idPrefix": "relatorio-5d6da7554ba6-",
+  "indexSha256": "adff850a23c86601bc3367f1f329d47f0869c45b30b1478e3070f6494c2e7dfd",
+  "storage": "Read-only bundle in Lambda; original upload and generated data are not committed to the public repository. Rebuild with scripts/build-epi-report.py."
+}
