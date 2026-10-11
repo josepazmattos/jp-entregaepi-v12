@@ -75,9 +75,23 @@ export async function buildSigningPdf(ficha, certificate) {
   tableHeader();
   for (const item of ficha.itens) row([item.quantidade, item.epiNome || item.epiDescricao, item.semCA ? 'Sem CA' : item.ca, item.datasMovimentacao?.entrega || '', item.datasMovimentacao?.devolucao || '', 'Biometria confirmada']);
   y -= 12;
-  text(`Certificação digital: ${certificate.subject}\nIdentificador da confirmação biométrica: ${bio.id}\nConteúdo confirmado (SHA-256): ${documentHash(ficha)}`, { size: 8 });
-  if(certificate.kind==='e-CPF')text(`Certificado de pessoa física · CPF do assinante: ${certificate.cpf}`,{size:8});
-  text('Preserve este arquivo original. Uma impressão em papel ou uma nova impressão em PDF não preserva a assinatura digital incorporada.', { size: 8 });
+  // Only the printed appearance is abbreviated. Full subject remains in the
+  // PDF signature dictionary/CMS; complete evidence is still embedded below.
+  const subject=String(certificate.subject||''),commonName=subject.match(/(?:^|\n)CN=([^\n]+)/)?.[1];
+  const signer=(commonName||(!subject.includes('=')?subject:'Titular identificado no certificado')).replace(/:\d{11,14}$/,'');
+  const authentication=[
+    {value:'AUTENTICAÇÃO DA FICHA',size:8.5,type:bold},
+    {value:`Certificação digital: ${signer} · ${certificate.kind||'A1'}`,size:8,type:font},
+    {value:`Confirmação biométrica: ${bio.id}`,size:7.5,type:font},
+    {value:`SHA-256 do conteúdo: ${documentHash(ficha)}`,size:7.5,type:font},
+    {value:'A assinatura digital está no PDF original. Preserve o arquivo baixado do JPGED.',size:7.5,type:font}
+  ].flatMap(item=>lines(item.value,available-16,item.size,item.type).map(value=>({...item,value})));
+  const authenticationHeight=16+authentication.reduce((sum,item)=>sum+item.size*1.35,0);
+  ensure(authenticationHeight);
+  page.drawRectangle({x:margin,y:y-authenticationHeight,width:available,height:authenticationHeight,color:rgb(.97,.98,.97),borderWidth:.5,borderColor:rgb(.65,.72,.68)});
+  let authenticationY=y-8;
+  for(const item of authentication){page.drawText(item.value,{x:margin+8,y:authenticationY-item.size,size:item.size,font:item.type});authenticationY-=item.size*1.35;}
+  y-=authenticationHeight;
   const evidence = { schema: 'JPGED-1', document: documentContent(ficha), documentHash: documentHash(ficha), biometric: { id: bio.id, signedAt: bio.signedAt, finger: bio.dedo, proof: bio.proof, proofSignature: bio.proofSignature, publicKey: bio.publicKey } };
   await doc.attach(Buffer.from(JSON.stringify(evidence)), 'evidencias-jpged.json', { mimeType: 'application/json', description: 'Conteúdo confirmado e prova biométrica. Sem template biométrico.' });
   doc.getPages().forEach((p, i, pages) => p.drawText(`JPGED · ${ficha.numero || ficha.id} · Página ${i+1}/${pages.length}`, { x: margin, y: 20, size: 8, font }));

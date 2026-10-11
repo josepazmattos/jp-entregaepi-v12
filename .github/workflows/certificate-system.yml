@@ -29,14 +29,18 @@ jobs:
           npm run build --prefix certificate-import
           git diff --exit-code -- frontend/EntregaEPI/assets/certificate-worker.js
           npm test --prefix certificate-import
-      - run: node --test backend/test/jpged-*.test.js
+      - run: JPGED_LAYOUT_OUTPUT=tests/output/layout node --test backend/test/jpged-*.test.js backend/test/auth.test.js
       - run: npm ci --prefix tests --no-audit --no-fund
       - run: npm run install-browser --prefix tests
       - run: node tests/jpged-browser.cjs
+      - run: node tests/frontend-startup-browser.cjs
       - name: Guardar somente evidências sintéticas
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: certificado-sistema-${{ github.sha }}
-          path: tests/output/jpged/
+          path: |
+            tests/output/jpged/
+            tests/output/layout/
+            tests/output/startup/
           retention-days: 14
