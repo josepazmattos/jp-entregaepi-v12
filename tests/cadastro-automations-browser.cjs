@@ -33,7 +33,7 @@ let browser, page, claims, holdPreview = false, releasePreview, previewStarted, 
     const req = route.request(), url = new URL(req.url());
     const json = (status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
     if (url.hostname.startsWith('cognito-idp.')) return json(200, { AuthenticationResult: { IdToken: 'header.' + Buffer.from(JSON.stringify(claims)).toString('base64url') + '.synthetic', AccessToken: 'synthetic', ExpiresIn: 3600 } });
-    if (url.hostname === '127.0.0.1') return json(200, { ok: true, service: 'JP Biometria', version: '12.10.0', sdk: true, reader: true, deviceCount: 1, capabilities: { capture: true, verify: true, templates: true } });
+    if (url.hostname === '127.0.0.1') return json(200, { ok: true, service: 'JP Biometria', version: '12.10.1', sdk: true, reader: true, deviceCount: 1, capabilities: { capture: true, verify: true, templates: true } });
     assert.ok(url.hostname.endsWith('.execute-api.sa-east-1.amazonaws.com'));
     if (url.pathname === '/health') return json(200, { ok: true, durable: true, storageReady: true });
     if (url.pathname.startsWith('/api/caepi/')) return json(200, { ok: true, item: { ca: '365', name: 'EPI SINTÉTICO', found: true, officialSnapshot: true, downloadedAt: '2026-10-10T00:00:00Z', autofillAllowed: true } });

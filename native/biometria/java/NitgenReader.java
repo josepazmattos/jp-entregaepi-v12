@@ -179,8 +179,16 @@ final class NitgenReader implements BioReader {
     private static void checkError(Object bsp, String operation) throws Exception {
         if (Boolean.TRUE.equals(invoke(bsp, "IsErrorOccured"))) {
             Object code = invoke(bsp, "GetErrorCode");
-            throw new BioFailure("NITGEN_" + String.valueOf(code).replaceAll("[^0-9]", ""), "O SDK NITGEN não concluiu " + operation + ". Código: " + code + ". Feche o utilitário de diagnóstico e tente novamente.", 422);
+            if (code instanceof Number) throw sdkFailure(((Number)code).intValue(), operation);
+            throw new BioFailure("SDK_API_INCOMPATIBLE", "O SDK NITGEN retornou um código de erro inválido.", 503);
         }
+    }
+    static BioFailure sdkFailure(int code, String operation) {
+        // Official NBioAPI_Error.h: 0x0f = VALIDITY_FAIL; 0x18 = EXPIRED_VERSION.
+        // Neither code establishes that the USB reader is absent or occupied.
+        if(code==15) return new BioFailure("NITGEN_15", "O SDK NITGEN recusou sua validação durante " + operation + ". A biometria permanece indisponível. Encaminhe o código NITGEN_15 ao suporte JP para conferir a instalação e a versão com a NITGEN/FingerTech. O certificado digital pode ser configurado separadamente.", 503);
+        if(code==24) return new BioFailure("NITGEN_24", "O SDK NITGEN informou versão expirada. Solicite ao suporte JP uma versão válida do fabricante. O certificado digital pode ser configurado separadamente.", 503);
+        return new BioFailure("NITGEN_"+code, "O SDK NITGEN não concluiu " + operation + ". Código: " + code + ". Verifique o leitor e os programas de captura em uso.", 422);
     }
     private static BioFailure failure(Throwable e) {
         while (e instanceof InvocationTargetException && ((InvocationTargetException)e).getTargetException() != null) e = ((InvocationTargetException)e).getTargetException();

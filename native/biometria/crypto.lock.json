@@ -1,0 +1,8 @@
+{
+  "name": "Bouncy Castle lightweight crypto",
+  "version": "1.86",
+  "url": "https://repo.maven.apache.org/maven2/org/bouncycastle/bcprov-jdk15to18/1.86/bcprov-jdk15to18-1.86.jar",
+  "sha512": "c19b275489cc330c4a77960fc878420e6fdde067c683068a5404bac9e00c35f12a5b21f976de9f1925b94792fd4efa4aceb13e037e15ab6da2c24da5ea7accaf",
+  "sizeBytes": 7177698,
+  "license": "https://www.bouncycastle.org/licence.html"
+}

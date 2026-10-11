@@ -450,6 +450,39 @@
           ]
         }
       }
+    },
+    "VaultCreationPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "JPGEDCreateImportedSigningKeys",
+        "Roles": [
+          "jp-entregaepi-v12-lambda-role"
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "kms:CreateKey",
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:KeyOrigin": "EXTERNAL",
+                  "kms:KeyUsage": "SIGN_VERIFY",
+                  "kms:KeySpec": [
+                    "RSA_2048",
+                    "RSA_3072",
+                    "RSA_4096"
+                  ]
+                },
+                "Bool": {
+                  "kms:MultiRegion": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
     }
   },
   "Outputs": {

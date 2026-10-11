@@ -55,7 +55,7 @@ func extract(data []byte, destination string) (manifest, error) {
 	if e != nil {
 		return m, e
 	}
-	if json.Unmarshal(b, &m) != nil || m.Version != "12.10.0" || len(m.Files) != len(files)-1 {
+	if json.Unmarshal(b, &m) != nil || m.Version != "12.10.1" || len(m.Files) != len(files)-1 {
 		return m, errors.New("PACKAGE_MANIFEST_INVALID")
 	}
 	seen := map[string]bool{}
@@ -125,12 +125,30 @@ func installFile(source, target, hash string) error {
 func ready(s map[string]any) bool {
 	return s["ok"] == true && s["sdk"] == true && s["reader"] == true && s["checking"] != true && s["busy"] != true
 }
+func withoutReader(s map[string]any) (string, error) {
+	if code, _ := s["errorCode"].(string); code == "NITGEN_15" || code == "NITGEN_24" {
+		return code, errors.New(code)
+	}
+	caps, _ := s["capabilities"].(map[string]any)
+	if caps["certificates"] != true {
+		return "CERTIFICATES_UNAVAILABLE", fmt.Errorf("certificate capability unavailable")
+	}
+	return "INSTALLED_WITHOUT_READER", nil
+}
 func solution(code string) string {
 	switch code {
 	case "READY":
 		return "Leitor pronto. Abra Trabalhadores > Digitais ou a ficha de EPI para assinar."
 	case "HVCI_DRIVER":
 		return "O driver fornecido pode ser incompatível com a proteção de memória ativa neste Windows. Solicite à FingerTech o driver HFDU06 compatível. Nenhuma proteção foi desativada."
+	case "INSTALLED_WITHOUT_READER":
+		return "Instalação concluída. No acesso Master, você já pode cadastrar o certificado digital da empresa em Biometria > Certificado digital, sem conectar o leitor. Para cadastrar digitais ou assinar biometricamente, conecte o Hamster DX. Se o Windows ainda precisar do driver, execute este instalador novamente com o leitor conectado."
+	case "NITGEN_15":
+		return "O agente foi instalado, mas o SDK NITGEN recusou sua validação. A biometria ainda não está pronta. Encaminhe este código ao suporte JP para conferir a instalação e a versão com a NITGEN/FingerTech. O acesso ao certificado digital permanece independente. Não é necessário apagar digitais ou fichas."
+	case "NITGEN_24":
+		return "O agente foi instalado, mas o SDK NITGEN informou versão expirada. Solicite ao suporte JP uma versão válida do fabricante. O acesso ao certificado digital permanece independente."
+	case "CERTIFICATES_UNAVAILABLE":
+		return "O agente iniciou, mas não disponibilizou certificados. Execute novamente o instalador completo atualizado e envie este código ao suporte JP se continuar."
 	case "USB_ABSENT":
 		return "Conecte o Hamster DX diretamente a uma porta USB e execute este instalador novamente."
 	case "READER_NOT_FOUND":

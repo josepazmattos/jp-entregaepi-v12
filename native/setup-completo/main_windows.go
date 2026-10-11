@@ -77,7 +77,7 @@ func status(port int) (map[string]any, error) {
 	if e != nil {
 		return nil, e
 	}
-	if s["version"] != "12.10.0" {
+	if s["version"] != "12.10.1" {
 		return nil, errors.New("AGENT_VERSION_INVALID")
 	}
 	return s, nil
@@ -106,7 +106,7 @@ type hardware struct {
 
 func inspectHardware() (hardware, error) {
 	var h hardware
-	b, e := powershell(`$ErrorActionPreference='Stop';$d=@(Get-CimInstance Win32_PnPEntity | Where-Object {$_.PNPDeviceID -match '^USB\\VID_0A86&PID_(0100|0200)'});$g=Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard -ClassName Win32_DeviceGuard;$v=0;if(@($g.SecurityServicesRunning) -contains 2){$v=1};[pscustomobject]@{Count=$d.Count;Working=(@($d|Where-Object {$_.ConfigManagerErrorCode -eq 0}).Count -gt 0);MemoryIntegrity=$v}|ConvertTo-Json -Compress`)
+	b, e := powershell(`$ErrorActionPreference='Stop';$d=@(Get-CimInstance Win32_PnPEntity | Where-Object {$_.PNPDeviceID -match '^USB\\VID_0A86&PID_(0100|0200)'});$v=0;if($d.Count -gt 0 -and @($d|Where-Object {$_.ConfigManagerErrorCode -eq 0}).Count -eq 0){$g=Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard -ClassName Win32_DeviceGuard;if(@($g.SecurityServicesRunning) -contains 2){$v=1}};[pscustomobject]@{Count=$d.Count;Working=(@($d|Where-Object {$_.ConfigManagerErrorCode -eq 0}).Count -gt 0);MemoryIntegrity=$v}|ConvertTo-Json -Compress`)
 	if e != nil {
 		return h, e
 	}
@@ -190,7 +190,7 @@ func run() (string, error) {
 		return "SECURITY_UNKNOWN", e
 	}
 	if h.Count == 0 {
-		return "USB_ABSENT", errors.New("connect reader before preparing the driver")
+		return withoutReader(s)
 	}
 	if h.Working {
 		if code == "" {
@@ -226,7 +226,7 @@ func run() (string, error) {
 	}
 	h, e = inspectHardware()
 	if e == nil && h.Count == 0 {
-		return "USB_ABSENT", errors.New("connect reader")
+		return withoutReader(s)
 	}
 	code, _ = s["errorCode"].(string)
 	if code == "" {
@@ -236,12 +236,12 @@ func run() (string, error) {
 }
 func main() {
 	code, e := run()
-	text := "JP Biometria 12.10.0\n\n" + solution(code)
+	text := "JP Biometria 12.10.1\n\n" + solution(code)
 	if e != nil {
 		text += "\n\nCódigo para o suporte: " + code
 	}
 	if len(os.Args) == 2 && os.Args[1] == "--install-quiet" {
-		json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": e == nil, "code": code, "version": "12.10.0"})
+		json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": e == nil, "code": code, "version": "12.10.1"})
 	} else {
 		message(text, e != nil)
 	}

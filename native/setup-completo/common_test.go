@@ -20,7 +20,7 @@ func sample(t *testing.T, name string, content []byte, corrupt bool) []byte {
 	if corrupt {
 		hash = "invalid"
 	}
-	m := manifest{"12.10.0", []entry{{name, hash, int64(len(content))}}}
+	m := manifest{"12.10.1", []entry{{name, hash, int64(len(content))}}}
 	v, _ := json.Marshal(m)
 	f, _ := z.Create("manifest.json")
 	f.Write(v)
@@ -110,7 +110,29 @@ func TestActualReleasePayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generated release archive is invalid: %v", err)
 	}
-	if m.Version != "12.10.0" {
+	if m.Version != "12.10.1" {
 		t.Fatal("incorrect release version")
+	}
+}
+
+func TestInstallWithoutReaderKeepsCertificateAvailable(t *testing.T) {
+	s := map[string]any{"ok": false, "sdk": true, "reader": false, "capabilities": map[string]any{"certificates": true}}
+	code, err := withoutReader(s)
+	if err != nil || code != "INSTALLED_WITHOUT_READER" || ready(s) {
+		t.Fatal("Certificate installation must succeed without claiming a ready reader")
+	}
+	delete(s, "capabilities")
+	if _, err = withoutReader(s); err == nil {
+		t.Fatal("Do not claim success without certificate support")
+	}
+}
+
+func TestMissingUSBDoesNotHideSDKValidityFailure(t *testing.T) {
+	for _, expected := range []string{"NITGEN_15", "NITGEN_24"} {
+		s := map[string]any{"sdk": true, "reader": false, "errorCode": expected, "capabilities": map[string]any{"certificates": true}}
+		code, err := withoutReader(s)
+		if code != expected || err == nil || ready(s) || solution(code) == solution("unknown") {
+			t.Fatal("An SDK validation failure must not be hidden by missing USB")
+		}
 	}
 }

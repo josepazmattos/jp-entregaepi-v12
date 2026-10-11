@@ -377,6 +377,17 @@ class WindowsSmoke:
         manifest = verify_release(self.source, self.commit)
         self.report["installerSha"] = manifest["sha256"]
         self.passed("releaseArtifactVerified")
+        # Prove the external Java prerequisite before testing the repair-only EXE.
+        # Persist only public version/architecture, never the full JVM properties.
+        java = Path(os.environ.get("JAVA_HOME", "")) / "bin" / "java.exe"
+        probe = subprocess.run([str(java), "-XshowSettings:properties", "-version"],
+                               capture_output=True, timeout=20)
+        output = (probe.stdout + probe.stderr).decode("utf-8", errors="replace")
+        props = dict(re.findall(r"^\s*(os\.arch|java\.specification\.version)\s*=\s*(\S+)", output, re.M))
+        self.report["externalJava"] = props
+        require(probe.returncode == 0 and props.get("os.arch") == "amd64" and props.get("java.specification.version") == "17",
+                "JAVA_PREREQUISITE_INVALID", "O Java externo do ambiente de teste não iniciou como esperado.")
+        self.passed("externalJavaPrerequisiteVerified")
         require_empty_registry()
         self.passed("registryInitiallyAbsent")
         self.root = Path(tempfile.mkdtemp(prefix="JP Biometria Windows Smoke ")).resolve()

@@ -15,10 +15,17 @@ public final class JPBiometriaAgentTest {
     private static final String ORIGIN = "https://www.jptreinamentos.com.br";
     private static final String SHA = "1111111111111111111111111111111111111111";
     public static void main(String[] args) throws Exception {
-        jsonTests(); imageTests(); httpTests();
+        jsonTests(); certificateResponseTests(); vaultWrapTests(); sdkErrorTests(); imageTests(); httpTests();
+        if(args.length==1)pkcs12Tests(args[0]);
         System.out.println("Java native bridge: " + assertions + " assertions passed (synthetic reader; no physical SDK/device).");
     }
     static void check(boolean condition, String label) { assertions++; if (!condition) throw new AssertionError(label); }
+    static void sdkErrorTests() {
+        BioFailure invalid=NitgenReader.sdkFailure(15,"Initialize");
+        check(invalid.code.equals("NITGEN_15") && invalid.getMessage().contains("validação") && invalid.getMessage().contains("Initialize"),"SDK validity failure identifies its operation");
+        check(!invalid.getMessage().contains("Feche") && !invalid.getMessage().contains("posição do dedo"),"SDK validity failure does not claim reader contention");
+        check(NitgenReader.sdkFailure(24,"Initialize").getMessage().contains("expirada"),"expired SDK is distinct from missing USB");
+    }
     interface Checked { void run() throws Exception; }
     static void rejects(Checked action, String label) throws Exception {
         boolean rejected = false; try { action.run(); } catch (Exception e) { rejected = true; } check(rejected, label);
@@ -30,6 +37,46 @@ public final class JPBiometriaAgentTest {
         for (String invalid : new String[]{"{\"a\":1,\"a\":2}", "{\"a\":false}x", "{\"a\":{}}", "{\"a\":[]}", "{\"a\":01}", "{\"a\":\"\\u+123\"}", "{\"a\":\"\\u-123\"}", "{\"a\":\"\\u١٢٣٤\"}", "{\"a\":true,}"}) rejects(() -> Json.object(invalid), "strict JSON rejects " + invalid);
         check(Json.encode(JPBiometriaAgent.map("s", "\n\"\\")).equals("{\"s\":\"\\n\\\"\\\\\"}"), "JSON escaping");
         check(JPBiometriaAgent.hmac(KEY, "abc").equals("_XrbFSwF74Dcz1Ch-kwF1aPsbalVdfwxKufF0JGDY1E"), "stable HMAC-SHA256 test vector");
+    }
+    static void pkcs12Tests(String folder) throws Exception {
+        for(String file:new String[]{"synthetic.pfx","pf.pfx","chain.pfx"}) {
+            java.security.KeyStore store=java.security.KeyStore.getInstance("PKCS12");
+            try(InputStream input=new FileInputStream(new File(folder,file))){store.load(input,"synthetic-test-only".toCharArray());}
+            String alias=store.aliases().nextElement();java.security.Key key=store.getKey(alias,"synthetic-test-only".toCharArray());
+            check(key instanceof java.security.interfaces.RSAPrivateKey,"installed Java opens modern A1 PKCS12 "+file);
+            java.security.Signature signer=java.security.Signature.getInstance("SHA256withRSA");signer.initSign((java.security.PrivateKey)key);signer.update("test".getBytes(StandardCharsets.UTF_8));byte[] signature=signer.sign();
+            signer.initVerify(store.getCertificate(alias));signer.update("test".getBytes(StandardCharsets.UTF_8));check(signer.verify(signature),"installed Java verifies A1 proof "+file);
+            rejects(()->{try(InputStream input=new FileInputStream(new File(folder,file))){store.load(input,"wrong".toCharArray());}},"incorrect A1 password rejected "+file);
+        }
+    }
+    static void vaultWrapTests() throws Exception {
+        java.security.KeyPairGenerator generator=java.security.KeyPairGenerator.getInstance("RSA");generator.initialize(2048);
+        java.security.KeyPair source=generator.generateKeyPair(),wrapping=generator.generateKeyPair();
+        byte[] raw=source.getPrivate().getEncoded(),encrypted=VaultImport.wrap(raw,wrapping.getPublic().getEncoded());
+        javax.crypto.Cipher rsa=javax.crypto.Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding");
+        rsa.init(javax.crypto.Cipher.DECRYPT_MODE,wrapping.getPrivate(),new javax.crypto.spec.OAEPParameterSpec("SHA-256","MGF1",java.security.spec.MGF1ParameterSpec.SHA256,javax.crypto.spec.PSource.PSpecified.DEFAULT));
+        byte[] aes=rsa.doFinal(Arrays.copyOf(encrypted,256));
+        org.bouncycastle.crypto.engines.RFC5649WrapEngine kw=new org.bouncycastle.crypto.engines.RFC5649WrapEngine(org.bouncycastle.crypto.engines.AESEngine.newInstance());
+        kw.init(false,new org.bouncycastle.crypto.params.KeyParameter(aes));
+        byte[] decoded=kw.unwrap(encrypted,256,encrypted.length-256);
+        check(Arrays.equals(raw,decoded),"KMS RFC5649 wrapping preserves PKCS8 and OAEP uses SHA256 for MGF1");
+        encrypted[encrypted.length-1]^=1;
+        rejects(()->kw.unwrap(encrypted,256,encrypted.length-256),"modified wrapped key rejected by integrity check");
+    }
+    static void certificateResponseTests() throws Exception {
+        Map<String,Object> response=CertificateBridge.decodeApiResponse(200,"{\"ok\":true,\"configuration\":{\"id\":\"config-test\",\"target\":{\"registrationType\":\"CNPJ\",\"registrationNumber\":\"12345678000195\"},\"contentBase64\":\"dGVzdA==\"}}");
+        Map<?,?> configuration=(Map<?,?>)response.get("configuration");
+        check("CNPJ".equals(((Map<?,?>)configuration.get("target")).get("registrationType")), "configuration response reaches local signer with employer target");
+        response=CertificateBridge.decodeApiResponse(200,"{\"ok\":true,\"certificate\":{\"fingerprint\":\"test-fingerprint\",\"thumbprint\":\"test-thumbprint\",\"target\":{\"companyId\":\"company-test\"}}}");
+        check("test-fingerprint".equals(((Map<?,?>)response.get("certificate")).get("fingerprint")), "configuration confirmation parses binding metadata");
+        response=CertificateBridge.decodeApiResponse(200,"{\"ok\":true,\"completed\":true,\"item\":{\"itens\":[{\"quantidade\":1.5,\"datasMovimentacao\":{\"entrega\":\"10/10/2026\"}}]}}");
+        check(Boolean.TRUE.equals(response.get("completed")), "signed ficha response accepts nested items");
+        try {CertificateBridge.decodeApiResponse(401,"{\"ok\":false,\"code\":\"CERTIFICADO_REAUTENTICAR\",\"error\":\"Entre novamente.\"}");throw new AssertionError("401 accepted");}
+        catch(BioFailure error){check(error.httpStatus==401 && "CERTIFICADO_REAUTENTICAR".equals(error.code), "authentication failures remain actionable");}
+        for(String invalid:new String[]{"{\"x\":{\"a\":1,\"a\":2}}","{\"x\":[1,]}","{\"x\":1.}","{\"x\":01}","{\"x\":[]}trailing"}) rejects(()->Json.responseObject(invalid),"malformed nested response rejected");
+        String nested="{}";for(int i=0;i<20;i++)nested="{\"x\":"+nested+"}";final String tooDeep=nested;
+        rejects(()->Json.responseObject(tooDeep),"response nesting bounded");
+        rejects(()->Json.object("{\"token\":{\"nested\":true}}"),"browser certificate request remains flat");
     }
     public static class Audit { public int ImageWidth, ImageHeight; public Finger[] FingerData; Audit(int width, int height, byte[] data) { ImageWidth=width; ImageHeight=height; FingerData=new Finger[]{new Finger(data)}; } }
     public static class Finger { public Template[] Template; Finger(byte[] data) { Template=new Template[]{new Template(data)}; } }
