@@ -80,3 +80,11 @@ export function findEquipment(records, data) {
   return records.filter(item => equipmentKey(item) === key)
     .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || String(a.id).localeCompare(String(b.id)))[0] || null;
 }
+
+// New registrations have one shared record per CA, regardless of model/size.
+// Existing historical records and IDs are never rewritten or removed.
+export function findRegisteredCA(records, ca) {
+  const normalized=normalizarCA(ca);if(!normalized)return null;
+  return records.filter(item=>item.tipo!=='sem_ca'&&item.semCA!==true&&normalizarCA(item.ca)===normalized)
+    .sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||''))||String(a.id).localeCompare(String(b.id)))[0]||null;
+}

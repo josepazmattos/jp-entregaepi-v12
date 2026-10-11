@@ -230,6 +230,7 @@ function clearSessionData(clearDrafts=false) {
   logoCreateLoading=false;companySaving=false;updateCompanySubmitButton();
   ["trabalhadorForm","epiForm","entregaForm","empresaAccessForm"].forEach(id=>{const button=$(id)?.querySelector('button[type="submit"]');if(button)button.disabled=false;});
   cache={empresas:[],trabalhadores:[],epis:[],fichas:[]};
+  equipmentCatalogSummary=null;if(typeof clearExistingEquipment==='function')clearExistingEquipment();
   clearEntregaDraft();
   activeEmpresaId="";localStorage.removeItem(activeCompanyKey);sessionStorage.removeItem(activeCompanyKey);
   ["empresasList","trabalhadoresList","episList","fichasList","dashboardFichas","nextActions"].forEach(id=>$(id).textContent="");
@@ -307,7 +308,7 @@ async function refreshAll(){
   })()]);
   $("metricEmpresas").textContent=cache.empresas.length;
   $("metricTrabalhadores").textContent=cache.trabalhadores.length;
-  $("metricEpis").textContent=cache.epis.length;
+  $("metricEpis").textContent=equipmentCatalogSummary?.total??cache.epis.length;
   $("metricFichas").textContent=cache.fichas.length;
   renderDashboard();
   renderConfigSummary();
@@ -343,11 +344,13 @@ async function refreshTrabalhadores(update=true){if(!activeEmpresaId){$("trabalh
 function isWithoutCA(item){return item.tipo==="sem_ca"||item.semCA===true;}
 function equipmentLabel(item){return isWithoutCA(item)?"Sem CA":"CA "+(item.ca||"não informado");}
 function equipmentDescription(item){return [item.nomeCurto||window.JP_FICHA.equipmentName(item)||"Equipamento",item.modelo?"Modelo: "+item.modelo:"",item.tamanho?"Tamanho: "+item.tamanho:""].filter(Boolean).join(" · ");}
+let equipmentCatalogSummary=null;
 function renderEpis(){
-  const search=normalizeSearch($("epiSearch")?.value);const rows=cache.epis.filter(item=>!search||normalizeSearch([item.descricao||item.name,item.fabricante,item.ca,item.modelo,item.tamanho,equipmentLabel(item)].join(" ")).includes(search));
-  $("episList").innerHTML=rows.length?rows.map(e=>itemHtml({...e,nome:e.nomeCurto||window.JP_FICHA.equipmentName(e)},[equipmentLabel(e),e.fabricante,[e.modelo?"Modelo: "+e.modelo:"",e.tamanho?"Tamanho: "+e.tamanho:""].filter(Boolean).join(" · "),isWithoutCA(e)?"":e.validade||e.validity,isWithoutCA(e)?"Equipamento sem Certificado de Aprovação":e.situacao||e.status])).join(""):search?"Nenhum equipamento corresponde à busca.":"Nenhum equipamento cadastrado no catálogo compartilhado.";
+  const total=equipmentCatalogSummary?.total??cache.epis.length;
+  setText('episList',`${total.toLocaleString('pt-BR')} equipamentos disponíveis`);
+  setText('epiCatalogSource',equipmentCatalogSummary?.sourceDate?`Relatório CA de ${window.JP_FICHA.formatDate(equipmentCatalogSummary.sourceDate)} · Compartilhado com todas as empresas`:'Catálogo compartilhado com todas as empresas');
 }
-async function refreshEpis(update=true){const r=await api("/api/epis");ensureSuccess(r,"Não foi possível carregar o catálogo de equipamentos.");cache.epis=alphabetical(asArray(r),e=>e.descricao||e.name);renderEpis();renderEntregaOptions();if(update)await refreshAllSafe();return r;}
+async function refreshEpis(update=true){const r=await api("/api/epis");ensureSuccess(r,"Não foi possível carregar o catálogo de equipamentos.");equipmentCatalogSummary=r.body?.catalogo||null;const retained=cache.epis.filter(e=>e.origemCadastro==='relatorio_ca');cache.epis=alphabetical([...asArray(r),...retained.filter(item=>!asArray(r).some(e=>e.ca===item.ca))],e=>e.descricao||e.name||e.nomeCurto);renderEpis();renderEntregaOptions();if(update)await refreshAllSafe();return r;}
 function renderFichas(){
   const showDeleted=$('showDeletedFichas')?.checked===true;
   const rows=cache.fichas.filter(f=>showDeleted||f.status!=='cancelada');
@@ -403,6 +406,7 @@ function addEntregaItem(){
   }catch(error){handleAppError(error);}
 }
 function updateEquipmentKind(){
+  if(typeof clearExistingEquipment==='function')clearExistingEquipment();
   const without=$("epiSemCa")?.checked===true;
   $("epiCaFields")?.classList.toggle("hidden",without);$("epiCaDetails")?.classList.toggle("hidden",without);$("epiSemCaHelp")?.classList.toggle("hidden",!without);
   ["caInput","epiValidade","epiSituacao"].forEach(id=>{const input=$(id);if(input){input.disabled=without;if(without)input.value="";}});
@@ -702,6 +706,7 @@ async function consultarCA(){
   const ca=$("caInput").value.trim();
   const message=$("caMessage");
   if(!ca){message.className="message warn";message.textContent="Informe o número do CA.";return;}
+  if(typeof checkExistingEquipment==='function'&&await checkExistingEquipment())return;
   ["epiNome","epiDescricao","epiFabricante","epiValidade","epiSituacao"].forEach(id=>$(id).value="");
   message.className="message warn";message.textContent="Consultando CA...";
   try{
@@ -1012,12 +1017,12 @@ async function submitCadastro(event, path, empresaRequired=false) {
       if(body.tipo==="sem_ca"){body.ca="";body.validade="";body.situacao="Sem CA";}
     }
     const result=ensureSuccess(await api(path,{method:"POST",body:JSON.stringify(body)}),"Não foi possível salvar o cadastro.");
-    form.reset();if(path==="/api/epis")updateEquipmentKind();
+    form.reset();if(path==="/api/epis"){updateEquipmentKind();if(result.body?.item?.origemCadastro==='relatorio_ca')cache.epis.push(result.body.item);}
     if(path==="/api/trabalhadores"&&!isMaster()){cancelWorkerEdit();workerListPage=1;$("trabalhadorSearch").value="";$("workerStatusFilter").value="todos";}
     await refreshAll();
     if(generation!==sessionGeneration||(empresaRequired&&company!==companyGeneration))return;
     if(path==="/api/trabalhadores"&&!isMaster()){$("appMessage").className="message success";$("appMessage").textContent="Colaborador cadastrado na sua empresa.";}
-    if(path==="/api/epis"){ $("appMessage").className="message success";$("appMessage").textContent=result.body?.reutilizado?"O equipamento já estava no catálogo compartilhado e está disponível para uso.":"Equipamento incluído no catálogo compartilhado de todas as empresas.";}
+    if(path==="/api/epis"){ $("appMessage").className="message success";$("appMessage").textContent=result.body?.reutilizado?"EPI já cadastrado":"Equipamento incluído no catálogo compartilhado de todas as empresas.";}
   }catch(error){if(generation===sessionGeneration&&(!empresaRequired||company===companyGeneration))handleAppError(error);}finally{if(generation===sessionGeneration&&(!empresaRequired||company===companyGeneration))button.disabled=false;}
 }
 $("empresaForm").addEventListener("submit",submitCompany);
@@ -1051,7 +1056,7 @@ $("entregaAddItem").addEventListener("click",addEntregaItem);
 $("entregaClearItems").addEventListener("click",()=>{if(!entregaSaving){clearEntregaDraft();renderEntregaOptions();}});
 $("entregaTrabalhador").addEventListener("change",()=>{if(!entregaSaving)clearEntregaDraft();});
 $("entregaItemsList").addEventListener("click",event=>{const button=event.target.closest('[data-remove-delivery]');if(!button||entregaSaving)return;const index=Number(button.dataset.removeDelivery);if(!Number.isInteger(index)||index<0||index>=entregaItems.length)return;entregaItems.splice(index,1);if(!entregaItems.length)clearEntregaDraft();renderEntregaOptions(true);});
-$("epiSearch").addEventListener("input",renderEpis);
+$("epiSearch").addEventListener("keydown",event=>{if(event.key==='Enter'){event.preventDefault();openEquipmentCatalog();}});
 ["epiComCa","epiSemCa"].forEach(id=>$(id).addEventListener("change",updateEquipmentKind));
 $("entregaForm").addEventListener("submit",async event=>{
   event.preventDefault();

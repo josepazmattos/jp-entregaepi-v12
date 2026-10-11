@@ -5,6 +5,7 @@ import * as storage from '../db/store.js';
 import { httpError } from '../middleware/auth.js';
 import { createBiometricsService } from '../services/biometria.service.js';
 import { buildFicha } from '../services/ficha.service.js';
+import { reportCatalog } from '../services/epi-report.js';
 
 const router = Router();
 
@@ -29,7 +30,7 @@ router.post('/', async (req, res) => {
   const items = await Promise.all(itens.map(async requested => {
     if (!requested || typeof requested !== 'object' || Array.isArray(requested)) return { requested: {}, epi: null };
     const epiId = textField(requested.epiId, { required: true, field: 'EPI', max: 128 });
-    if (!equipmentReads.has(epiId)) equipmentReads.set(epiId, get('epi', epiId));
+    if (!equipmentReads.has(epiId)) equipmentReads.set(epiId, get('epi', epiId).then(item=>item||reportCatalog.get(epiId)));
     return { requested, epi: await equipmentReads.get(epiId) };
   }));
   const item = await create('ficha', buildFicha({ empresaId, empresa, trabalhador, items, body, actor: req.auth.sub }));

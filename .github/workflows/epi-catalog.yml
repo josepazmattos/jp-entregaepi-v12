@@ -1,0 +1,36 @@
+name: Catálogo compartilhado e CA único
+on:
+  push:
+    branches: [catalogo-relatorioca-20261011]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preservar biometria, certificado e impressão
+        run: git diff --exit-code 4460488ba2748335a673a3e105c5d8a1521412a9 HEAD -- native backend/src/services/jpged-pdf.js backend/src/services/jpged-pki.js backend/src/services/jpged-vault.js backend/src/services/biometria.service.js frontend/EntregaEPI/assets/jpged.js frontend/EntregaEPI/assets/biometria.js
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci --prefix backend --no-audit --no-fund
+      - run: python3 scripts/test-epi-report.py
+      - run: node --test backend/test/epi-report*.test.js backend/test/epis-catalog.test.js backend/test/catalog-concurrency.test.js backend/test/ficha-movimentacoes.test.js backend/test/api.test.js backend/test/auth.test.js backend/test/biometria-login.test.js tests/frontend.test.cjs
+      - run: npm ci --prefix tests --no-audit --no-fund
+      - run: npm run install-browser --prefix tests
+      - run: JP_CATALOG_VISUAL_LOG=1 node tests/epi-catalog-browser.cjs
+      - run: node tests/frontend-startup-browser.cjs
+      - run: node tests/auto-update-browser.cjs
+      - run: node tests/biometria-login-browser.cjs
+      - run: node tests/jpged-browser.cjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: catalogo-epi-${{ github.sha }}
+          path: tests/output/
+          retention-days: 14
