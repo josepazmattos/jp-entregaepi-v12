@@ -11,6 +11,7 @@ const compare=new Intl.Collator('pt-BR',{sensitivity:'base',numeric:true});
 const unavailable=()=>httpError(503,'O catálogo do relatório está indisponível. Os cadastros manuais continuam disponíveis.','EPI_RELATORIO_INDISPONIVEL');
 export function createReportCatalog({filePath=process.env.EPI_REPORT_PATH||new URL('../data/epi-report/manifest.json',import.meta.url)}={}){
   const folder=dirname(filePath instanceof URL?fileURLToPath(filePath):filePath);
+  const required=process.env.EPI_REPORT_REQUIRED==='true'||existsSync(filePath);
   let manifest, records, byId, failure=false;
   const details=new Map();
   function load(){
@@ -50,7 +51,7 @@ export function createReportCatalog({filePath=process.env.EPI_REPORT_PATH||new U
     let imported=[];
     if(origin==='all'||origin==='report'){load();imported=records.filter(item=>!cas.has(item.ca));}
     const candidates=[...(origin==='report'?[]:existing.map(item=>({...item,origemCadastro:'cadastrado',ambiguous:false}))),...imported];
-    const term=fold(q),caQuery=/^(?:ca\s*)?[\d.\s-]+$/i.test(term)?term.replace(/\D/g,''):'';
+    const term=fold(q),caQuery=/^(?:ca\s*)?[\d.\s-]+$/i.test(term)?term.replace(/\D/g,'').replace(/^0+/,''):'';
     const tokens=term.split(/\s+/).filter(Boolean);
     const filtered=candidates.filter(item=>(origin!=='without-ca'||item.semCA)&&(status==='all'||fold(item.situacao)===status)&&(!term||(caQuery?item.ca===caQuery:tokens.every(t=>(item.search||fold([item.nomeCurto,item.ca,item.fabricante,item.modelo,item.tamanho].join(' '))).includes(t)))));
     filtered.sort((a,b)=>compare.compare(a.nomeCurto,b.nomeCurto)||compare.compare(a.ca,b.ca)||compare.compare(a.id,b.id));
@@ -70,7 +71,7 @@ export function createReportCatalog({filePath=process.env.EPI_REPORT_PATH||new U
   function byCA(ca){
     // An installation without the optional report retains manual registration.
     // Once installed, an invalid report must never bypass duplicate protection.
-    if(!existsSync(filePath)&&!failure)return null;
+    if(!required&&!existsSync(filePath))return null;
     load();
     const item=byId.get(manifest.idPrefix+ca);return item&&!item.ambiguous?get(item.id):null;
   }
