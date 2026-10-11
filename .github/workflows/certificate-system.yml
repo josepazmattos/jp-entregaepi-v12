@@ -20,6 +20,8 @@ jobs:
         with:
           node-version: '22'
       - run: python3 -m pip install cryptography==46.0.3
+      - name: Preparar leitura do PDF no teste de assinatura
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y poppler-utils
       - run: npm ci --prefix backend --no-audit --no-fund
       - run: npm ci --prefix certificate-import --ignore-scripts --no-audit --no-fund
       - name: Verificar pacote criptográfico reproduzível
