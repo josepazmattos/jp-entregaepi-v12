@@ -57,7 +57,7 @@ jobs:
       - name: Instalar e reinstalar exatamente o EXE aprovado
         run: |
           java -XshowSettings:properties -version
-          python infra/windows_biometria_smoke.py --source native/biometria/dist --commit "$env:GITHUB_SHA"
+          python infra/windows_runtime_recovery_smoke.py --source native/biometria/dist --commit "$env:GITHUB_SHA"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
