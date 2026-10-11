@@ -32,13 +32,13 @@ with tempfile.TemporaryDirectory(prefix='jp-sdk-isolated-') as temporary:
         manifest = json.loads(archive.read('manifest.json'))
         for entry in manifest['files']:
             name = entry['name']
-            if not name.startswith(('sdk/', 'jre/')):
+            if not name.startswith(('sdk/', 'jre/')) and name != 'driver/Venus.dll':
                 continue
             assert '\\' not in name and '..' not in name and ':' not in name
             content = archive.read(name)
             assert len(content) == entry['size'] and hashlib.sha256(content).hexdigest() == entry['sha256']
             base = home / 'sdk-5.2.0.6' if name.startswith('sdk/') else root / 'Programs/Eclipse Adoptium/jp-biometria-jre8u504b01'
-            target = base / name[4:]
+            target = root / 'driver/Venus.dll' if name == 'driver/Venus.dll' else base / name[4:]
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(content)
     previous = os.environ['LOCALAPPDATA']
@@ -55,6 +55,10 @@ with tempfile.TemporaryDirectory(prefix='jp-sdk-isolated-') as temporary:
             diagnose_sdk(home, supplied / name / 'NBioBSPJNI.jar', name+'-')
         shutil.copyfile(supplied / 'system/NSearch.dll', home / 'sdk-5.2.0.6/Bin/x64/NSearch.dll')
         diagnose_sdk(home, label_prefix='full-system-')
+        # The driver's user-mode DLL is distinct from the USB kernel driver.
+        # The stock INF copies Venus.dll into the Windows system directory.
+        shutil.copyfile(root / 'driver/Venus.dll', home / 'sdk-5.2.0.6/Bin/x64/Venus.dll')
+        diagnose_sdk(home, label_prefix='driver-user-mode-')
         # Compare the documented C initialization entry point to isolate the JNI layer.
         # This does not replace the production API or bypass its validation.
         binary = home / 'sdk-5.2.0.6/Bin/x64'
