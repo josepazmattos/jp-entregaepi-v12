@@ -60,3 +60,17 @@ test('devolução de ativo ou inativo permite assinatura conferida e preserva a 
   }
   assert.deepEqual(await store.get('ficha',f.ficha.id),previous);
 });
+
+
+test('autorização de computadores exige Master, empresa existente e autenticação recente',async()=>{
+ const f=await fixture(),path='/api/biometria/dispositivos/desafio',recent={...claims,auth_time:String(Math.floor(Date.now()/1000))};
+ const client={...recent,'cognito:groups':[], 'custom:empresa_id':f.company.id};
+ assert.equal((await request('POST',path,{name:'PC'},f.company.id,client)).status,403);
+ assert.equal((await request('POST',path,{name:'PC'},f.company.id,claims)).status,401);
+ assert.equal((await request('POST',path,{name:'PC'},'missing',recent)).status,403);
+ const start=await request('POST',path,{name:'PC'},f.company.id,recent);assert.equal(start.status,200);
+ const proof=JSON.stringify(start.body.challenge),body={publicKey,proof,proofSignature:sign('sha256',Buffer.from(proof),pair.privateKey).toString('base64')};
+ assert.equal((await request('POST',path+'/'+start.body.challenge.challengeId,body,f.company.id,recent)).status,200);
+ const list=await request('GET','/api/biometria/dispositivos',null,f.company.id,recent);assert.equal(list.body.items.length,1);assert.equal(JSON.stringify(list.body).includes(publicKey),false);
+ assert.equal((await request('GET','/api/biometria/dispositivos',null,f.company.id,client)).status,403);
+});

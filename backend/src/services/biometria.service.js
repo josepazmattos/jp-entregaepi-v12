@@ -3,6 +3,7 @@ import { httpError } from '../middleware/auth.js';
 import { validateCaptureImage } from './capture-image.js';
 import { workerScope } from './trabalhadores-import.service.js';
 import { documentHash } from './document-integrity.js';
+import {verificationDevice} from './biometria-devices.js';
 
 export const hash = value => createHash('sha256').update(value).digest('hex');
 export const fingerValid = value => typeof value === 'string' && /^(R|L)_(THUMB|INDEX|MIDDLE|RING|LITTLE)$/.test(value);
@@ -29,7 +30,7 @@ function readProof(body, challenge, publicKey) {
 }
 
 export function createBiometricsService(store) {
-  async function challenge({ worker, ficha = null, fingerCode, actor, kind }) {
+  async function challenge({ worker, ficha = null, fingerCode, actor, kind, devicePublicKey }) {
     if (!fingerValid(fingerCode) || !['enroll','verify'].includes(kind)) bad('Selecione o dedo que será utilizado.');
     if (worker.status === 'Inativo' && !(kind === 'verify' && ficha?.tipo === 'Devolução')) bad('O trabalhador está inativo.', 'TRABALHADOR_INATIVO', 409);
     let enrollment;
@@ -38,16 +39,18 @@ export function createBiometricsService(store) {
       enrollment = await store.get('biometria', enrollmentId(worker, fingerCode));
       if (!enrollment || !worker.biometrias?.[fingerCode] || enrollment.id !== worker.biometrias[fingerCode].id) bad('Este dedo não está cadastrado. Cadastre a digital em Trabalhadores antes de assinar.', 'BIOMETRIA_NAO_CADASTRADA', 409);
     }
+    const device=kind==='verify'?await verificationDevice(store,worker.empresaId,devicePublicKey,enrollment.publicKey):null;
     const item = await store.create('biometria_desafio', {
       empresaId: worker.empresaId, trabalhadorId: worker.id, workerVersion: worker._version || 1,
       fichaId: ficha?.id || '', fichaVersion: ficha?._version || 0,
       ...(ficha ? { documentHash: documentHash(ficha) } : {}),
       fingerCode, kind, actor, expiresAtEpoch: Math.floor(Date.now()/1000)+300,
-      enrollmentVersion: enrollment?._version || 0, enrollmentId: enrollment?.id || '', used: false
+      enrollmentVersion: enrollment?._version || 0, enrollmentId: enrollment?.id || '', used: false,
+      ...(device?{verificationKey:device.key,deviceId:device.id,deviceVersion:device.version}:{})
     });
     return { challengeId: item.id, workerId: worker.id, fichaId: item.fichaId, fingerCode, kind,
       ...(item.documentHash ? { documentHash: item.documentHash } : {}),
-      ...(enrollment ? { template: enrollment.template, publicKey: enrollment.publicKey } : {}) };
+      ...(enrollment ? { template: enrollment.template, publicKey: device.key } : {}) };
   }
   async function complete({ body, worker, ficha = null, actor, kind }) {
     const challenge = await store.get('biometria_desafio', body.challengeId);
@@ -62,8 +65,12 @@ export function createBiometricsService(store) {
     if ((worker._version || 1) !== challenge.workerVersion || ficha && ((ficha._version || 1) !== challenge.fichaVersion || !signaturePending(ficha))) bad('O cadastro ou a ficha mudou durante a captura. Atualize e tente novamente.', 'REGISTRO_ALTERADO', 409);
     const id = enrollmentId(worker, challenge.fingerCode);
     const previous = await store.get('biometria', id);
-    const publicKey = kind === 'enroll' ? body.publicKey : previous?.publicKey;
+    const publicKey = kind === 'enroll' ? body.publicKey : challenge.verificationKey||previous?.publicKey;
     if (kind === 'verify' && (!previous || previous._version !== challenge.enrollmentVersion || previous.id !== challenge.enrollmentId)) bad('O cadastro biométrico foi alterado. Inicie novamente.', 'REGISTRO_ALTERADO', 409);
+    if(kind==='verify'){
+      const device=await verificationDevice(store,worker.empresaId,publicKey,previous.publicKey);
+      if(challenge.deviceVersion&&device.version!==challenge.deviceVersion)bad('A autorização do computador mudou. Inicie novamente.','BIOMETRIA_DISPOSITIVO_ALTERADO',409);
+    }
     const proof = readProof(body, challenge, publicKey);
     const template = kind === 'enroll' ? templateText(body.template) : previous.template;
     if (proof.templateHash !== hash(template)) bad('O template não corresponde ao cadastro selecionado.', 'BIOMETRIA_TEMPLATE_DIVERGENTE');
@@ -87,8 +94,14 @@ export function createBiometricsService(store) {
       operations.push({type:'update',entity:'biometria',id,expectedVersion:previous._version,data:{ultimaVerificacao:now}});
     }
     operations.push({type:'update',entity:'biometria_desafio',id:challenge.id,expectedVersion:challenge._version,data:{used:true,proofHash}});
-    const scope=workerScope(worker.empresaId), revision=await store.readScope(scope);
-    await store.transact({scope,expectedRevision:revision,mutationId:`biometria:${challenge.id}`,operations});
+    const scope=workerScope(worker.empresaId);
+    // Retry a changed company revision only. Per-record versions still prevent
+    // stale worker/enrollment/ficha writes and the receipt prevents duplicates.
+    for(let attempt=0;;attempt++){
+      const revision=await store.readScope(scope);
+      try{await store.transact({scope,expectedRevision:revision,mutationId:`biometria:${challenge.id}`,operations});break;}
+      catch(error){if(error.code!=='REGISTRO_ALTERADO'||attempt>=7)throw error;const relevant=await Promise.all(operations.filter(op=>op.type!=='create').map(op=>store.get(op.entity,op.id)));if(relevant.some((item,index)=>!item||item._version!==operations.filter(op=>op.type!=='create')[index].expectedVersion))throw error;await new Promise(resolve=>setTimeout(resolve,10+Math.floor(Math.random()*40)));}
+    }
     return {item:await store.get(kind==='enroll'?'trabalhador':'ficha',kind==='enroll'?worker.id:ficha.id),replayed:false,...(savedBiometric?{biometria:savedBiometric}:{})};
   }
   async function gallery(worker) {

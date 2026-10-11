@@ -34,10 +34,10 @@ async function certificateAgent(action,jobId,context){
     const body=await response.json();assertOperationContext(context);if(!response.ok||body.ok===false)throw new Error(body.message||body.error||'A certificação não foi concluída.');return body;
   }finally{clearTimeout(timer);operationControllers.delete(controller);}
 }
-function authorizeCertificateChange(context){
+function authorizeCertificateChange(context,title='Autorizar alteração do certificado'){
   if(!isMaster())return Promise.reject(new Error('Somente o Master pode alterar certificados.'));
   return new Promise((resolve,reject)=>{
-    const dialog=dialogShell(document,'Autorizar alteração do certificado',jpgedCompanyName()+' · Confirme sua senha de Master.');
+    const dialog=dialogShell(document,title,jpgedCompanyName()+' · Confirme sua senha de Master.');
     dialog.querySelector('.dialog-content').innerHTML='<form><label for="vaultMasterPassword">Senha do Master</label><input id="vaultMasterPassword" type="password" autocomplete="current-password" required><button type="submit" class="btn btn-primary">Autorizar esta alteração</button></form>';
     let done=false;const form=dialog.querySelector('form'),field=dialog.querySelector('input');field.focus();
     dialog.addEventListener('close',()=>{field.value='';if(!done)reject(new Error('Alteração cancelada.'));},{once:true});

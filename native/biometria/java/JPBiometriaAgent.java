@@ -14,7 +14,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 /** Loopback-only bridge. A local private control key is never exposed to browser responses. */
 public final class JPBiometriaAgent implements AutoCloseable {
-    static final String VERSION = "12.10.0-bio1", SERVICE = "JP Biometria Local Java";
+    static final String VERSION = "12.10.0-bio2", SERVICE = "JP Biometria Local Java";
     static final int FIRST_PORT = 8789, LAST_PORT = 8799, MAX_BODY = 16384;
     static final Set<String> WEB_ORIGINS = new HashSet<>(Arrays.asList("https://www.jptreinamentos.com.br", "https://jptreinamentos.com.br"));
     private final HttpServer server;
@@ -61,7 +61,8 @@ public final class JPBiometriaAgent implements AutoCloseable {
         Map<String, Object> out = new LinkedHashMap<>(deviceStatus);
         out.putAll(map("version", VERSION, "service", SERVICE, "agent", "JPBiometria", "buildSha", buildSha,
             "instanceId", instance, "port", port(), "busy", capturing, "checking", probeQueued.get(),
-            "capabilities", map("capture", true, "captureMethod", "POST", "capturePath", "/api/capture", "templates", true, "verify", true,"documentHash",true,"certificates",true)));
+            "biometricPublicKey",biometricProof.publicKey(),
+            "capabilities", map("capture", true, "captureMethod", "POST", "capturePath", "/api/capture", "templates", true, "verify", true,"documentHash",true,"certificates",true,"sharedEnrollment",true)));
         if (capturing) { out.put("message", "Captura em andamento. Aguarde a conclusão."); }
         return out;
     }
@@ -78,11 +79,12 @@ public final class JPBiometriaAgent implements AutoCloseable {
             boolean capturePath = path.equals("/api/capture") || path.equals("/capture");
             boolean verifyPath = path.equals("/api/signature") || path.equals("/verify") || path.equals("/api/enroll");
             boolean certPath = path.equals("/api/certificate/configure") || path.equals("/api/certificate/sign");
-            if (!statusPath && !debugPath && !capturePath && !verifyPath && !certPath) { error(exchange, 404, "NOT_FOUND", "Rota não disponível."); return; }
+            boolean devicePath = path.equals("/api/device/authorize");
+            if (!statusPath && !debugPath && !capturePath && !verifyPath && !certPath && !devicePath) { error(exchange, 404, "NOT_FOUND", "Rota não disponível."); return; }
             if (method.equals("OPTIONS")) {
                 if (origin == null) { error(exchange, 403, "ORIGIN_REQUIRED", "Origem necessária."); return; }
                 String requested = exchange.getRequestHeaders().getFirst("Access-Control-Request-Method");
-                if (requested == null || !(requested.equals("GET") && (statusPath || debugPath) || requested.equals("POST") && (capturePath || verifyPath || certPath))) {
+                if (requested == null || !(requested.equals("GET") && (statusPath || debugPath) || requested.equals("POST") && (capturePath || verifyPath || certPath || devicePath))) {
                     error(exchange, 405, "METHOD_NOT_ALLOWED", "Método não permitido."); return;
                 }
                 String headers = exchange.getRequestHeaders().getFirst("Access-Control-Request-Headers");
@@ -103,6 +105,12 @@ public final class JPBiometriaAgent implements AutoCloseable {
             // Side effects require an explicitly allowed Origin and POST. No image-tag/navigation capture.
             if (!method.equals("POST")) { error(exchange, 405, "METHOD_NOT_ALLOWED", "Use POST para a captura."); return; }
             if (origin == null) { error(exchange, 403, "ORIGIN_REQUIRED", "Abra o teste no aplicativo JP ou no diagnóstico local."); return; }
+            if(devicePath){
+                if(!WEB_ORIGINS.contains(origin)){error(exchange,403,"ORIGIN_NOT_ALLOWED","Autorize o computador no aplicativo autenticado.");return;}
+                String contentType=exchange.getRequestHeaders().getFirst("Content-Type");
+                if(contentType==null||!contentType.split(";",2)[0].trim().equalsIgnoreCase("application/json")){error(exchange,415,"CONTENT_TYPE_REQUIRED","Envie JSON.");return;}
+                json(exchange,200,biometricProof.authorize(Json.object(readBody(exchange))));return;
+            }
             if(certPath){
                 if(!WEB_ORIGINS.contains(origin)){error(exchange,403,"ORIGIN_NOT_ALLOWED","Abra a configuração no aplicativo autenticado.");return;}
                 String contentType=exchange.getRequestHeaders().getFirst("Content-Type");

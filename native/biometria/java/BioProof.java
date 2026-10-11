@@ -19,6 +19,17 @@ final class BioProof {
         }
     }
     String publicKey(){return Base64.getEncoder().encodeToString(key.getPublic().getEncoded());}
+    Map<String,Object> authorize(Map<String,Object> request) throws BioFailure {
+        try {
+            if(!request.keySet().equals(new HashSet<>(Arrays.asList("v","kind","companyId","challengeId","nonce","expiresAtEpoch")))||!(request.get("v") instanceof Number)||((Number)request.get("v")).longValue()!=1||!"device".equals(request.get("kind")))throw new IllegalArgumentException();
+            for(String name:Arrays.asList("companyId","challengeId","nonce"))if(!(request.get(name) instanceof String)||!((String)request.get(name)).matches("[A-Za-z0-9_-]{1,128}"))throw new IllegalArgumentException();
+            if(!(request.get("expiresAtEpoch") instanceof Number))throw new IllegalArgumentException();
+            long expires=((Number)request.get("expiresAtEpoch")).longValue(),now=System.currentTimeMillis()/1000;
+            if(expires<=now||expires>now+600)throw new IllegalArgumentException();
+            String payload=Json.encode(request);Signature signature=Signature.getInstance("SHA256withECDSA");signature.initSign(key.getPrivate());signature.update(payload.getBytes(StandardCharsets.UTF_8));
+            return JPBiometriaAgent.map("ok",true,"publicKey",publicKey(),"proof",payload,"proofSignature",Base64.getEncoder().encodeToString(signature.sign()));
+        } catch(Exception e){throw new BioFailure("DEVICE_AUTHORIZATION_INVALID","A autorização expirou ou é inválida. Inicie novamente pelo Master.",400);}
+    }
     static String hash(byte[] value) throws Exception {StringBuilder out=new StringBuilder();for(byte b:MessageDigest.getInstance("SHA-256").digest(value))out.append(String.format("%02x",b&255));return out.toString();}
     Map<String,Object> attest(Map<String,Object> request,Map<String,Object> result) throws BioFailure {
         try {

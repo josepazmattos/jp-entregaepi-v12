@@ -64,7 +64,8 @@
     const runtimeIssue=runtimeCode?RUNTIME_DIAGNOSTICS[runtimeCode]:null;
     const busy=body.busy===true,checking=body.checking===true;
     const ready=body.ok===true&&captureAvailable&&detected&&!busy&&!checking&&!runtimeIssue;
-    return Object.freeze({port,service:'JP Biometria',version:validVersion?version:'Não informada',recognized:true,
+    const devicePublicKey=body.capabilities?.sharedEnrollment===true&&typeof body.biometricPublicKey==='string'&&body.biometricPublicKey.length<500?body.biometricPublicKey:'';
+    return Object.freeze({port,service:'JP Biometria',version:validVersion?version:'Não informada',recognized:true,devicePublicKey,sharedEnrollmentAvailable:!!devicePublicKey,
       ready,compatible,captureAvailable,certificatesAvailable:body.capabilities?.certificates===true,documentHashAvailable:body.capabilities?.documentHash===true,enrollmentImageAvailable:compatible&&versionAtLeast(version,'12.9.1')&&body.capabilities?.templates===true,verificationAvailable:compatible&&body.capabilities?.verify===true&&body.capabilities?.templates===true,upgradeRequired:!compatible,busy,checking,readerDetected:detected,sdkMissing,
       runtimeCode,runtimeTitle:runtimeIssue?.title||'',runtimeMessage:runtimeIssue?.message||'',
       deviceName:nitgen&&device.length<=80&&/^[\w .()\/-]+$/.test(device)?device:'Leitor NITGEN',
@@ -114,7 +115,7 @@
           const agentCode=safeCode(body?.errorCode||body?.code);
           const error=failure('BIO_HTTP',{httpStatus:response.status,agentCode});
           if(agentCode==='BIOMETRIA_DIVERGENTE')error.message='A digital não corresponde ao cadastro. A ficha continua sem assinatura.';
-          if(agentCode==='BIOMETRIC_DEVICE_DIFFERENT')error.message='Esta digital foi cadastrada em outro computador. Cadastre-a neste computador antes de assinar.';
+          if(agentCode==='BIOMETRIC_DEVICE_DIFFERENT')error.message='Atualize o JP Biometria e solicite ao Master a autorização deste computador. O cadastro da digital no aplicativo será preservado.';
           const known={READER_BUSY:'O leitor está em uso. Aguarde a operação atual e tente novamente.',SDK_API_INCOMPATIBLE:'O SDK instalado não oferece a interface esperada pelo JP Biometria. Confira a instalação do componente Java NITGEN.',SDK_LOAD_FAILED:'Não foi possível carregar o SDK NITGEN. Confira Java e bibliotecas da mesma arquitetura.',READER_NOT_FOUND:'O SDK não localizou o leitor NITGEN. Confira a conexão USB.',CAPTURE_FAILED:'O SDK não concluiu a captura. Feche outros programas que estejam usando o leitor e tente novamente.'};
           if(Object.prototype.hasOwnProperty.call(known,agentCode))error.message=known[agentCode];
           if(/^NITGEN_[0-9]{1,10}$/.test(agentCode||''))error.message='O leitor NITGEN não concluiu a operação. Código: '+agentCode+'. Confira a posição do dedo e feche outros programas de captura antes de tentar novamente.';
@@ -200,7 +201,11 @@
         return body;
       },signal);
     }
-    return Object.freeze({discover,capture,biometric,cancel(){operation?.abort();},clear(){operation?.abort();selected=null;lastDiagnostics=[];},getStatus:()=>selected,getDiagnostics:()=>lastDiagnostics.map(item=>({...item}))});
+    async function authorizeDevice(challenge,{signal}={}){
+      if(!selected?.sharedEnrollmentAvailable)throw new Error('Atualize o JP Biometria para autorizar este computador.');
+      return locked(async operationSignal=>request(selected.port,'/api/device/authorize',operationSignal,8000,8000,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(challenge)}),signal);
+    }
+    return Object.freeze({discover,capture,biometric,authorizeDevice,cancel(){operation?.abort();},clear(){operation?.abort();selected=null;lastDiagnostics=[];},getStatus:()=>selected,getDiagnostics:()=>lastDiagnostics.map(item=>({...item}))});
   }
   function extractImage(body){
     if(!body||body.realFingerImage!==true)throw failure('BIO_IMAGE_MISSING');

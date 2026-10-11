@@ -207,7 +207,7 @@ function finishLogin(authentication,username){
   if(!authentication?.IdToken)throw new Error("O serviço não confirmou a autenticação. Entre novamente.");
   saveAuth(authentication,username);rememberLogin(username);resetFirstAccess();$("password").value="";showApp();
 }
-async function api(path,opts={}){const requestSession=sessionGeneration,requestCompany=companyGeneration;const scoped=/^\/api\/(trabalhadores|fichas|jpged)(\/|$)|^\/api\/empresas\//.test(path);const cfg=window.JP_CONFIG;const auth=getAuth();const headers=Object.assign({},opts.headers||{});if(auth&&auth.idToken)headers.Authorization="Bearer "+auth.idToken;if(activeEmpresaId)headers["x-empresa-id"]=activeEmpresaId;if(opts.body&&!headers["content-type"])headers["content-type"]="application/json";let res;try{res=await fetch(cfg.apiBaseUrl+path,Object.assign({},opts,{headers}));}catch(error){if(requestSession!==sessionGeneration||(scoped&&requestCompany!==companyGeneration))error.code="SESSION_CHANGED";throw error;}const text=await res.text();let body=text;try{body=JSON.parse(text)}catch(e){}if(requestSession!==sessionGeneration||(scoped&&requestCompany!==companyGeneration)){const error=new Error("A sessão ou a empresa mudou durante a consulta.");error.code="SESSION_CHANGED";throw error;}return {status:res.status,body}}
+async function api(path,opts={}){const requestSession=sessionGeneration,requestCompany=companyGeneration;const scoped=/^\/api\/(trabalhadores|fichas|jpged|biometria)(\/|$)|^\/api\/empresas\//.test(path);const cfg=window.JP_CONFIG;const auth=getAuth();const headers=Object.assign({},opts.headers||{});if(auth&&auth.idToken)headers.Authorization="Bearer "+auth.idToken;if(activeEmpresaId)headers["x-empresa-id"]=activeEmpresaId;if(opts.body&&!headers["content-type"])headers["content-type"]="application/json";let res;try{res=await fetch(cfg.apiBaseUrl+path,Object.assign({},opts,{headers}));}catch(error){if(requestSession!==sessionGeneration||(scoped&&requestCompany!==companyGeneration))error.code="SESSION_CHANGED";throw error;}const text=await res.text();let body=text;try{body=JSON.parse(text)}catch(e){}if(requestSession!==sessionGeneration||(scoped&&requestCompany!==companyGeneration)){const error=new Error("A sessão ou a empresa mudou durante a consulta.");error.code="SESSION_CHANGED";throw error;}return {status:res.status,body}}
 function write(data){$("apiOutput").textContent=typeof data==="string"?data:JSON.stringify(data,null,2)}function asArray(resp){return resp&&resp.body&&Array.isArray(resp.body.items)?resp.body.items:[]}function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
 function ensureSuccess(result, fallback="Não foi possível concluir a operação.") {
   if (result.status < 200 || result.status >= 300 || result.body?.ok === false) {
@@ -1110,7 +1110,7 @@ function stopInstallationWatch(){
 }
 function installedVersionReady(status){
   const version=String(status?.version||''),parts=version.split(/[.+-]/).slice(0,3).map(Number);
-  const recent=version==='12.10.0-bio1'||parts[0]>12||(parts[0]===12&&(parts[1]>10||(parts[1]===10&&parts[2]>=1)));
+  const recent=version==='12.10.0-bio2'||parts[0]>12||(parts[0]===12&&(parts[1]>10||(parts[1]===10&&parts[2]>=1)));
   return recent&&status?.ready&&status?.verificationAvailable;
 }
 async function resumeInstallationWatch(){

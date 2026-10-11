@@ -1,0 +1,80 @@
+name: Biometria compartilhada preservando leitor
+on:
+  push:
+    branches: [biometria-compartilhada-20261011]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: '1.27.1'
+          cache: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Preservar código de captura, comparação e driver
+        run: git diff --exit-code e1c164d6ff8fe379c13fa9f9c273a7282641f475 -- native/biometria/java/NitgenReader.java native/biometria/java/BioReader.java native/biometria/java/RuntimeProbe.java native/biometria/java/CertificateBridge.java native/biometria/certificates.ps1 native/biometria/sdk_search.go native/biometria/runtime_probe.go native/setup-completo
+      - run: python native/biometria/test_native.py
+      - run: python native/biometria/build.py --output native/biometria/dist --build-sha "$GITHUB_SHA"
+      - run: python -m pip install cryptography==46.0.3
+      - run: sudo apt-get update && sudo apt-get install --no-install-recommends -y poppler-utils
+      - run: npm ci --prefix backend --no-audit --no-fund
+      - run: node --test backend/test/biometria-devices.test.js backend/test/ficha-capture-api.test.js backend/test/jpged-*.test.js backend/test/auth.test.js tests/biometria.test.cjs
+      - run: python -m unittest discover -s infra -p test_biometria_release.py
+      - run: npm ci --prefix tests --no-audit --no-fund
+      - run: npm --prefix tests run install-browser
+      - run: node tests/frontend-startup-browser.cjs
+      - run: node tests/operations-browser.cjs
+      - run: node tests/jpged-browser.cjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: biometria-compartilhada-testes-${{ github.sha }}
+          path: |
+            tests/output/startup/
+            tests/output/operations/
+            tests/output/jpged/
+          retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: biometria-compartilhada-${{ github.sha }}
+          path: native/biometria/dist/*
+          if-no-files-found: error
+          retention-days: 14
+  windows:
+    runs-on: windows-latest
+    needs: validate
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: biometria-compartilhada-${{ github.sha }}
+          path: native/biometria/dist
+      - name: Instalar e reinstalar exatamente o EXE aprovado
+        run: |
+          java -XshowSettings:properties -version
+          python infra/windows_runtime_recovery_smoke.py --source native/biometria/dist --commit "$env:GITHUB_SHA"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: biometria-windows-${{ github.sha }}
+          path: .deploy/windows-biometria-report.json
