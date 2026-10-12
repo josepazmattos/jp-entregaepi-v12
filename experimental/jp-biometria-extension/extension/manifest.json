@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "JP Biometria · Piloto",
+  "short_name": "JP Biometria",
+  "version": "0.1.0",
+  "description": "Verifica o agente JP existente e testa o leitor NITGEN. Piloto sem acesso a certificados.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArODHcfPfZqBaTt83vnr4dQ5jtzGrB97PFMbOvk0bo0DTB8U3ZD+DjtHS9NYh9hlGe+Y+1Exv2Sh95yOipZomhEL+W7U17x4ol7CFcqiuDZ5J64mR6yBi00hCeRx08eX7cemlVcQyDkIIB1XxCwWufIeWOzQXItp2LNVsG1KqoNtagu4c16jCWrPiFruut06SWeTYAr/Z2BUTWB5C1YxKVTBXIeu66i5TygVBIBBRN3NABmlzIO2rgWal41OFqKwZOk0X8PODADEjeGLUh6CcbQAri5bieIkI37fROByXAijB6J/izCEgfhjAFC+NfFijMeP5P6RMBFjfvM/hBXVr9QIDAQAB",
+  "permissions": [
+    "nativeMessaging"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "JP Biometria"
+  },
+  "icons": {
+    "16": "icons/jp-16.png",
+    "32": "icons/jp-32.png",
+    "48": "icons/jp-48.png",
+    "128": "icons/jp-128.png"
+  },
+  "externally_connectable": {
+    "matches": [
+      "https://www.jptreinamentos.com.br/*",
+      "https://jptreinamentos.com.br/*"
+    ]
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'none'; img-src 'self' data:; base-uri 'none'; form-action 'none'"
+  }
+}

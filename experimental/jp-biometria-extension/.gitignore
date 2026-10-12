@@ -1,0 +1,5 @@
+dist/
+test-output/
+connector/jp-biometria-extension
+connector/*.exe
+node_modules/

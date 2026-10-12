@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>JP Biometria</title><link rel="stylesheet" href="style.css"></head>
+<body class="popup">
+  <header><img src="icons/jp-48.png" width="42" height="42" alt="JP"><div><strong>JP Biometria</strong><span>Conexão com seu leitor</span></div><b class="badge">PILOTO</b></header>
+  <main>
+    <section class="status" id="status" data-tone="neutral" aria-live="polite" aria-atomic="true">
+      <div class="status-top"><span class="light" aria-hidden="true"></span><span id="status-label">CONEXÃO LOCAL</span></div>
+      <h1 id="status-title">Vamos verificar seu leitor</h1><p id="status-detail">Confira a conexão antes de iniciar uma entrega.</p>
+    </section>
+    <div class="steps"><span><i>1</i> Extensão</span><span><i>2</i> Conector</span><span><i>3</i> Leitor</span></div>
+    <button class="primary" id="verify">Verificar leitor <span aria-hidden="true">↻</span></button>
+    <section class="next"><strong>Próximo passo</strong><p id="next-step">Clique em Verificar leitor.</p></section>
+    <details id="test-panel"><summary>Testar captura <span>Opcional</span></summary>
+      <div class="test-content"><label for="finger">Dedo para o teste</label><select id="finger">
+        <optgroup label="Mão direita"><option value="R_INDEX">Indicador direito</option><option value="R_THUMB">Polegar direito</option><option value="R_MIDDLE">Médio direito</option><option value="R_RING">Anelar direito</option><option value="R_LITTLE">Mínimo direito</option></optgroup>
+        <optgroup label="Mão esquerda"><option value="L_INDEX">Indicador esquerdo</option><option value="L_THUMB">Polegar esquerdo</option><option value="L_MIDDLE">Médio esquerdo</option><option value="L_RING">Anelar esquerdo</option><option value="L_LITTLE">Mínimo esquerdo</option></optgroup>
+      </select><p class="hint">A imagem aparece somente neste painel, temporariamente. Nenhum trabalhador será cadastrado.</p><button id="capture" class="secondary" disabled>Iniciar captura de teste</button>
+      <figure id="image-box" hidden><img id="finger-image" alt="Imagem recebida da captura de teste"><figcaption>Teste de leitura · não comprova identidade</figcaption><button id="clear" class="text-button">Limpar imagem</button></figure></div>
+    </details>
+    <a class="app-link" href="https://www.jptreinamentos.com.br/EntregaEPI/" target="_blank" rel="noopener noreferrer">Abrir aplicativo <span aria-hidden="true">↗</span></a>
+    <footer><a href="guide.html" target="_blank" rel="noopener">Ajuda para instalar</a><small id="version">Piloto 0.1.0</small></footer>
+  </main>
+  <script type="module" src="popup.js"></script>
+</body></html>

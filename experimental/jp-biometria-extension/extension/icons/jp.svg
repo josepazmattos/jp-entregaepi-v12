@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">JP EntregaEPI</title>
+  <rect width="128" height="128" rx="22" fill="#103b2d"/>
+  <g transform="translate(7.2 20.8) scale(.8)">
+    <path fill="#8ce0b0" d="M24 12h42v67L51 96H16L2 81V66h22v8l4 4h14l3-4V32H24z"/>
+    <path fill="#fff" fill-rule="evenodd" d="M76 12h49l15 15v33l-15 15H99v21H76zm23 21v21h18l3-3V36l-3-3z"/>
+  </g>
+</svg>

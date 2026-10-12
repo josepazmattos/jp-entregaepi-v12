@@ -1,0 +1,26 @@
+export const STATES = {
+  INITIAL: ['neutral', 'Vamos verificar seu leitor', 'Confira a conexão antes de iniciar uma entrega.', 'Clique em Verificar leitor.'],
+  WORKING: ['neutral', 'Verificando conexão…', 'Buscando o conector e o agente JP neste computador.', 'Aguarde alguns segundos.'],
+  CAPTURING: ['neutral', 'Encoste o dedo no leitor', 'Mantenha o dedo apoiado até a conclusão da captura.', 'Aguarde até 25 segundos. Não abra outro teste durante a leitura.'],
+  READY: ['success', 'Leitor pronto para teste', 'O agente JP informou que o leitor está disponível.', 'Você pode testar a captura ou abrir o aplicativo.'],
+  CAPTURE_OK: ['success', 'Captura de teste recebida', 'A imagem foi recebida do agente JP.', 'Este teste não compara a digital com um trabalhador nem assina uma ficha.'],
+  CONNECTOR_MISSING: ['warning', 'Instale o conector JP', 'A extensão está ativa, mas o conector não foi encontrado.', 'Execute JP-Biometria-Conector-Piloto.exe neste usuário do Windows e verifique novamente.'],
+  CONNECTOR_BLOCKED: ['warning', 'Conector bloqueado', 'O navegador não permitiu a comunicação local.', 'Peça ao suporte da empresa para conferir a política de extensões e o ID deste piloto.'],
+  CONNECTOR_ERROR: ['warning', 'Não foi possível falar com o conector', 'A comunicação foi interrompida antes da resposta.', 'Feche o painel, abra novamente e verifique. Se persistir, reinstale somente o conector piloto.'],
+  AGENT_SETUP_REQUIRED: ['warning', 'Agente JP não configurado', 'A instalação JP existente não foi localizada neste usuário do Windows.', 'Use o instalador JP já homologado pela equipe. Este piloto não instala SDK, Java ou driver.'],
+  AGENT_OFFLINE: ['warning', 'Abra o JP Biometria', 'O agente instalado não respondeu à verificação local.', 'Abra o JP Biometria neste computador e clique em Verificar leitor.'],
+  MULTIPLE_AGENTS: ['warning', 'Mais de um agente respondeu', 'Foram encontradas duas ou mais instâncias JP autenticadas.', 'Conclua qualquer leitura em andamento e peça ao suporte para manter apenas uma instância ativa.'],
+  AGENT_CHANGED: ['warning', 'O agente está mudando de estado', 'A conexão mudou durante a verificação.', 'Aguarde a inicialização do JP Biometria e verifique novamente.'],
+  SDK_NOT_FOUND: ['warning', 'Integração NITGEN ausente', 'O agente respondeu, mas não encontrou o SDK necessário.', 'O suporte JP deve conferir o componente NITGEN do agente. Reinstalar apenas a extensão não resolve essa etapa.'],
+  SDK_UNAVAILABLE: ['warning', 'Integração NITGEN indisponível', 'O agente não conseguiu carregar a integração do leitor.', 'Peça ao suporte JP para conferir o SDK e a compatibilidade do agente instalado.'],
+  READER_NOT_READY: ['warning', 'Leitor ainda não está pronto', 'O agente não confirmou um dispositivo disponível.', 'Conecte o Hamster DX. Se continuar assim, confira manualmente o driver no diagnóstico NITGEN e feche o diagnóstico antes de tentar de novo.'],
+  READER_BUSY: ['warning', 'Leitor em uso', 'Há uma captura ou verificação em andamento.', 'Conclua a operação atual. Feche o diagnóstico NITGEN se ele estiver utilizando o leitor.'],
+  CHECKING: ['neutral', 'Leitor em verificação', 'O agente ainda está conferindo o dispositivo.', 'Aguarde alguns segundos e clique em Verificar leitor.'],
+  AGENT_INCOMPATIBLE: ['warning', 'Agente sem captura disponível', 'O agente respondeu, mas não confirmou o recurso necessário.', 'Peça ao suporte JP para conferir a versão instalada antes de prosseguir.'],
+  CAPTURE_TIMEOUT: ['warning', 'Tempo de leitura encerrado', 'A captura não terminou dentro do tempo previsto.', 'Retire o dedo, aguarde o leitor ficar livre e faça um novo teste.'],
+  CAPTURE_FAILED: ['warning', 'Captura não concluída', 'O leitor não devolveu uma captura válida.', 'Verifique o leitor e tente novamente com o dedo limpo e bem apoiado.'],
+  IMAGE_MISSING: ['warning', 'Imagem não confirmada', 'Não foi recebida uma imagem PNG válida da captura.', 'Peça ao suporte JP para verificar o retorno de imagem do agente. Este resultado não comprova uma leitura.'],
+  INVALID_REQUEST: ['warning', 'Solicitação não permitida', 'O pedido não faz parte das funções deste piloto.', 'Use os botões deste painel.'],
+};
+
+export function stateFor(code) { return STATES[code] || STATES.CONNECTOR_ERROR; }
