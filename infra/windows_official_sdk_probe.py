@@ -20,7 +20,7 @@ def api(path, body=None):
 
 def receive(root):
     key=rsa.generate_private_key(public_exponent=65537,key_size=3072)
-    public=key.public_key().public_bytes(serialization.Encoding.PEM,serialization.PublicFormat.SubjectPublicKey)
+    public=key.public_key().public_bytes(serialization.Encoding.PEM,serialization.PublicFormat.SubjectPublicKeyInfo)
     folder=".ci-inputs/"+os.environ["GITHUB_RUN_ID"]
     api("/contents/"+folder+"/public-key.pem",{"branch":BRANCH,"message":"Publish disposable SDK test public key","content":base64.b64encode(public).decode()})
     print("Waiting for encrypted SDK test input",flush=True)
@@ -89,6 +89,29 @@ def main():
             for parent in [Path(os.environ.get("ProgramFiles(x86)","C:/Program Files (x86)")),Path(os.environ["ProgramFiles"])]:
                 for folder in parent.glob("*NITGEN*"):
                     report.setdefault("installedFiles",[]).extend(str(p) for p in folder.rglob("NBioBSP.dll"))
+
+            probe = root/"init.ps1"
+            probe.write_text(r"""$ErrorActionPreference='Stop'
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class OfficialSDK {
+ [DllImport("NBioBSP.dll", CallingConvention=CallingConvention.Winapi)] public static extern uint NBioAPI_Init(out UIntPtr handle);
+ [DllImport("NBioBSP.dll", CallingConvention=CallingConvention.Winapi)] public static extern uint NBioAPI_Terminate(UIntPtr handle);
+}
+'@
+$handle=[UIntPtr]::Zero
+$code=[OfficialSDK]::NBioAPI_Init([ref]$handle)
+@{architecture=([IntPtr]::Size*8);initialize=$code;readerTested=$false}|ConvertTo-Json -Compress
+if($code -eq 0){[OfficialSDK]::NBioAPI_Terminate($handle)|Out-Null}
+""",encoding="utf-8")
+            for arch,folder in [("x86","SysWOW64"),("amd64","System32")]:
+                ps=Path(os.environ["SystemRoot"])/folder/"WindowsPowerShell/v1.0/powershell.exe"
+                result=subprocess.run([str(ps),"-NoProfile","-NonInteractive","-File",str(probe)],capture_output=True,text=True,timeout=30)
+                try: status=json.loads(result.stdout.strip())
+                except ValueError: status={"initialize":None,"processCode":result.returncode}
+                report.setdefault("initialization",{})[arch]=status
+            report["sdkInitialized"]=all(v.get("initialize")==0 for v in report["initialization"].values())
             # Save setup metadata, never the vendor serial or biometric data.
             report["setupCompleted"]=process.poll()==0 and response.exists()
         finally:
