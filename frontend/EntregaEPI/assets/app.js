@@ -136,16 +136,30 @@ function resetDiagnostics(){
   setText("apiOutput","Nenhuma verificação realizada nesta sessão.");setText("bioOutput","Nenhuma verificação realizada nesta sessão.");
   ["healthTestButton","caTestButton","bioTestButton"].forEach(id=>{if($(id))$(id).disabled=false;});
 }
+// Desktop space preference affects presentation only; mobile remains a drawer.
+const sidebarPreferenceKey="jp-epi-sidebar-collapsed";
+let desktopSidebarCollapsed=false;
+try{desktopSidebarCollapsed=localStorage.getItem(sidebarPreferenceKey)==="1";}catch{}
 function setSidebarOpen(open,returnFocus=false){
-  const mobile=navigationMedia?.matches===true,expanded=mobile&&open;
-  $("appShell").classList.toggle("sidebar-open",expanded);
-  document.body.classList.toggle("menu-open",expanded);
+  const mobile=navigationMedia?.matches===true,drawerOpen=mobile&&Boolean(open);
+  const expanded=mobile?drawerOpen:!desktopSidebarCollapsed;
+  $("appShell").classList.toggle("sidebar-open",drawerOpen);
+  $("appShell").classList.toggle("sidebar-collapsed",!mobile&&desktopSidebarCollapsed);
+  document.body.classList.toggle("menu-open",drawerOpen);
   const sidebar=$("primarySidebar"),main=$("mainContent"),toggle=$("menuToggle");
-  if(sidebar)sidebar.inert=mobile&&!expanded;
-  if(main)main.inert=expanded;
-  if(toggle){toggle.setAttribute("aria-expanded",String(expanded));toggle.setAttribute("aria-label",expanded?"Fechar menu":"Abrir menu");}
-  if(expanded)$("sidebarClose")?.focus();
-  else if(returnFocus&&mobile)toggle?.focus();
+  if(sidebar)sidebar.inert=!expanded;
+  if(main)main.inert=drawerOpen;
+  const label=mobile?(expanded?"Fechar menu":"Abrir menu"):(expanded?"Ocultar menu":"Mostrar menu");
+  if(toggle){toggle.setAttribute("aria-expanded",String(expanded));toggle.setAttribute("aria-label",label);toggle.setAttribute("title",label);}
+  setText("menuToggleLabel",label);
+  if(drawerOpen)$("sidebarClose")?.focus();
+  else if(returnFocus)toggle?.focus();
+}
+function toggleSidebar(){
+  if(navigationMedia?.matches===true){setSidebarOpen(!$("appShell").classList.contains("sidebar-open"),true);return;}
+  desktopSidebarCollapsed=!desktopSidebarCollapsed;
+  try{localStorage.setItem(sidebarPreferenceKey,desktopSidebarCollapsed?"1":"0");}catch{}
+  setSidebarOpen(false,true);
 }
 function activateScreen(screen,focusContent=true){
   if(!Object.prototype.hasOwnProperty.call(screenLabels,screen))return;
@@ -1097,14 +1111,14 @@ $("entregaForm").addEventListener("submit",async event=>{
 });
 $("logoutButton").addEventListener("click",()=>{sessionStorage.removeItem(tokenKey);showLogin(true)});$("refreshButton").addEventListener("click",()=>refreshAllSafe());
 document.querySelectorAll(".nav button").forEach(btn=>btn.addEventListener("click",()=>activateScreen(btn.dataset.screen)));
-$("menuToggle")?.addEventListener("click",()=>setSidebarOpen(!$("appShell").classList.contains("sidebar-open"),true));
+$("menuToggle")?.addEventListener("click",toggleSidebar);
 $("sidebarClose")?.addEventListener("click",()=>setSidebarOpen(false,true));
 $("sidebarBackdrop")?.addEventListener("click",()=>setSidebarOpen(false,true));
 document.addEventListener("keydown",event=>{
   if(!$("appShell").classList.contains("sidebar-open"))return;
   if(event.key==="Escape"){event.preventDefault();setSidebarOpen(false,true);return;}
   if(event.key==="Tab"){
-    const controls=Array.from($("primarySidebar").querySelectorAll('button:not([disabled]),a[href],select:not([disabled]),input:not([disabled])'));
+    const controls=Array.from($("primarySidebar").querySelectorAll('button:not([disabled]),a[href],select:not([disabled]),input:not([disabled])')).filter(node=>node.getClientRects().length>0);
     const first=controls[0],last=controls[controls.length-1];
     if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
     else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
