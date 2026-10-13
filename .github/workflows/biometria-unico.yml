@@ -1,0 +1,29 @@
+name: Instalador unico - validacao SDK oficial
+on:
+  push:
+    branches: [instalador-unico-20261013]
+    paths:
+      - '.github/workflows/biometria-unico.yml'
+      - 'infra/windows_official_sdk_probe.py'
+      - 'native/setup-unico/**'
+permissions:
+  contents: write
+jobs:
+  official-sdk:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: python -m pip install cryptography==46.0.3 pywinauto==0.6.9
+      - run: python infra/windows_official_sdk_probe.py
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: sdk-official-report
+          path: .deploy/sdk-probe/*
+          if-no-files-found: error
+          retention-days: 7
