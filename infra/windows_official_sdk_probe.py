@@ -35,15 +35,10 @@ def receive(root):
     else:raise RuntimeError("SDK_INPUT_TIMEOUT")
     symmetric=key.decrypt(base64.b64decode(envelope["key"]),padding.OAEP(mgf=padding.MGF1(hashes.SHA256()),algorithm=hashes.SHA256(),label=None))
     private=json.loads(AESGCM(symmetric).decrypt(base64.b64decode(envelope["nonce"]),base64.b64decode(envelope["data"]),os.environ["GITHUB_RUN_ID"].encode()))
-    helper=root/"library_file_transfer.py";helper.write_text(private["helper"],encoding="utf-8")
-    archive=root/"sdk.zip"
-    transfer=subprocess.run([os.sys.executable,str(helper),"materialize",str(archive)],input=json.dumps(private["transfer"]).encode(),capture_output=True,timeout=180)
-    if transfer.returncode:
-        safe=transfer.stderr.decode(errors="replace")
-        safe=re.sub(r"https?://[^\s]+","[URL]",safe)
-        for v in private["transfer"].get("headers",{}).values():safe=safe.replace(str(v),"[HEADER]")
-        raise RuntimeError("SDK_PRIVATE_TRANSFER_FAILED: "+safe[-1800:])
-    assert hashlib.sha256(archive.read_bytes()).hexdigest()==SDK_SHA,"SDK_HASH_MISMATCH"
+    with urllib.request.urlopen(private["url"],timeout=120) as r: encrypted=r.read(400*1024*1024)
+    data=AESGCM(base64.b64decode(private["key"])).decrypt(base64.b64decode(private["nonce"]),encrypted,b"jp-sdk-windows-test")
+    assert hashlib.sha256(data).hexdigest()==SDK_SHA,"SDK_HASH_MISMATCH"
+    archive=root/"sdk.zip";archive.write_bytes(data)
     with zipfile.ZipFile(archive) as z:
         exe=next(n for n in z.namelist() if n.endswith("eNBioBSP_v5.2.0.6.exe"))
         serial=next(n for n in z.namelist() if n.endswith("SERIAL.txt"))
