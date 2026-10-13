@@ -18,7 +18,7 @@ def api(path, body=None):
         method="PUT" if body is not None else "GET")
     with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)
 
-def receive(root):
+def receive(root,extras=None):
     key=rsa.generate_private_key(public_exponent=65537,key_size=3072)
     public=key.public_key().public_bytes(serialization.Encoding.PEM,serialization.PublicFormat.SubjectPublicKeyInfo)
     folder=".ci-inputs/"+os.environ["GITHUB_RUN_ID"]
@@ -35,6 +35,7 @@ def receive(root):
     else:raise RuntimeError("SDK_INPUT_TIMEOUT")
     symmetric=key.decrypt(base64.b64decode(envelope["key"]),padding.OAEP(mgf=padding.MGF1(hashes.SHA256()),algorithm=hashes.SHA256(),label=None))
     private=json.loads(AESGCM(symmetric).decrypt(base64.b64decode(envelope["nonce"]),base64.b64decode(envelope["data"]),os.environ["GITHUB_RUN_ID"].encode()))
+    if extras is not None:extras.update(private)
     with urllib.request.urlopen(private["url"],timeout=120) as r: encrypted=r.read(400*1024*1024)
     data=AESGCM(base64.b64decode(private["key"])).decrypt(base64.b64decode(private["nonce"]),encrypted,b"jp-sdk-windows-test")
     assert hashlib.sha256(data).hexdigest()==SDK_SHA,"SDK_HASH_MISMATCH"
@@ -48,11 +49,11 @@ def receive(root):
     print("::add-mask::"+license_code,flush=True)
     return setup,license_code,private.get("returnPublicKey")
 
-def export_registered_runtime(out, return_key, report):
+def export_registered_runtime(out, return_key, report, search_roots=None):
     import io, struct
     entries={}
-    for parent in [Path(os.environ.get("ProgramFiles(x86)","C:/Program Files (x86)")),Path(os.environ["ProgramFiles"])]:
-        for folder in parent.glob("*NITGEN*"):
+    for parent in (search_roots or [Path(os.environ.get("ProgramFiles(x86)","C:/Program Files (x86)")),Path(os.environ["ProgramFiles"])]):
+        for folder in ([parent] if search_roots else parent.glob("*NITGEN*")):
             for jar in folder.rglob("NBioBSPJNI.jar"):
                 sdk=jar.parent.parent
                 for jni in sdk.rglob("NBioBSPJNI.dll"):
@@ -94,13 +95,13 @@ def main():
                 windows=[w for w in Desktop(backend="win32").windows() if w.process_id() in owned or re.search(r"(eNBio|NBioBSP|InstallShield|Visual C\+\+)",w.window_text(),re.I)]
                 for window in windows:
                     children=window.descendants()
-                    labels=[c.window_text().replace(serial,"[REDACTED]") for c in children if c.class_name()!="Edit"]
+                    labels=[c.window_text().replace(serial,"[REDACTED]") for c in children if "edit" not in c.class_name().lower()]
                     signature=repr(labels)
                     if signature not in seen:
-                        seen.add(signature);report["events"].append({"title":window.window_text(),"class":window.class_name(),"labels":labels})
+                        seen.add(signature);report["events"].append({"title":window.window_text(),"class":window.class_name(),"labels":labels,"controls":[{"class":c.class_name(),"id":c.control_id(),"enabled":c.is_enabled(),"visible":c.is_visible(),"length":len(c.window_text())} for c in children]})
                         print(json.dumps(report["events"][-1]),flush=True)
                     if time.monotonic()-last_click<1.5:continue
-                    edits=[c for c in children if c.class_name()=="Edit" and c.is_visible() and c.is_enabled()]
+                    edits=[c for c in children if "edit" in c.class_name().lower() and c.is_visible() and c.is_enabled()]
                     if any("Serial" in x or "License Code" in x for x in labels) and len(edits)>=3:
                         for control,value in zip(edits,["JP Biometria","Hokinet",serial]):control.set_edit_text(value)
                     buttons=[c for c in children if c.class_name()=="Button" and c.is_visible() and c.is_enabled()]
