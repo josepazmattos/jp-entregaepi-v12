@@ -1,0 +1,20 @@
+{
+  "version": "12.10.0-unico1",
+  "agentVersion": "12.10.0-bio2",
+  "buildSha": "7ec1d3a3388257f818b88e322d2e7487cbfbb255",
+  "filename": "JP-Biometria-Instalador-Unico.exe",
+  "sha256": "d8773cc34e0bcb4cbdb4a3120f7654cdcff7707a4f005343106d0625c48d4d3b",
+  "sizeBytes": 58881714,
+  "sdkRegistrationVerified": true,
+  "sourceRegisteredSDK": "18648c6d32c8e00f82347722c23996832d8dd3ec45f48f93993541725d17ae34",
+  "driverIncluded": true,
+  "javaIncluded": true,
+  "physicalReaderTested": false,
+  "windowsInstallerTestsPassed": true,
+  "testWorkflowRun": 38464050840,
+  "testEnvironments": [
+    "Windows Server 2022",
+    "Windows Server 2025"
+  ],
+  "clientWindowsEditionsTested": false
+}

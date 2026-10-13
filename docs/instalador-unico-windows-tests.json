@@ -1,0 +1,71 @@
+{
+  "run": 38464050840,
+  "reports": [
+    {
+      "physicalReaderTested": false,
+      "clientWindowsEditionsTested": false,
+      "checks": [
+        {
+          "case": "corrupt-package",
+          "rejectedBeforeInstall": true
+        },
+        {
+          "case": "clean-install",
+          "sdkInitialized": true,
+          "identityPreserved": true,
+          "ownedInstances": 1
+        },
+        {
+          "case": "reinstall",
+          "sdkInitialized": true,
+          "identityPreserved": true,
+          "ownedInstances": 1
+        },
+        {
+          "case": "repair-legacy-sdk",
+          "sdkInitialized": true,
+          "identityPreserved": true,
+          "ownedInstances": 1
+        }
+      ],
+      "installerChecksPassed": true,
+      "sdkInitialized": true,
+      "buildSha": "7ec1d3a3388257f818b88e322d2e7487cbfbb255",
+      "sha256": "d8773cc34e0bcb4cbdb4a3120f7654cdcff7707a4f005343106d0625c48d4d3b",
+      "os": "windows-2025"
+    },
+    {
+      "physicalReaderTested": false,
+      "clientWindowsEditionsTested": false,
+      "checks": [
+        {
+          "case": "corrupt-package",
+          "rejectedBeforeInstall": true
+        },
+        {
+          "case": "clean-install",
+          "sdkInitialized": true,
+          "identityPreserved": true,
+          "ownedInstances": 1
+        },
+        {
+          "case": "reinstall",
+          "sdkInitialized": true,
+          "identityPreserved": true,
+          "ownedInstances": 1
+        },
+        {
+          "case": "repair-legacy-sdk",
+          "sdkInitialized": true,
+          "identityPreserved": true,
+          "ownedInstances": 1
+        }
+      ],
+      "installerChecksPassed": true,
+      "sdkInitialized": true,
+      "buildSha": "7ec1d3a3388257f818b88e322d2e7487cbfbb255",
+      "sha256": "d8773cc34e0bcb4cbdb4a3120f7654cdcff7707a4f005343106d0625c48d4d3b",
+      "os": "windows-2022"
+    }
+  ]
+}
