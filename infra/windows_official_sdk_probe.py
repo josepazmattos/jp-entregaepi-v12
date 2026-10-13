@@ -103,7 +103,7 @@ def main():
                     if time.monotonic()-last_click<1.5:continue
                     edits=[c for c in children if "edit" in c.class_name().lower() and c.is_visible() and c.is_enabled()]
                     if any("Serial" in x or "License Code" in x for x in labels) and len(edits)>=3:
-                        for control,value in zip(edits,["JP Biometria","Hokinet",serial]):control.set_edit_text(value)
+                        for control,value in zip(edits,["JP Biometria","Hokinet"]+serial.split("-")):control.set_edit_text(value)
                     buttons=[c for c in children if c.class_name()=="Button" and c.is_visible() and c.is_enabled()]
                     for label in ("Next >","Next","Yes","I accept the terms of the license agreement","Install","Finish","OK"):
                         found=next((b for b in buttons if b.window_text().replace("&","").strip()==label),None)

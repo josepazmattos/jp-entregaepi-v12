@@ -43,7 +43,7 @@ def main():
                             labels=[c.window_text().replace(serial,'[REDACTED]') for c in children if c.class_name()!='Edit']
                             sig=repr(labels)
                             if sig not in seen:
-                                seen.add(sig);event={'architecture':arch,'title':window.window_text(),'labels':labels}
+                                seen.add(sig);event={'architecture':arch,'title':window.window_text(),'labels':labels,'fields':[{'id':c.control_id(),'length':len(c.window_text())} for c in children if c.class_name()=='Edit']}
                                 report['events'].append(event);print(json.dumps(event),flush=True)
                             edits=[c for c in children if c.class_name()=='Edit' and c.is_visible()]
                             buttons=[c for c in children if c.class_name()=='Button' and c.is_enabled() and c.is_visible()]
@@ -51,8 +51,9 @@ def main():
                             if sign is not None and not signed:
                                 default=next((b for b in buttons if 'Use default path' in b.window_text()),None)
                                 if default is not None and default.get_check_state():default.uncheck()
-                                assert len(edits)==2,'REGISTRATION_FIELDS_UNEXPECTED'
-                                edits[0].set_edit_text(str(binary));edits[1].set_edit_text(serial)
+                                parts=serial.split('-')
+                                assert len(edits)==1+len(parts),'REGISTRATION_FIELDS_UNEXPECTED'
+                                for control,value in zip(edits,[str(binary)]+parts):control.set_edit_text(value)
                                 sign.click();signed=True
                             elif sign is None:
                                 ok=next((b for b in buttons if b.window_text().replace('&','').strip()=='OK'),None)
