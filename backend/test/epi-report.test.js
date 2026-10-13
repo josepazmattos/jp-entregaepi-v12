@@ -33,6 +33,33 @@ test('hash incorreto bloqueia importação e não permite ignorar a regra de CA 
   }finally{broken.cleanup();}
 });
 test('filtros inválidos e caminhos maliciosos são recusados',()=>{
-  for(const filter of [{page:0},{q:['100']},{origin:'inventada'},{status:'aprovado'}])assert.throws(()=>catalog.search([],filter));
+  for(const filter of [{page:0},{q:['100']},{origin:'inventada'},{status:'aprovado'},{field:'invalid'},{field:['name']}])assert.throws(()=>catalog.search([],filter));
   const bad=reportFixture();try{bad.manifest.index.file='../index.json.gz';writeFileSync(bad.filePath,JSON.stringify(bad.manifest));assert.throws(()=>createReportCatalog({filePath:bad.filePath}).metadata());}finally{bad.cleanup();}
+});
+test('busca por nome não confunde luvas com botas do fabricante Marluvas',()=>{
+  const fixture=reportFixture({extraRecords:[
+    {ca:'700',nomeCurto:'BOTA DE CANO LONGO',fabricante:'MARLUVAS EQUIPAMENTOS DE SEGURANÇA',modelo:'BOTA 50C32'},
+    {ca:'701',nomeCurto:'LUVA PARA PROTEÇÃO CONTRA AGENTES MECÂNICOS',fabricante:'FÁBRICA ALFA',modelo:'TATO G07'},
+    {ca:'702',nomeCurto:'LUVA ISOLANTE DE BORRACHA',fabricante:'FÁBRICA BETA',modelo:'ISOLANTE G08'}
+  ]});
+  try{
+    const catalog=createReportCatalog({filePath:fixture.filePath});
+    const manual=[{id:'sem-ca',tipo:'sem_ca',semCA:true,nomeCurto:'LUVA DE COBERTURA',descricao:'LUVA DE COBERTURA',fabricante:'OFICINA',modelo:'COBERTURA'}];
+    for(const q of ['luva','LUVAS','luva de segu','luva de segurança','LUVA DE SEGURANCA']){
+      const result=catalog.search(manual,{q,field:'name'});
+      assert.equal(result.total,3,q);assert.ok(result.items.every(item=>item.nomeCurto.startsWith('LUVA')));
+    }
+    assert.equal(catalog.search([],{q:'luva isol',field:'name'}).items[0].ca,'702');
+    assert.equal(catalog.search([],{q:'oculos',field:'name'}).total,40);
+    assert.equal(catalog.search([],{q:'marluvas',field:'name'}).total,0);
+    assert.equal(catalog.search([],{q:'marluvas',field:'manufacturer'}).items[0].ca,'700');
+    assert.equal(catalog.search([],{q:'g07',field:'model'}).items[0].ca,'701');
+    assert.equal(catalog.search([],{q:'CA 7.01',field:'name'}).items[0].ca,'701');
+    assert.equal(catalog.search([],{q:'000701',field:'ca'}).items[0].ca,'701');
+    assert.equal(catalog.search([],{q:'luva',field:'ca'}).total,0);
+    assert.equal(catalog.search(manual,{q:'luva',field:'name',origin:'without-ca'}).items[0].id,'sem-ca');
+    assert.equal(catalog.search([],{q:'inexistente',field:'name'}).total,0);
+    assert.equal(catalog.search([],{q:'oculos fabrica',field:'all',page:2}).items.length,15);
+    assert.equal(catalog.search([],{q:'oculos',field:'name',status:'valido'}).total,20);
+  }finally{fixture.cleanup();}
 });

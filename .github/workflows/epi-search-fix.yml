@@ -1,0 +1,34 @@
+name: Corrigir busca de EPI por nome
+on:
+  push:
+    branches: [corrigir-busca-epi-20261013]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci --prefix backend --no-audit --no-fund
+      - run: npm ci --prefix tests --no-audit --no-fund
+      - name: Localizar Chrome do ambiente de teste
+        run: echo "JP_TEST_CHROMIUM=$(command -v google-chrome)" >> "$GITHUB_ENV"
+      - run: node --test backend/test/epi-report*.test.js backend/test/epis-catalog.test.js backend/test/catalog-concurrency.test.js backend/test/ficha-movimentacoes.test.js backend/test/api.test.js backend/test/auth.test.js tests/frontend.test.cjs
+      - run: node tests/epi-catalog-browser.cjs
+      - run: node tests/visual-navigation-browser.cjs
+      - run: node tests/auto-update-browser.cjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: busca-epi-validacao
+          path: |
+            tests/output/epi-catalog/
+            tests/output/visual-navigation/
+          if-no-files-found: error
+          retention-days: 30
