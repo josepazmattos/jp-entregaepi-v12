@@ -46,7 +46,33 @@ def receive(root):
         license_code=z.read(serial).decode("utf-8-sig").strip()
     assert license_code and "\n" not in license_code
     print("::add-mask::"+license_code,flush=True)
-    return setup,license_code
+    return setup,license_code,private.get("returnPublicKey")
+
+def export_registered_runtime(out, return_key, report):
+    import io, struct
+    entries={}
+    for parent in [Path(os.environ.get("ProgramFiles(x86)","C:/Program Files (x86)")),Path(os.environ["ProgramFiles"])]:
+        for folder in parent.glob("*NITGEN*"):
+            for jar in folder.rglob("NBioBSPJNI.jar"):
+                sdk=jar.parent.parent
+                for jni in sdk.rglob("NBioBSPJNI.dll"):
+                    data=jni.read_bytes();pe=struct.unpack_from("<I",data,0x3c)[0]
+                    arch={0x8664:"amd64",0x14c:"x86"}.get(struct.unpack_from("<H",data,pe+4)[0])
+                    if not arch:continue
+                    entries[arch+"/sdk/Lib/NBioBSPJNI.jar"]=jar.read_bytes()
+                    for dll in jni.parent.glob("*.dll"):entries[arch+"/sdk/Bin/"+dll.name]=dll.read_bytes()
+                    for skin in sdk.rglob("NBSP2*.dll"):entries[arch+"/sdk/Bin/"+skin.name]=skin.read_bytes()
+    assert all(a+"/sdk/Bin/NBioBSP.dll" in entries for a in ("amd64","x86")),"REGISTERED_RUNTIME_INCOMPLETE"
+    buffer=io.BytesIO()
+    with zipfile.ZipFile(buffer,"w",zipfile.ZIP_DEFLATED) as z:
+        for n,data in sorted(entries.items()):z.writestr(n,data)
+    data=buffer.getvalue();key=os.urandom(32);nonce=os.urandom(12)
+    public=serialization.load_pem_public_key(return_key.encode())
+    wrapped=public.encrypt(key,padding.OAEP(mgf=padding.MGF1(hashes.SHA256()),algorithm=hashes.SHA256(),label=None))
+    (out/"registered-runtime.enc").write_bytes(AESGCM(key).encrypt(nonce,data,os.environ["GITHUB_RUN_ID"].encode()))
+    b64=lambda b:base64.b64encode(b).decode()
+    (out/"runtime-envelope.json").write_text(json.dumps({"key":b64(wrapped),"nonce":b64(nonce),"runId":os.environ["GITHUB_RUN_ID"],"sha256":hashlib.sha256(data).hexdigest()}))
+    report["registeredRuntime"]={"files":len(entries),"sha256":hashlib.sha256(data).hexdigest(),"encryptedForOwner":True}
 
 def main():
     assert os.name=="nt" and os.environ.get("GITHUB_ACTIONS")=="true"
@@ -54,28 +80,31 @@ def main():
     out=Path(".deploy/sdk-probe");out.mkdir(parents=True,exist_ok=True)
     report={"physicalReaderTested":False,"sdkInitialized":False,"events":[]}
     from pywinauto import Desktop
+    import psutil
     with tempfile.TemporaryDirectory(prefix="JP-official-sdk-") as temp:
-        root=Path(temp);setup,serial=receive(root)
+        root=Path(temp);setup,serial,return_key=receive(root)
         response=root/"setup.iss"
         process=subprocess.Popen([str(setup),"/r",'/f1'+str(response),"/SMS"])
-        deadline=time.monotonic()+300
+        deadline=time.monotonic()+180
         seen=set(); last_click=0
         try:
             while time.monotonic()<deadline:
-                windows=[w for w in Desktop(backend="win32").windows() if re.search(r"(eNBio|NBioBSP|InstallShield)",w.window_text(),re.I)]
+                try: owned={process.pid}|{p.pid for p in psutil.Process(process.pid).children(recursive=True)}
+                except psutil.Error: owned={process.pid}
+                windows=[w for w in Desktop(backend="win32").windows() if w.process_id() in owned or re.search(r"(eNBio|NBioBSP|InstallShield|Visual C\+\+)",w.window_text(),re.I)]
                 for window in windows:
-                    children=window.children()
+                    children=window.descendants()
                     labels=[c.window_text().replace(serial,"[REDACTED]") for c in children if c.class_name()!="Edit"]
                     signature=repr(labels)
                     if signature not in seen:
-                        seen.add(signature);report["events"].append({"title":window.window_text(),"labels":labels})
+                        seen.add(signature);report["events"].append({"title":window.window_text(),"class":window.class_name(),"labels":labels})
                         print(json.dumps(report["events"][-1]),flush=True)
                     if time.monotonic()-last_click<1.5:continue
                     edits=[c for c in children if c.class_name()=="Edit" and c.is_visible() and c.is_enabled()]
                     if any("Serial" in x or "License Code" in x for x in labels) and len(edits)>=3:
                         for control,value in zip(edits,["JP Biometria","Hokinet",serial]):control.set_edit_text(value)
                     buttons=[c for c in children if c.class_name()=="Button" and c.is_visible() and c.is_enabled()]
-                    for label in ("Next >","Next","Yes","I accept the terms of the license agreement","Install","Finish"):
+                    for label in ("Next >","Next","Yes","I accept the terms of the license agreement","Install","Finish","OK"):
                         found=next((b for b in buttons if b.window_text().replace("&","").strip()==label),None)
                         if found:
                             found.click();last_click=time.monotonic();break
@@ -111,6 +140,8 @@ if($code -eq 0){[OfficialSDK]::NBioAPI_Terminate($handle)|Out-Null}
                 except ValueError: status={"initialize":None,"processCode":result.returncode}
                 report.setdefault("initialization",{})[arch]=status
             report["sdkInitialized"]=all(v.get("initialize")==0 for v in report["initialization"].values())
+            if report["sdkInitialized"] and return_key:
+                export_registered_runtime(out,return_key,report)
             # Save setup metadata, never the vendor serial or biometric data.
             report["setupCompleted"]=process.poll()==0 and response.exists()
         finally:
@@ -119,5 +150,6 @@ if($code -eq 0){[OfficialSDK]::NBioAPI_Terminate($handle)|Out-Null}
                 subprocess.run(["taskkill","/PID",str(process.pid),"/T","/F"],capture_output=True)
     print(json.dumps(report),flush=True)
     assert report.get("setupCompleted"),"OFFICIAL_SETUP_FAILED"
+    assert report.get("sdkInitialized"),"SDK_INITIALIZATION_FAILED"
 
 if __name__=="__main__":main()
