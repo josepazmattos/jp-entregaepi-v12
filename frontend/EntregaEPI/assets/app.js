@@ -155,7 +155,12 @@ function setSidebarOpen(open,returnFocus=false){
   if(drawerOpen){
     // Wait for the drawer to become visible before moving keyboard focus.
     const focusMenu=()=>{if($("appShell").classList.contains("sidebar-open"))$("sidebarClose")?.focus();};
-    if(typeof window.requestAnimationFrame==="function")window.requestAnimationFrame(focusMenu);else focusMenu();
+    const afterVisible=()=>{
+      const animations=typeof sidebar?.getAnimations==="function"?sidebar.getAnimations():[];
+      if(animations.length)Promise.all(animations.map(animation=>animation.finished.catch(()=>{}))).then(focusMenu);
+      else focusMenu();
+    };
+    if(typeof window.requestAnimationFrame==="function")window.requestAnimationFrame(afterVisible);else afterVisible();
   }else if(returnFocus)toggle?.focus();
 }
 function toggleSidebar(){
