@@ -1,0 +1,53 @@
+name: Instalador Windows Chrome - componentes e diagnostico
+on:
+  push:
+    branches: [instalador-chrome-20261013]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: '1.27.1'
+          cache: false
+      - run: python native/biometria/test_native.py
+      - run: python native/setup-chrome/build.py --output native/setup-chrome/dist --build-sha "$GITHUB_SHA"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: instalador-chrome-${{ github.sha }}
+          path: native/setup-chrome/dist/*
+          if-no-files-found: error
+          retention-days: 30
+  windows:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+        runtime: [x86, amd64]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: instalador-chrome-${{ github.sha }}
+          path: native/setup-chrome/dist
+      - run: python infra/windows_chrome_installer_smoke.py --source native/setup-chrome/dist --commit "$env:GITHUB_SHA" --runtime "${{ matrix.runtime }}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: relatorio-${{ matrix.os }}-${{ matrix.runtime }}
+          path: .deploy/windows-chrome-report.json
