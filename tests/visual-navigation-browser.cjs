@@ -6,7 +6,7 @@ const company={id:'VISUAL-EMPRESA',nome:'EMPRESA EXEMPLO',cnpj:'00.000.000/0000-
 const worker={id:'VISUAL-PESSOA',empresaId:company.id,nomeCompleto:'COLABORADOR EXEMPLO',cpf:'000.000.000-00',funcao:'TÉCNICO DE CAMPO',status:'Ativo'};
 const epi={id:'VISUAL-EPI',descricao:'CAPACETE DE SEGURANÇA',nomeCurto:'CAPACETE DE SEGURANÇA',ca:'00000',fabricante:'FABRICANTE EXEMPLO'};
 const ficha={id:'VISUAL-FICHA',numero:'EPI-EXEMPLO-0001',empresaId:company.id,trabalhadorId:worker.id,trabalhadorNome:worker.nomeCompleto,tipo:'Entrega',data:'13/10/2026',status:'pendente',itens:[{epiId:epi.id,epiDescricao:epi.descricao,ca:epi.ca,quantidade:1}]};
-const database={empresas:[company],trabalhadores:[worker],epis:[epi],fichas:[ficha]};
+const database={empresas:[{id:"Z",nome:"ZETA SERVIÇOS"},company,{id:"B",nome:"beta"},{id:"A",nome:"ÁGUA SERVIÇOS"},{id:"N",nome:"59.482.110 EMPRESA NUMÉRICA"}],trabalhadores:[worker],epis:[epi],fichas:[ficha]};
 const errors=[],writes=[],checks=[];let browser;
 const server=http.createServer((req,res)=>{
  const file=path.resolve(frontend,decodeURIComponent(new URL(req.url,'http://localhost').pathname).replace(/^\/EntregaEPI\/?/,'')||'index.html');
@@ -38,10 +38,15 @@ async function layout(page,name,screenshot=false){
    if(u.pathname==='/api/jpged/certificado')return json({ok:true,certificate:null});
    if(u.pathname.startsWith('/api/jpged'))return json({ok:true,items:[]});
    if(u.pathname==='/api/epis/catalogo')return json({ok:true,items:[epi],total:1,page:1,pageSize:15,pages:1});
-   const key=u.pathname.replace('/api/','');if(database[key])return json({ok:true,items:database[key]});
+   const key=u.pathname.replace('/api/','');if(database[key])return json({ok:true,items:key==='empresas'&&role==='EMPRESA'?[company]:database[key]});
    return json({ok:true,items:[]});
   });
   await context.addInitScript(()=>{window.visualFocusTrace=[];document.addEventListener('focusin',e=>window.visualFocusTrace.push({id:e.target.id,tag:e.target.tagName,at:Date.now()}));});const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(origin+'/EntregaEPI/');await page.waitForSelector('#appShell:not(.hidden)');await page.waitForFunction(()=>document.getElementById('metricTrabalhadores').textContent==='1');
+  if(role==='MASTER'){
+   for(const id of ['empresaAtivaSelect','entregaEmpresa','workerCompanySelect'])assert.deepEqual(await page.locator('#'+id+' option').evaluateAll(options=>options.filter(o=>o.value).map(o=>o.textContent)),['59.482.110 EMPRESA NUMÉRICA','ÁGUA SERVIÇOS','beta','EMPRESA EXEMPLO','ZETA SERVIÇOS']);
+   assert.equal(await page.locator('#empresaAtivaSelect').inputValue(),company.id);await page.evaluate(()=>refreshEmpresas(false));assert.equal(await page.locator('#empresaAtivaSelect').inputValue(),company.id);
+   pass('MASTER: companies alphabetized in every selector; refreshing preserves the active company');
+  }
   assert.equal(await page.locator('#menuToggle').getAttribute('aria-expanded'),'true');
   const open=await layout(page,role+'-desktop-aberto',role==='MASTER');
   await page.locator('#menuToggle').click();await page.locator('#primarySidebar').waitFor({state:'hidden'});assert.equal(await page.locator('#primarySidebar').isVisible(),false);assert.equal(await page.locator('#mainContent').evaluate(n=>n.inert),false);
