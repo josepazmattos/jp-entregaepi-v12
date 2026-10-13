@@ -87,3 +87,19 @@ func TestManagedSDKIsFoundWithoutEnvironmentConfiguration(t *testing.T) {
 		t.Fatalf("managed SDK must be found automatically: %#v %s", got, problem)
 	}
 }
+
+func TestRegisteredManagedRuntimePrecedesOldBundle(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("LOCALAPPDATA", base)
+	for _, key := range []string{"ProgramFiles", "ProgramW6432", "ProgramFiles(x86)", "SystemDrive", "JP_BIOMETRIA_SDK"} {
+		t.Setenv(key, "")
+	}
+	registered := filepath.Join(base, "JP", "Biometria", "sdk-5.2.0.6-jp1")
+	legacy := filepath.Join(base, "JP", "Biometria", "sdk-5.2.0.6")
+	createSearchSDK(t, registered, true)
+	createSearchSDK(t, legacy, true)
+	got, problem := discoverInstalledSDK()
+	if problem != "" || len(got) != 2 || got[0].Root != registered || got[1].Root != legacy {
+		t.Fatalf("registered SDK priority: %#v %s", got, problem)
+	}
+}

@@ -3,10 +3,8 @@ on:
   push:
     branches: [instalador-unico-20261013]
     paths:
-      - '.github/workflows/biometria-unico.yml'
       - 'infra/windows_official_sdk_probe.py'
       - 'infra/windows_registration_probe.py'
-      - 'native/setup-unico/**'
 permissions:
   contents: write
 jobs:

@@ -1,0 +1,35 @@
+name: Instalador unico - testes do arquivo final
+on:
+  push:
+    branches: [instalador-unico-20261013]
+    paths:
+      - '.github/workflows/biometria-unico-candidato.yml'
+      - 'infra/windows_unico_smoke.py'
+      - 'native/setup-unico/**'
+      - 'native/biometria/**'
+permissions:
+  contents: write
+jobs:
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: python -m pip install cryptography==46.0.3
+      - run: python infra/windows_unico_smoke.py
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JP_TEST_SLOT: ${{ matrix.os }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: instalador-unico-${{ matrix.os }}
+          path: .deploy/unified-report.json
+          if-no-files-found: error
+          retention-days: 30
