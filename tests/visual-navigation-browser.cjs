@@ -16,9 +16,10 @@ const server=http.createServer((req,res)=>{
 });
 const pass=name=>{checks.push(name);console.log('PASSOU: '+name);};
 async function layout(page,name,screenshot=false){
+ await page.evaluate(()=>new Promise(requestAnimationFrame));
  const d=await page.evaluate(()=>({width:innerWidth,doc:document.documentElement.scrollWidth,body:document.body.scrollWidth,main:document.querySelector('#mainContent').getBoundingClientRect().width}));
  assert.ok(d.doc<=d.width+1&&d.body<=d.width+1,name+': no horizontal page overflow '+JSON.stringify(d));
- if(screenshot)await page.screenshot({path:path.join(out,name+'.png'),fullPage:true});return d;
+ if(screenshot)await page.screenshot({path:path.join(out,name+'.png'),fullPage:true,animations:'disabled'});return d;
 }
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
@@ -43,10 +44,10 @@ async function layout(page,name,screenshot=false){
   const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(origin+'/EntregaEPI/');await page.waitForSelector('#appShell:not(.hidden)');await page.waitForFunction(()=>document.getElementById('metricTrabalhadores').textContent==='1');
   assert.equal(await page.locator('#menuToggle').getAttribute('aria-expanded'),'true');
   const open=await layout(page,role+'-desktop-aberto',role==='MASTER');
-  await page.locator('#menuToggle').click();assert.equal(await page.locator('#primarySidebar').isVisible(),false);assert.equal(await page.locator('#mainContent').evaluate(n=>n.inert),false);
+  await page.locator('#menuToggle').click();await page.locator('#primarySidebar').waitFor({state:'hidden'});assert.equal(await page.locator('#primarySidebar').isVisible(),false);assert.equal(await page.locator('#mainContent').evaluate(n=>n.inert),false);
   const closed=await layout(page,role+'-desktop-amplo',role==='MASTER');assert.ok(closed.main-open.main>=250,'Workspace gains sidebar width');
   await page.reload();await page.waitForSelector('#appShell:not(.hidden)');assert.equal(await page.locator('#menuToggle').getAttribute('aria-expanded'),'false');
-  await page.evaluate(()=>goScreen('trabalhadores'));assert.equal(await page.locator('#primarySidebar').isVisible(),false);
+  await page.evaluate(()=>goScreen('trabalhadores'));await page.locator('#primarySidebar').waitFor({state:'hidden'});assert.equal(await page.locator('#primarySidebar').isVisible(),false);
   await page.locator('#menuToggle').click();assert.equal(await page.locator('#primarySidebar').isVisible(),true);await page.locator('#menuToggle').click();
   pass(role+': hide/show menu, content gains width, preference survives reload and navigation');
   if(role==='MASTER'){
@@ -55,17 +56,17 @@ async function layout(page,name,screenshot=false){
   }
   const screens=role==='MASTER'?['dashboard','empresas','empresas-cadastradas','trabalhadores','epis','entrega','fichas','jpged','biometria','certificado','config']:['dashboard','trabalhadores','epis','entrega','fichas','jpged','biometria','config'];
   for(const width of [1920,1366,1280,1024,768,390,320]){
-   await page.setViewportSize({width,height:900});
+   await page.setViewportSize({width,height:900});await page.evaluate(()=>new Promise(requestAnimationFrame));
    for(const screen of screens){await page.evaluate(s=>goScreen(s),screen);await layout(page,role+'-'+width+'-'+screen,role==='MASTER'&&((width===1366&&screen==='config')||(width===390&&screen==='dashboard')));}
   }
   pass(role+': every available screen fits widths 320, 390, 768, 1024, 1280, 1366 and 1920');
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>goScreen('dashboard'));await page.locator('#menuToggle').click();assert.equal(await page.locator('#menuToggle').getAttribute('aria-expanded'),'true');assert.equal(await page.locator('#mainContent').evaluate(n=>n.inert),true);
   await layout(page,role+'-mobile-menu',role==='MASTER');await page.keyboard.press('Shift+Tab');assert.equal(await page.evaluate(()=>document.activeElement.dataset.screen),'config');await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.activeElement.id),'sidebarClose');
-  await page.keyboard.press('Escape');assert.equal(await page.evaluate(()=>document.activeElement.id),'menuToggle');assert.equal(await page.locator('#primarySidebar').isVisible(),false);
-  await page.locator('#menuToggle').click();await page.locator('.nav [data-screen="fichas"]').click();assert.equal(await page.locator('#primarySidebar').isVisible(),false);assert.equal(await page.locator('#screen-fichas').isVisible(),true);
+  await page.keyboard.press('Escape');assert.equal(await page.evaluate(()=>document.activeElement.id),'menuToggle');await page.locator('#primarySidebar').waitFor({state:'hidden'});assert.equal(await page.locator('#primarySidebar').isVisible(),false);
+  await page.locator('#menuToggle').click();await page.locator('.nav [data-screen="fichas"]').click();await page.locator('#primarySidebar').waitFor({state:'hidden'});assert.equal(await page.locator('#primarySidebar').isVisible(),false);assert.equal(await page.locator('#screen-fichas').isVisible(),true);
   if(role==='EMPRESA')for(const name of ['empresas','empresas-cadastradas','certificado'])assert.equal(await page.locator('.nav [data-screen="'+name+'"]').isVisible(),false);
   pass(role+': mobile keyboard loop, Escape, navigation close, role visibility');
-  await page.setViewportSize({width:1366,height:900});assert.equal(await page.locator('#primarySidebar').isVisible(),false);await page.evaluate(()=>goScreen('config'));
+  await page.setViewportSize({width:1366,height:900});await page.locator('#primarySidebar').waitFor({state:'hidden'});assert.equal(await page.locator('#primarySidebar').isVisible(),false);await page.evaluate(()=>goScreen('config'));
   assert.ok((await page.locator('#downloadBiometriaLink').getAttribute('href')).includes('12.10.0-unico1'));
   const sizes=await page.evaluate(()=>({body:parseFloat(getComputedStyle(document.body).fontSize),button:parseFloat(getComputedStyle(document.getElementById('downloadBiometriaLink')).fontSize)}));assert.ok(sizes.body>=16&&sizes.button>=14);
   await context.close();
