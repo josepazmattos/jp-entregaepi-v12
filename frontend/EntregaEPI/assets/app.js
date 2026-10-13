@@ -152,8 +152,11 @@ function setSidebarOpen(open,returnFocus=false){
   const label=mobile?(expanded?"Fechar menu":"Abrir menu"):(expanded?"Ocultar menu":"Mostrar menu");
   if(toggle){toggle.setAttribute("aria-expanded",String(expanded));toggle.setAttribute("aria-label",label);toggle.setAttribute("title",label);}
   setText("menuToggleLabel",label);
-  if(drawerOpen)$("sidebarClose")?.focus();
-  else if(returnFocus)toggle?.focus();
+  if(drawerOpen){
+    // Wait for the drawer to become visible before moving keyboard focus.
+    const focusMenu=()=>{if($("appShell").classList.contains("sidebar-open"))$("sidebarClose")?.focus();};
+    if(typeof window.requestAnimationFrame==="function")window.requestAnimationFrame(focusMenu);else focusMenu();
+  }else if(returnFocus)toggle?.focus();
 }
 function toggleSidebar(){
   if(navigationMedia?.matches===true){setSidebarOpen(!$("appShell").classList.contains("sidebar-open"),true);return;}

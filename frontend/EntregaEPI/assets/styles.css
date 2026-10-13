@@ -598,6 +598,12 @@ h3 { font-size: 18px; line-height: 1.4; letter-spacing: -.01em; }
 .status-badge { white-space: normal; text-align: center; }
 .ficha-row .item-actions { flex-shrink: 1; }
 .epi-catalog-origin { font-size: .8125rem; }
+#downloadsBiometria { display: grid; gap: 12px; margin-bottom: 24px; }
+.startup-checks > .section-heading { margin-bottom: 20px; }
+.startup-grid article { display: flex; flex-direction: column; gap: 12px; }
+.startup-grid h3 { margin: 0; }
+.startup-grid .status-badge { align-self: flex-start; }
+.startup-grid .startup-actions { margin-top: auto; padding-top: 4px; }
 @media (min-width: 1025px) {
   .app-shell.sidebar-collapsed { grid-template-columns: minmax(0, 1fr); }
   .app-shell.sidebar-collapsed .sidebar { display: none; }
