@@ -1,0 +1,23 @@
+{
+  "published": true,
+  "pages": [
+    {
+      "path": "/EntregaEPI",
+      "httpStatus": 200,
+      "htmlSHA256": "9264f6718d011119dd4d24bf1cfd922b2787a56c80dcba557c3805529ec0e419"
+    },
+    {
+      "path": "/EntregaEPI/",
+      "httpStatus": 200,
+      "htmlSHA256": "9264f6718d011119dd4d24bf1cfd922b2787a56c80dcba557c3805529ec0e419"
+    },
+    {
+      "path": "/EntregaEPI/index.html",
+      "httpStatus": 200,
+      "htmlSHA256": "9264f6718d011119dd4d24bf1cfd922b2787a56c80dcba557c3805529ec0e419"
+    }
+  ],
+  "downloadURL": "https://www.jptreinamentos.com.br/EntregaEPI/updates/12.10.0-unico1/JP-Biometria-Instalador-Unico.exe",
+  "installerSHA256": "d8773cc34e0bcb4cbdb4a3120f7654cdcff7707a4f005343106d0625c48d4d3b",
+  "testRun": 38464050840
+}
