@@ -120,8 +120,8 @@ async function main(){
   {
     const s=await scenario({version:'12.9.3'});await s.login();await s.done();
     await s.page.evaluate(()=>goScreen('biometria'));
-    assert.match(await s.page.locator('#bioRepairLink').getAttribute('href'),/updates\/12\.10\.0-bio2\/JP-Biometria-Setup-12\.10\.0-bio2\.exe$/);
-    assert.equal(await s.page.locator('#bioRepairLink').innerText(),'Atualizar JP Biometria');
+    assert.match(await s.page.locator('#bioRepairLink').getAttribute('href'),/updates\/12\.10\.0-unico1\/JP-Biometria-Instalador-Unico\.exe$/);
+    assert.equal(await s.page.locator('#bioRepairLink').innerText(),'Instalar ou reparar JP Biometria');
     // Preserve the real click listener but avoid downloading the repair installer in a UI test.
     await s.page.locator('#bioRepairLink').evaluate(node=>node.addEventListener('click',event=>event.preventDefault(),{once:true}));
     await s.page.locator('#bioRepairLink').click();
