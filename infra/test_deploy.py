@@ -175,7 +175,7 @@ def make_project(root):
     binary[152:154] = b"\x0b\x02"
     (root / "frontend/EntregaEPI/assets" / deploy.EXECUTABLE).write_bytes(binary)
     (root / "frontend/EntregaEPI/assets" / deploy.MANIFEST).write_text(json.dumps({
-        "version": "12.10.0", "buildSha": COMMIT, "filename": deploy.EXECUTABLE,
+        "version": "12.10.0-bio2", "buildSha": COMMIT, "filename": deploy.EXECUTABLE,
         "sha256": hashlib.sha256(binary).hexdigest(), "sizeBytes": len(binary)}))
     complete_binary = binary + bytes(1024)
     (root / "frontend/EntregaEPI/assets" / deploy.COMPLETE_EXECUTABLE).write_bytes(complete_binary)
@@ -333,7 +333,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(deleted, {"EntregaEPI/assets/jpged.js", "EntregaEPI/assets/operations.js", "EntregaEPI/assets/ficha.js", "EntregaEPI/assets/biometria.js",
             "EntregaEPI/assets/" + deploy.EXECUTABLE, "EntregaEPI/assets/" + deploy.MANIFEST,
             "EntregaEPI/assets/" + deploy.COMPLETE_EXECUTABLE, "EntregaEPI/assets/" + deploy.COMPLETE_MANIFEST,
-            "EntregaEPI/version.json"})
+            "EntregaEPI/version.json"} | {item.key for item in self.operation.files if "/releases/" in item.key})
 
     def test_corrupt_installer_aborts_before_aws_calls(self):
         asset = self.root / "frontend/EntregaEPI/assets" / deploy.EXECUTABLE

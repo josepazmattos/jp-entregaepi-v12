@@ -27,6 +27,7 @@ import zipfile
 from fetch_ca_snapshot import read_source, verify_installed
 from biometria_release import verify_release, ReleaseError, EXECUTABLE, MANIFEST
 from complete_release import verify as verify_complete, FILENAME as COMPLETE_EXECUTABLE, MANIFEST as COMPLETE_MANIFEST
+from frontend_release import release_assets, release_html, IMMUTABLE_CACHE
 
 VERSION = "12.10.0"
 REPOSITORY = "josepazmattos/jp-entregaepi-v12"
@@ -166,6 +167,7 @@ class PublicFile:
     key: str
     path: Path
     content_type: str
+    cache_control: str = CACHE_CONTROL
 
 
 def check_context(root: Path, env: dict) -> str:
@@ -317,13 +319,16 @@ def prepare_frontend(root: Path, stage: Path, commit: str, run_id: str) -> list[
     required = {f"{PREFIX}/assets/{name}" for name in ("app.js", "jpged.js", "operations.js", "ficha.js", "biometria.js", "styles.css", EXECUTABLE, MANIFEST, COMPLETE_EXECUTABLE, COMPLETE_MANIFEST)}
     if not required.issubset({item.key for item in files}):
         raise DeployError("Arquivos obrigatórios do frontend estão ausentes.")
+    for asset in release_assets(source, stage, commit, PREFIX):
+        target = stage / asset["file"]
+        files.append(PublicFile(asset["key"], target, content_type(target), IMMUTABLE_CACHE))
     cfg = {"version": VERSION, "buildSha": commit, "appBasePath": f"/{PREFIX}/", "apiBaseUrl": API_URL,
            "cognitoRegion": REGION, "userPoolId": POOL, "clientId": CLIENT, "ambiente": "producao"}
     config_file = stage / "config.js"
     config_file.write_text("window.JP_CONFIG = " + json.dumps(cfg, ensure_ascii=False, indent=2) + ";\n", encoding="utf-8")
     index_file = stage / "index.html"
     index = (source / "index.html").read_text(encoding="utf-8")
-    index = index.replace("__APP_PREFIX__", PREFIX).replace("__BUILD_SHA__", commit).replace("__APP_VERSION__", VERSION)
+    index = release_html(index, commit, PREFIX).replace("__APP_VERSION__", VERSION)
     index_file.write_text(index, encoding="utf-8")
     files.append(PublicFile(f"{PREFIX}/config.js", config_file, content_type(config_file)))
     tail = [PublicFile(f"{PREFIX}/index.html", index_file, content_type(index_file)),
@@ -632,7 +637,7 @@ class Deployment:
             before = self.before[item.key]
             condition = {"IfMatch": before["metadata"]["ETag"]} if before["existed"] else {"IfNoneMatch": "*"}
             self.attempted_keys.append(item.key)
-            self.put_object(item.key, item.path, {"ContentType": item.content_type, "CacheControl": CACHE_CONTROL,
+            self.put_object(item.key, item.path, {"ContentType": item.content_type, "CacheControl": item.cache_control,
                             "Metadata": {"version": VERSION, "build-sha": self.commit, "sha256": sha256(item.path)}}, condition)
             self.report["files"][item.key] = sha256(item.path)
         self.check("frontend-conditional-writes-assets-before-index-no-bulk-delete")

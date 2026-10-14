@@ -1,4 +1,4 @@
-name: Desempenho EntregaEPI
+name: Desempenho e cache EntregaEPI
 on:
   push:
     branches: [desempenho-20261014]
@@ -25,6 +25,12 @@ jobs:
           git show 612628c3e5bbe1c8e242202d79a9d0edcf31c3ef:frontend/EntregaEPI/index.html > tests/baseline/index.html
           echo "JP_TEST_CHROMIUM=$(command -v google-chrome)" >> "$GITHUB_ENV"
       - run: node --test backend/test/epi-report*.test.js backend/test/api.test.js backend/test/auth.test.js tests/frontend.test.cjs
+      - name: Testar pacote versionado e publicação com reversão
+        run: |
+          python3 -m unittest discover -s infra -p 'test_frontend_release.py' -v
+          python3 -m unittest discover -s infra -p 'test_deploy.py' -v
+          python3 -m unittest discover -s infra -p 'test_tenant_preflight.py' -v
+      - run: node tests/cache-release-browser.cjs
       - run: node tests/performance-browser.cjs
       - run: node tests/frontend-startup-browser.cjs
       - run: node tests/epi-catalog-browser.cjs

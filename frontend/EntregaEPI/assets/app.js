@@ -1,5 +1,6 @@
 (function ensureConfig(){if(!window.JP_CONFIG||!window.JP_CONFIG.apiBaseUrl){window.JP_CONFIG={version:"12.10.0",appBasePath:"/EntregaEPI/",apiBaseUrl:"https://g4pdu3t1va.execute-api.sa-east-1.amazonaws.com",cognitoRegion:"sa-east-1",userPoolId:"sa-east-1_3FNCoTvr0",clientId:"2q2inha617oeer4vb0m0hjoja0",ambiente:"producao"}}})();
 const $=id=>document.getElementById(id), tokenKey="jp-v12-auth", rememberedUserKey="jp-v12-remembered-user", activeCompanyKey="jp-v12-active-company";
+const appAssetBase=document.currentScript?.src?new URL('.',document.currentScript.src).href:(window.JP_CONFIG.appBasePath||'/EntregaEPI/').replace(/\/?$/, '/')+'assets/';
 let sessionGeneration=0,companyGeneration=0,authAttempt=0,importAttempt=0,logoCreateGeneration=0,logoEditGeneration=0;let lastSessionUsername="";let cache={empresas:[],trabalhadores:[],epis:[],fichas:[]};let activeEmpresaId=sessionStorage.getItem(activeCompanyKey)||"";
 let firstAccessChallenge=null,empresaLogoDraft="",empresaLogoEdit=null,empresaRequestId="",importPreview=null,companyLoginAutomatic=true;
 let logoCreateLoading=false,companySaving=false;
@@ -466,8 +467,7 @@ async function previewCompanyPdf(event){
   companyPdfLoading=true;updateCompanySubmitButton();$("empresaPdfFile").disabled=true;
   const message=$("empresaPdfMessage");message.className="message warn";message.textContent="Lendo o cartão CNPJ…";
   try{
-    const base=(window.JP_CONFIG.appBasePath||"/EntregaEPI/").replace(/\/?$/, "/");
-    const {readCompanyPdf}=await import(base+"assets/company-pdf.mjs?v=20261010-empresas");
+    const {readCompanyPdf}=await import(appAssetBase+"company-pdf.mjs?v=20261010-empresas");
     if(!current())return;
     const result=await readCompanyPdf(file,{signal:controller.signal});if(!current())return;
     companyPdfDraft=result.fields;
@@ -733,7 +733,7 @@ async function confirmWorkersImport(){
 function downloadWorkersTemplate(){
   if(!isMaster())return;
   if(!workerRegistrationCompany||workerRegistrationCompany!==activeEmpresaId){$("workerCompanySelect")?.focus();return;}
-  const anchor=document.createElement("a");anchor.href=(window.JP_CONFIG.appBasePath||"/EntregaEPI/").replace(/\/?$/, "/")+"assets/modelo-trabalhadores.xlsx";anchor.download="Modelo_Trabalhadores_JP_EntregaEPI.xlsx";document.body.appendChild(anchor);anchor.click();anchor.remove();
+  const anchor=document.createElement("a");anchor.href=appAssetBase+"modelo-trabalhadores.xlsx";anchor.download="Modelo_Trabalhadores_JP_EntregaEPI.xlsx";document.body.appendChild(anchor);anchor.click();anchor.remove();
 }
 async function consultarCA(){
   if($("epiSemCa")?.checked)return;
