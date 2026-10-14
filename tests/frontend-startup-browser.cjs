@@ -72,7 +72,7 @@ async function scenario(options={}){
 }
 async function main(){
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));origin=`http://127.0.0.1:${server.address().port}`;
-  browser=await chromium.launch({...(process.env.JP_TEST_CHROMIUM?{executablePath:process.env.JP_TEST_CHROMIUM}:{}),headless:true,args:['--no-sandbox']});report.browser=browser.version();
+  browser=await chromium.launch({...(process.env.JP_TEST_CHROMIUM?{executablePath:process.env.JP_TEST_CHROMIUM}:{}),...(process.env.JP_TEST_CHROMIUM?{executablePath:process.env.JP_TEST_CHROMIUM}:{}),headless:true,args:['--no-sandbox']});report.browser=browser.version();
   {
     const certificate={mode:'vault',vaultState:'Enabled',subject:'SYNTHETIC COMPANY',validTo:'2099-01-01T00:00:00Z'};
     const a=await scenario({version:'12.10.0-bio1',certificate}),b=await scenario({version:'12.10.0-bio1',certificate});

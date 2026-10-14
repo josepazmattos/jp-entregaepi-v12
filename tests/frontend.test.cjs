@@ -690,3 +690,10 @@ test('lista de movimentações repete EPI, preserva itens após falha e limpa ao
   form.fields={trabalhadorId:worker.id,epiId:epi.id,tipo:'Entrega',quantidade:'1'};app.run('addEntregaItem()');
   syntheticAuth(app);await app.run('changeActiveCompany("OUTRA-EMPRESA")');assert.equal(app.run('entregaItems.length'),0);
 });
+test('atualizar uma lista consulta apenas essa lista e atualiza os indicadores',async()=>{
+  for(const [fn,route] of [['refreshEpis','epis'],['refreshTrabalhadores','trabalhadores'],['refreshFichas','fichas'],['refreshEmpresas','empresas']]){
+    const app=appHarness(initialRoute);syntheticAuth(app);await app.run('refreshAll()');app.requests.length=0;
+    await app.run(fn+'()');assert.equal(app.requests.length,1,fn);assert.ok(app.requests[0].url.endsWith('/api/'+route));
+    assert.equal(app.elements.metricEmpresas.textContent,1);assert.equal(app.elements.metricTrabalhadores.textContent,1);
+  }
+});

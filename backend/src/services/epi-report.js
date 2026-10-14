@@ -17,8 +17,8 @@ function nameTokens(term){
   const specific=meaningful.filter((word,index)=>word!=='seguranca'&&!(index===meaningful.length-1&&word.length>=4&&'seguranca'.startsWith(word)));
   return (specific.length?specific:meaningful).map(word=>word.length>3&&word.endsWith('s')?word.slice(0,-1):word);
 }
-function matchesName(name,tokens){
-  const words=fold(name).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+function matchesName(name,tokens,preparedWords){
+  const words=preparedWords||fold(name).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
   return tokens.every(token=>words.some(word=>word.startsWith(token)));
 }
 const unavailable=()=>httpError(503,'O catálogo do relatório está indisponível. Os cadastros manuais continuam disponíveis.','EPI_RELATORIO_INDISPONIVEL');
@@ -26,7 +26,18 @@ export function createReportCatalog({filePath=process.env.EPI_REPORT_PATH||new U
   const folder=dirname(filePath instanceof URL?fileURLToPath(filePath):filePath);
   const required=process.env.EPI_REPORT_REQUIRED==='true'||existsSync(filePath);
   let manifest, records, byId, failure=false;
-  const details=new Map();
+  // Only immutable report text is reused. Live manual records are read and folded afresh.
+  const details=new Map(),reportNames=new Map(),reportText=new Map();
+  function preparedText(item,value){
+    if(item.origemCadastro!=='relatorio_ca')return fold(value);
+    if(!reportText.has(value))reportText.set(value,fold(value));
+    return reportText.get(value);
+  }
+  function preparedWords(item){
+    if(item.origemCadastro!=='relatorio_ca')return undefined;
+    if(!reportNames.has(item.nomeCurto))reportNames.set(item.nomeCurto,fold(item.nomeCurto).split(/[^\p{L}\p{N}]+/u).filter(Boolean));
+    return reportNames.get(item.nomeCurto);
+  }
   function load(){
     if(failure)throw unavailable();
     if(records)return;
@@ -70,11 +81,11 @@ export function createReportCatalog({filePath=process.env.EPI_REPORT_PATH||new U
     function matches(item){
       if(!term)return true;
       if(field==='ca'||((field==='all'||field==='name')&&caQuery))return Boolean(caQuery)&&item.ca===caQuery;
-      if(field==='name')return matchesName(item.nomeCurto,names);
-      const text=field==='manufacturer'?fold(item.fabricante):field==='model'?fold(item.modelo):item.search||fold([item.nomeCurto,item.ca,item.fabricante,item.modelo,item.tamanho].join(' '));
+      if(field==='name')return matchesName(item.nomeCurto,names,preparedWords(item));
+      const text=field==='manufacturer'?preparedText(item,item.fabricante):field==='model'?preparedText(item,item.modelo):item.search||fold([item.nomeCurto,item.ca,item.fabricante,item.modelo,item.tamanho].join(' '));
       return tokens.every(token=>text.includes(token));
     }
-    const filtered=candidates.filter(item=>(origin!=='without-ca'||item.semCA)&&(status==='all'||fold(item.situacao)===status)&&matches(item));
+    const filtered=candidates.filter(item=>(origin!=='without-ca'||item.semCA)&&(status==='all'||preparedText(item,item.situacao)===status)&&matches(item));
     filtered.sort((a,b)=>compare.compare(a.nomeCurto,b.nomeCurto)||compare.compare(a.ca,b.ca)||compare.compare(a.id,b.id));
     const pages=Math.max(1,Math.ceil(filtered.length/15)),current=Math.min(Number(page),pages);
     return {items:filtered.slice((current-1)*15,current*15).map(item=>{const {descricao,name,...short}=publicItem(item);return short;}),page:current,pages,total:filtered.length,pageSize:15,source:metadataSafe()};

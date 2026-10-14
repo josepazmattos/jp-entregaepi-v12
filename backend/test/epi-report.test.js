@@ -63,3 +63,13 @@ test('busca por nome não confunde luvas com botas do fabricante Marluvas',()=>{
     assert.equal(catalog.search([],{q:'oculos',field:'name',status:'valido'}).total,20);
   }finally{fixture.cleanup();}
 });
+test('índice reutilizado do relatório nunca esconde mudanças em cadastros manuais',()=>{
+  catalog.search([],{q:'oculos',field:'name',status:'valido'});
+  const manual={id:fixture.id('100'),ca:'100',nomeCurto:'LUVA MANUAL',descricao:'LUVA MANUAL',fabricante:'FÁBRICA NOVA',situacao:'VÁLIDO'};
+  assert.equal(catalog.search([manual],{q:'luva',field:'name'}).items[0].nomeCurto,'LUVA MANUAL');
+  manual.nomeCurto='BOTA MANUAL';manual.descricao='BOTA MANUAL';manual.situacao='VENCIDO';
+  assert.equal(catalog.search([manual],{q:'luva',field:'name'}).total,0);
+  assert.equal(catalog.search([manual],{q:'bota',field:'name',status:'vencido'}).items[0].nomeCurto,'BOTA MANUAL');
+  assert.equal(catalog.search([manual],{q:'bota',field:'name',status:'valido'}).total,0);
+  assert.equal(JSON.stringify(catalog.search([],{q:'oculos',field:'name'})).includes('preparedWords'),false);
+});
