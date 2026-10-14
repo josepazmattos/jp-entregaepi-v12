@@ -988,7 +988,7 @@ async function changeActiveCompany(id){
   clearEntregaDraft();
   ["trabalhadorForm","entregaForm"].forEach(id=>{$(id).reset();const button=$(id).querySelector('button[type="submit"]');if(button)button.disabled=false;});if($("trabalhadorSearch"))$("trabalhadorSearch").value="";
   saveActiveCompany(id);cache.trabalhadores=[];cache.fichas=[];$("trabalhadoresList").textContent="Carregando...";$("fichasList").textContent="Carregando...";$("dashboardFichas").textContent="";renderEntregaOptions();
-  renderRoleAccess();
+  renderEmpresas();
   try{await refreshCompanyData();}catch(error){handleAppError(error);}
   if(document.querySelector("#screen-jpged.active"))loadJpged();
 }
