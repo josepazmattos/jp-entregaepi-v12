@@ -20,6 +20,7 @@ jobs:
         run: git diff --exit-code 2880d1baff1b81284e22f9d59e6bffe76b6f16bc -- native backend frontend/EntregaEPI/index.html
       - run: npm ci --prefix backend --no-audit --no-fund
       - run: npm ci --prefix tests --no-audit --no-fund
+      - run: sudo apt-get update && sudo apt-get install --no-install-recommends -y poppler-utils
       - run: echo "JP_TEST_CHROMIUM=$(command -v google-chrome)" >> "$GITHUB_ENV"
       - run: node --test tests/biometria.test.cjs backend/test/biometria-login.test.js backend/test/ficha-capture-api.test.js
       - run: node tests/biometria-latency.cjs
