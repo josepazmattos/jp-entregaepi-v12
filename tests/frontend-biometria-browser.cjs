@@ -65,7 +65,7 @@ module.exports=async function runBiometricBrowser({browser,origin,output}){
     throw new Error('Rota de API não prevista no teste biométrico: '+url.pathname);
   });
   async function login(){await page.locator('#username').fill('BIO-USUARIO-SINTETICO');await page.locator('#password').fill('SENHA-SINTETICA');await page.locator('#loginButton').click();await page.waitForFunction(()=>document.getElementById('metricEmpresas').textContent==='2');}
-  async function navigate(screen){if(await page.locator('#menuToggle').isVisible())await page.locator('#menuToggle').click();await page.locator(`.nav [data-screen="${screen}"]`).click();}
+  async function navigate(screen){if(await page.locator('#menuToggle').getAttribute('aria-expanded')!=='true')await page.locator('#menuToggle').click();await page.locator(`.nav [data-screen="${screen}"]`).click();}
   async function captured(){await page.locator('#bioCaptureImage').waitFor({state:'visible'});assert.equal(await page.locator('#bioCaptureImage').evaluate(image=>image.complete&&image.naturalWidth>0),true);}
   async function discarded(){await page.locator('#bioCapturePanel').waitFor({state:'hidden'});assert.equal(await page.locator('#bioCaptureImage').getAttribute('src'),null);await noStoredBiometrics();}
   async function startHeld(fichaId){captureMode='hold';releaseCapture=null;await navigate('biometria');await page.locator('#bioOpenTestButton').click();await page.locator('#bioCaptureButton').click();for(let attempt=0;!releaseCapture&&attempt<100;attempt++)await new Promise(resolve=>setTimeout(resolve,20));assert.ok(releaseCapture,'o pedido de captura chegou ao agente sintético');}
