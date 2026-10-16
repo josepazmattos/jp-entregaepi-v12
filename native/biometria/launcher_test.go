@@ -398,3 +398,18 @@ func TestDiagnosticSafeClose(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Failure handling is selected before parsing, profile lookup or mutex creation.
+// Invalid protocol arguments must not reopen the startup dialog either.
+func TestStartupIsSilentAndInstallationRemainsInteractive(t *testing.T) {
+	for _, args := range [][]string{{"--start"}, {"--start", "jpbiometria://start"}, {"--start", "invalid"}, {"--install-quiet"}} {
+		if !quietInvocation(args) {
+			t.Fatalf("unexpected startup dialog for %v", args)
+		}
+	}
+	for _, args := range [][]string{nil, {"--unknown"}} {
+		if quietInvocation(args) {
+			t.Fatalf("interactive installation suppressed for %v", args)
+		}
+	}
+}

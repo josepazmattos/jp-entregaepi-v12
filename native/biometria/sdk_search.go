@@ -67,7 +67,7 @@ func discoverInstalledSDK() ([]sdkLocation, string) {
 			ordered = append(ordered, root)
 		}
 	}
-	ordered = append(ordered, managed)
+	ordered = append(ordered, filepath.Join(os.Getenv("LOCALAPPDATA"), "JP", "Biometria", "sdk-5.2.0.6-jp1"), managed)
 	return discoverSDK(ordered)
 }
 

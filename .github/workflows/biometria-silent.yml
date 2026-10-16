@@ -1,0 +1,57 @@
+name: Biometria - inicializacao silenciosa
+on:
+  push:
+    branches: [biometria-silenciosa-20261016]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version: '1.27.1'
+          cache: false
+      - run: test -z "$(gofmt -l native/biometria native/setup-unico)"
+      - run: python native/biometria/test_native.py
+      - run: node --test tests/biometria.test.cjs
+      - run: python -m unittest discover -s infra -p test_biometria_release.py
+      - run: python native/setup-unico/build_ci.py --output .deploy/silent-release --build-sha "$GITHUB_SHA"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: biometria-silent-release
+          path: .deploy/silent-release/
+          if-no-files-found: error
+          retention-days: 30
+  windows:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: biometria-silent-release
+          path: .deploy/silent-release
+      - run: python infra/windows_silent_start_smoke.py --source .deploy/silent-release --commit "$env:GITHUB_SHA"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: biometria-silent-${{ matrix.os }}
+          path: .deploy/silent-start-report.json
+          if-no-files-found: error
+          retention-days: 30

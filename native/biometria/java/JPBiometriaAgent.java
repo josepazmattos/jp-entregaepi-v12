@@ -14,7 +14,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 /** Loopback-only bridge. A local private control key is never exposed to browser responses. */
 public final class JPBiometriaAgent implements AutoCloseable {
-    static final String VERSION = "12.10.0-bio2", SERVICE = "JP Biometria Local Java";
+    static final String VERSION = "12.10.1", SERVICE = "JP Biometria Local Java";
     static final int FIRST_PORT = 8789, LAST_PORT = 8799, MAX_BODY = 16384;
     static final Set<String> WEB_ORIGINS = new HashSet<>(Arrays.asList("https://www.jptreinamentos.com.br", "https://jptreinamentos.com.br"));
     private final HttpServer server;

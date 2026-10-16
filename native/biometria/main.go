@@ -26,7 +26,7 @@ import (
 	"time"
 )
 
-const version = "12.10.0-bio2"
+const version = "12.10.1"
 const firstPort, lastPort = 8789, 8799
 const installedName, jarName = "JPBiometria.exe", "JPBiometriaAgent.jar"
 
@@ -71,7 +71,7 @@ func main() {
 		}
 		return
 	}
-	quiet := len(args) > 0 && args[0] == "--install-quiet"
+	quiet := quietInvocation(args)
 	mode, err := parseMode(args)
 	if err != nil {
 		failMain(err.Error(), quiet)
@@ -94,7 +94,7 @@ func main() {
 			_, err = startAgent(dir, key)
 		}
 		if err != nil {
-			failMain("Não foi possível iniciar a ponte JP Biometria. Execute o reparador 12.10.0-bio2.\n\n"+err.Error(), quiet)
+			failMain("Não foi possível iniciar a ponte JP Biometria. Execute o reparador 12.10.1.\n\n"+err.Error(), quiet)
 		}
 		return
 	}
@@ -122,6 +122,13 @@ func main() {
 		message = "A verificação do SDK e do leitor ainda está em andamento."
 	}
 	notifyUser(fmt.Sprintf("JP Biometria %s instalado e iniciado na porta %d.\n\n%s\n\nAbra o aplicativo JP, clique em Verificar leitor e depois em Testar captura. A instalação não confirma uma captura física.", version, result.Port, message), false)
+}
+
+// Startup is silent both at Windows sign-in and through the browser protocol.
+// Errors remain observable through the exit code and the app's reader check.
+// Installation retains its interactive completion and error messages.
+func quietInvocation(args []string) bool {
+	return len(args) > 0 && (args[0] == "--install-quiet" || args[0] == "--start")
 }
 func failMain(message string, quiet bool) {
 	if quiet {
