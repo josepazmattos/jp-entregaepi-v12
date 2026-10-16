@@ -74,11 +74,11 @@ module.exports=async function runBiometricBrowser({browser,origin,output}){
     await page.locator('#bioOpenTestButton').click();assert.equal(requests.length,0);assert.equal(await page.locator('#bioCaptureWorker').innerText(),'Nenhum trabalhador vinculado');
     passed('biometria não consulta nem captura automaticamente ao navegar ou abrir o painel');
     await page.locator('#bioCaptureButton').click();await captured();assert.equal(registrations.length,0);assert.equal(await page.locator('#bioRegisterButton').isVisible(),false);await noStoredBiometrics();
-    assert.ok(!(await page.locator('#bioOutput').innerText()).includes('TEMPLATE'));assert.ok(!(await page.locator('#bioOutput').innerText()).includes('NAO-EXIBIR-LOG'));
+    assert.ok(!(await page.locator('#bioOutput').textContent()).includes('TEMPLATE'));assert.ok(!(await page.locator('#bioOutput').textContent()).includes('NAO-EXIBIR-LOG'));
     const beforeRepeat=requests.length;
     await page.locator('#bioCaptureButton').click();await captured();
     assert.deepEqual(requests.slice(beforeRepeat).map(r=>r.path),['/api/capture']);
-    const timing=JSON.parse(await page.locator('#bioOutput').innerText());
+    const timing=JSON.parse(await page.locator('#bioOutput').textContent());
     assert.equal(timing.resultado,'CAPTURA_RECEBIDA');assert.ok(timing.temposMs.total>=0);assert.ok(timing.temposMs.capturaLocal>=0);
     assert.match(await page.locator('#bioCaptureResult').innerText(),/Tempo total: [\d,.]+ s/);
     passed('captura consecutiva vai direto ao leitor e apresenta tempo medido sem imagem nos diagnósticos');
@@ -87,7 +87,7 @@ module.exports=async function runBiometricBrowser({browser,origin,output}){
     await page.locator('#bioCancelButton').click();await discarded();
     passed('captura de teste decodifica imagem real retornada pelo contrato e descarta sem salvar');
 
-    statusMode='wrong';await page.locator('#bioTestButton').click();await page.waitForFunction(()=>document.getElementById('bioStatusBadge').dataset.state==='error');assert.ok(!(await page.locator('#bioOutput').innerText()).includes('TEMPLATE'));
+    statusMode='wrong';await page.locator('#bioTestButton').click();await page.waitForFunction(()=>document.getElementById('bioStatusBadge').dataset.state==='error');assert.ok(!(await page.locator('#bioOutput').textContent()).includes('TEMPLATE'));
     statusMode='missing';await page.locator('#bioTestButton').click();await page.waitForFunction(()=>document.getElementById('bioStatusBadge').dataset.state==='warning');
     passed('HTTP 200 incompatível e agente sem leitor nunca são apresentados como prontos');
 

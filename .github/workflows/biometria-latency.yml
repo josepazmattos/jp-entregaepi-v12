@@ -24,10 +24,14 @@ jobs:
       - run: node --test tests/biometria.test.cjs backend/test/biometria-login.test.js backend/test/ficha-capture-api.test.js
       - run: node tests/biometria-latency.cjs
       - run: node tests/biometria-capture-browser.cjs
-      - run: node tests/operations-browser.cjs
-      - run: node tests/frontend-startup-browser.cjs
-      - run: python3 -m unittest discover -s infra -p test_frontend_release.py
-      - run: node tests/cache-release-browser.cjs
+      - if: ${{ !cancelled() }}
+        run: node tests/operations-browser.cjs
+      - if: ${{ !cancelled() }}
+        run: node tests/frontend-startup-browser.cjs
+      - if: ${{ !cancelled() }}
+        run: python3 -m unittest discover -s infra -p test_frontend_release.py
+      - if: ${{ !cancelled() }}
+        run: node tests/cache-release-browser.cjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
