@@ -46,7 +46,7 @@ const pass=name=>{checks.push(name);console.log('PASSOU: '+name);};
  const scripts=await page.locator('script[src]').evaluateAll(nodes=>nodes.map(n=>n.src));
  assert.ok(scripts.filter(s=>!s.includes('/config.js')).every(s=>s.includes('/releases/'+versions[0]+'/assets/')));
  assert.ok(responses.some(r=>r.url.includes('/assets/app.js')&&r.headers['content-encoding']==='gzip'));
- assert.match(await page.locator('#bioRepairLink').getAttribute('href'),/\/updates\/12\.10\.0-unico1\/JP-Biometria-Instalador-Unico\.exe$/);
+ assert.match(await page.locator('#bioRepairLink').getAttribute('href'),/\/updates\/12\.10\.1-unico1\/JP-Biometria-Instalador-Unico\.exe$/);
  pass('Aplicativo completo abre com scripts comprimidos e versionados; instalador único preservado');
  const pdf=companyPdf();
  const parsed=await page.evaluate(async bytes=>{

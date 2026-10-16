@@ -13,6 +13,68 @@ function client(route,options={}){
 }
 function pendingUntilAbort(_url,{signal}){return new Promise((resolve,reject)=>{const fail=()=>reject(Object.assign(new Error('aborted'),{name:'AbortError'}));if(signal.aborted)fail();else signal.addEventListener('abort',fail,{once:true});});}
 
+test('biometria: conexão recente elimina sondagem antes da captura, mas expira em 30 segundos',async()=>{
+  let clock=0;
+  const {instance,requests}=client(url=>url.pathname==='/status'?json(ready):json({ok:true,realFingerImage:true,fingerImageDataUrl:pixel}),{now:()=>clock});
+  await instance.discover();
+  clock=29999;await instance.discover({reuseRecent:true});assert.equal(requests.length,1);
+  clock=30000;await instance.discover({reuseRecent:true});assert.equal(requests.length,2,'consultar cache não renova seu prazo');
+  clock=59000;await instance.capture({fingerCode:'R_INDEX'});
+  clock=60000;await instance.discover({reuseRecent:true});assert.equal(requests.length,3,'captura real bem-sucedida renova a conexão');
+  await instance.capture({fingerCode:'L_INDEX'});assert.equal(requests.length,4);
+  assert.equal(requests.filter(r=>r.init.method==='POST').length,2,'cada clique continua fazendo uma captura física');
+  await instance.discover();assert.equal(requests.length,5,'Verificar leitor sempre faz consulta nova');
+  instance.clear();await instance.discover({reuseRecent:true});assert.equal(requests.length,6,'logout/limpeza exige nova detecção');
+});
+
+test('biometria: conexão recente não ignora permissão, cancelamento nem exclusão mútua',async()=>{
+  let permission='granted';
+  const {instance,requests}=client((url,init)=>url.pathname==='/status'?json(ready):pendingUntilAbort(url,init),{queryPermission:async()=>({state:permission})});
+  await instance.discover();permission='denied';
+  await assert.rejects(instance.discover({reuseRecent:true}),{code:'BIO_PERMISSION'});assert.equal(requests.length,1);
+  permission='prompt';await assert.rejects(instance.discover({reuseRecent:true,automatic:true}),{code:'BIO_PERMISSION_REQUIRED'});
+  permission='granted';await instance.discover({reuseRecent:true});assert.equal(requests.length,2);
+  const cancelled=new AbortController();cancelled.abort();
+  await assert.rejects(instance.discover({reuseRecent:true,signal:cancelled.signal}),{code:'BIO_CANCELLED'});
+  await instance.discover({reuseRecent:true});assert.equal(requests.length,3);
+  const pending=instance.capture({fingerCode:'R_INDEX'});await new Promise(resolve=>setImmediate(resolve));
+  await assert.rejects(instance.discover({reuseRecent:true}),{code:'BIO_BUSY'});
+  instance.cancel();await assert.rejects(pending,{code:'BIO_CANCELLED'});
+  await instance.discover({reuseRecent:true});assert.equal(requests.length,5,'captura cancelada exige nova consulta');
+});
+
+test('biometria: desconexão, timeout e erro do leitor invalidam conexão sem repetir POST',async()=>{
+  for(const fail of [()=>refused(),pendingUntilAbort,()=>json({code:'READER_NOT_FOUND'},503),()=>json({code:'READER_BUSY'},409),()=>json({ok:false})]){
+    const {instance,requests}=client((url,init)=>url.pathname==='/status'?json(ready):fail(url,init),{captureTimeout:10});
+    await instance.discover();await instance.discover({reuseRecent:true});
+    await assert.rejects(instance.capture({fingerCode:'R_INDEX'}));
+    assert.equal(requests.filter(r=>r.init.method==='POST').length,1);
+    await instance.discover({reuseRecent:true});assert.equal(requests.filter(r=>r.init.method==='GET').length,2);
+  }
+});
+
+test('biometria: estado ausente, ocupado ou incompatível não é reaproveitado',async()=>{
+  for(const state of [{...ready,reader:false},{...ready,busy:true},{...ready,version:'12.7.0'},{...ready,version:'12.9.0',capabilities:{...ready.capabilities,templates:true}}]){
+    const {instance,requests}=client(url=>url.port==='8789'?json(state):refused());
+    await instance.discover();const before=requests.length;
+    await instance.discover({reuseRecent:true,requireEnrollmentImage:true});assert.ok(requests.length>before);
+  }
+});
+
+test('biometria: cadastro e assinatura reaproveitam conexão, conservam desafio e invalidam chave trocada',async()=>{
+  let changed=false,clock=0;
+  const capable={...ready,capabilities:{...ready.capabilities,verify:true,templates:true}};
+  const {instance,requests}=client(url=>url.pathname==='/status'?json(capable):changed?json({code:'BIOMETRIC_DEVICE_DIFFERENT'},409):json({ok:true,proof:'PROVA-SINTETICA',proofSignature:'ASSINATURA-SINTETICA'}),{now:()=>clock});
+  await instance.discover();
+  const challenge={kind:'enroll',challengeId:'DESAFIO-SINTETICO',fingerCode:'R_INDEX'};
+  clock=29000;await instance.biometric(challenge);
+  clock=31000;await instance.discover({reuseRecent:true,requireEnrollmentImage:true});assert.equal(requests.length,2);
+  assert.deepEqual(JSON.parse(requests[1].init.body),challenge);
+  changed=true;await assert.rejects(instance.biometric({...challenge,kind:'verify'}),e=>e.agentCode==='BIOMETRIC_DEVICE_DIFFERENT');
+  assert.equal(requests.length,3,'não repete assinatura nem gera novo desafio automaticamente');
+  await instance.discover({reuseRecent:true});assert.equal(requests.length,4);
+});
+
 test('biometria: contrato exige JSON de agente conhecido e detecção explícita',()=>{
   assert.equal(bio.normalizeStatus(ready,8789).ready,true);
   assert.equal(bio.normalizeStatus({...ready,reader:false},8789).ready,false);

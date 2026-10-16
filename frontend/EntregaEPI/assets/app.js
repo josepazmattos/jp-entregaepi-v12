@@ -920,18 +920,23 @@ async function captureBiometricImage(){
   clearBiometricImage();context.fingerCode=fingerCode;
   const controller=new AbortController();biometricAbort=controller;setBiometricControls(true);
   setText('bioCaptureButton','Capturando...');biometricMessage('warn','Mantenha o dedo selecionado no leitor quando a luz acender. Feche o diagnóstico NITGEN se ele estiver aberto.');
+  const startedAt=performance.now();
   try{
-    const client=getBiometricClient(),status=await client.discover({signal:controller.signal});
+    const client=getBiometricClient(),status=await client.discover({signal:controller.signal,reuseRecent:true});
     if(!biometricContextCurrent(context,generation))return;showBiometricStatus(status);
     if(!status.ready)throw window.JP_BIOMETRIA.unavailableError(status);
+    const readyAt=performance.now();
     const response=await client.capture({fingerCode,purpose:context.fichaId?'signature':'test',signal:controller.signal});
     if(!biometricContextCurrent(context,generation))return;
+    const capturedAt=performance.now();
     const image=await window.JP_BIOMETRIA.prepareCaptureImage(response,{signal:controller.signal});
     if(!biometricContextCurrent(context,generation))return;
     context.image=image;
     const preview=$('bioCaptureImage');preview.src=image;preview.classList.remove('hidden');$('bioCapturePlaceholder').classList.add('hidden');
     $('bioRegisterButton').classList.toggle('hidden',!context.fichaId);
-    biometricMessage('success',context.fichaId?'Captura recebida. Confira o trabalhador e a ficha acima; depois clique em Registrar captura na ficha.':'Captura de teste recebida. A imagem será descartada ao fechar; nenhum cadastro ou ficha foi alterado.');
+    const completedAt=performance.now(),temposMs={conexao:Math.round(readyAt-startedAt),capturaLocal:Math.round(capturedAt-readyAt),preparacaoImagem:Math.round(completedAt-capturedAt),total:Math.round(completedAt-startedAt)};
+    setText('bioOutput',JSON.stringify({agente:status.service,versao:status.version,porta:status.port,resultado:'CAPTURA_RECEBIDA',temposMs},null,2));
+    biometricMessage('success',(context.fichaId?'Captura recebida. Confira o trabalhador e a ficha acima; depois clique em Registrar captura na ficha.':'Captura de teste recebida. A imagem será descartada ao fechar; nenhum cadastro ou ficha foi alterado.')+' Tempo total: '+(temposMs.total/1000).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+' s.');
   }catch(error){if(!biometricContextCurrent(context,generation)||error.code==='BIO_CANCELLED')return;biometricMessage('error',showBiometricFailure(error,'captura'));}
   finally{if(biometricContextCurrent(context,generation)){biometricAbort=null;setBiometricControls(false);setText('bioCaptureButton','Capturar novamente');setText('bioCheckedAt','Última verificação: '+new Date().toLocaleString('pt-BR'));}}
 }
