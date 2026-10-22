@@ -85,6 +85,7 @@ async function main(){
     await s.page.locator('#jpDownloadsTest').click();assert.ok(await s.page.locator('#screen-biometria').evaluate(n=>n.classList.contains('active')));
     await s.page.locator('#bioDownloadsCenter').click();assert.ok(await s.page.locator('#screen-config').evaluate(n=>n.classList.contains('active')));
     assert.equal(await s.page.locator('#jpDownloadProblem').evaluate(n=>n===document.activeElement),true);
+    assert.ok(await s.page.evaluate(()=>document.getElementById('downloadsTitle').getBoundingClientRect().top>=document.querySelector('.app-header').getBoundingClientRect().bottom),'download heading stays below the sticky header');
     pass(role+' can return from Biometria directly to the repair center');
     await s.page.selectOption('#jpDownloadProblem','install_failed');
     await s.page.locator('#downloadsBiometria').screenshot({path:path.join(output,role.toLowerCase()+'.png')});
