@@ -1,0 +1,34 @@
+name: Validar central de downloads
+on:
+  push:
+    branches: [downloads-reparadores-20261022]
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci --prefix tests --no-audit --no-fund
+      - name: Preparar a versão atualmente publicada com o novo centro
+        run: python3 infra/prepare_downloads_test_snapshot.py --output /tmp/jp-downloads-site
+      - name: Conferir sintaxe e executar navegador real com serviços sintéticos
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check frontend/EntregaEPI/assets/downloads-center.js
+          CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
+          test -n "$CHROME_PATH"
+          JP_TEST_CHROMIUM="$CHROME_PATH" JP_DOWNLOADS_TEST_ROOT=/tmp/jp-downloads-site node tests/downloads-center-browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: downloads-center-validation
+          path: tests/output/downloads/
+          if-no-files-found: ignore

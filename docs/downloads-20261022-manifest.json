@@ -1,0 +1,22 @@
+{
+  "release": "downloads-20261022-1",
+  "installer": {
+    "url": "/EntregaEPI/updates/12.10.1-unico1/JP-Biometria-Instalador-Unico.exe",
+    "version": "12.10.1-unico1",
+    "bytes": 58881775,
+    "sha256": "d45dba66241ad4a5b13b49a99e7ecf6b115290bf7aa84902d19630706f50e072"
+  },
+  "repair": {
+    "url": "/EntregaEPI/updates/12.10.1-unico1/JP-Biometria-Reparador-12.10.1.exe",
+    "version": "12.10.1",
+    "bytes": 7930880,
+    "sha256": "c50a3de53a7861a4fbcada73c76bd74650f2277a6c69fb1fb6e07841a4d59c56",
+    "source": "Unchanged agent.exe from the published complete installer"
+  },
+  "physicalReaderTested": false,
+  "driverInstallation": "manual, manufacturer instructions",
+  "sources": [
+    "https://suporte.fingertech.com.br/",
+    "https://support.google.com/chrome/answer/114662?hl=pt-BR"
+  ]
+}
