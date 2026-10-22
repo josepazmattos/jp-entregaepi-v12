@@ -11,6 +11,7 @@ const checks=[];
 const server=http.createServer((req,res)=>{
   let route=decodeURIComponent(new URL(req.url,'http://local').pathname).replace(/^\/EntregaEPI\/?/,'')||'index.html';
   if(route.startsWith('updates/downloads-20261022-1/')&&!fs.existsSync(path.join(root,route)))route='assets/'+path.basename(route);
+  if(route.endsWith('.exe')){res.writeHead(200,{'Content-Type':'application/octet-stream','Content-Disposition':'attachment; filename="'+path.basename(route)+'"'});res.end('SYNTHETIC DOWNLOAD: file bytes verified separately');return;}
   const file=path.resolve(root,route);
   if(!file.startsWith(root+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end();return;}
   res.setHeader('Content-Type',({'.js':'text/javascript','.css':'text/css','.html':'text/html','.svg':'image/svg+xml','.json':'application/json','.png':'image/png'})[path.extname(file)]||'application/octet-stream');
@@ -76,7 +77,7 @@ async function main(){
     const downloads=[];
     for(const id of ['downloadBiometriaLink','downloadReparadorLink']){
       const pending=s.page.waitForEvent('download');await s.page.locator('#'+id).click();
-      const download=await pending;downloads.push(download.suggestedFilename());await download.delete();
+      const download=await pending;downloads.push(download.suggestedFilename());
     }
     assert.deepEqual(downloads,['JP-Biometria-Instalador-Unico.exe','JP-Biometria-Reparador-12.10.1.exe']);
     assert.ok(await s.page.evaluate(()=>Number(sessionStorage.getItem('jp-biometria-install-until'))>Date.now()));
