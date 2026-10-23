@@ -10,7 +10,7 @@ fs.mkdirSync(output,{recursive:true});
 const checks=[];
 const server=http.createServer((req,res)=>{
   let route=decodeURIComponent(new URL(req.url,'http://local').pathname).replace(/^\/EntregaEPI\/?/,'')||'index.html';
-  if(route.startsWith('updates/downloads-20261022-1/')&&!fs.existsSync(path.join(root,route)))route='assets/'+path.basename(route);
+  if(route.startsWith('updates/downloads-20261023-1/')&&!fs.existsSync(path.join(root,route)))route='assets/'+path.basename(route);
   if(route.endsWith('.exe')){res.writeHead(200,{'Content-Type':'application/octet-stream','Content-Disposition':'attachment; filename="'+path.basename(route)+'"'});res.end('SYNTHETIC DOWNLOAD: file bytes verified separately');return;}
   const file=path.resolve(root,route);
   if(!file.startsWith(root+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end();return;}
@@ -109,3 +109,4 @@ async function main(){
   fs.writeFileSync(path.join(output,'report.json'),JSON.stringify({checks,syntheticServices:true,physicalReaderTested:false},null,2));
 }
 main().catch(e=>{console.error(e);process.exitCode=1}).finally(async()=>{await browser?.close();server.close()});
+

@@ -53,7 +53,7 @@ def main():
     patched = patch_html(source)
     assert patch_html(patched) == patched
     index.write_text(patched, encoding='utf-8')
-    release = destination / 'updates/downloads-20261022-1'
+    release = destination / 'updates/downloads-20261023-1'
     release.mkdir(parents=True, exist_ok=True)
     for name in ['downloads-center.js', 'downloads-center.css']:
         shutil.copyfile(root / 'frontend/EntregaEPI/assets' / name, release / name)
@@ -63,3 +63,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

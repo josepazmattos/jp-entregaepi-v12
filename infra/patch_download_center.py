@@ -3,7 +3,7 @@ import argparse
 import re
 from pathlib import Path
 
-RELEASE = '/EntregaEPI/updates/downloads-20261022-1/'
+RELEASE = '/EntregaEPI/updates/downloads-20261023-1/'
 
 
 def patch_html(source: str, build_sha: str | None = None) -> str:
@@ -11,6 +11,7 @@ def patch_html(source: str, build_sha: str | None = None) -> str:
         raise ValueError('Expected one existing download section')
     if source.count('</head>') != 1 or source.count('</body>') != 1:
         raise ValueError('Invalid application HTML')
+    source = source.replace('/EntregaEPI/updates/downloads-20261022-1/', RELEASE)
     css = f'  <link rel="stylesheet" href="{RELEASE}downloads-center.css">\n'
     js = f'  <script defer src="{RELEASE}downloads-center.js"></script>\n'
     if 'downloads-center.css' not in source:
@@ -39,3 +40,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
