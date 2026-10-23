@@ -1,0 +1,27 @@
+{
+  "release": "downloads-20261023-2",
+  "driver": {
+    "url": "/EntregaEPI/drivers/nitgen/hamster-dx-iii-1.4.0.0/Hamster-DX-III-Windows-Driver-1.4.0.0.zip",
+    "packageVersion": "1.4.0.0",
+    "bytes": 65400353,
+    "sha256": "d7074ed2fe83dad36d19347621ba9c49990ad52ec988a1cbf996c0d194807ed9",
+    "sourcePage": "https://suporte.topdata.com.br/suporte/driver-hamster-dx-e-hamster-iii/",
+    "sourceUrl": "https://www.dropbox.com/scl/fi/1axhf6xtsbdrzds9ibgfn/Hamster-DX-III-Windows-Driver-1.4.0.0.zip?dl=1&rlkey=4n9u2znvvvaqecicpeon3m54s&st=e8uj9lpn",
+    "entryPoint64": "Hamster-DX-III-Windows-Driver-1.4.0.0/UBio_Hamster_X_Driver_Setup_x64/UBio_Hamster_X_Driver_Setup_x64.exe",
+    "entryPoint32": "Hamster-DX-III-Windows-Driver-1.4.0.0/UBio_Hamster_X_Driver_Setup_x86/UBio_Hamster_X_Driver_Setup_x86.exe",
+    "installation": "manual",
+    "userReportedInstallationSuccess": true,
+    "userReportedCaptureSuccess": false,
+    "reportedOn": "2026-10-23"
+  },
+  "previousDriver": {
+    "url": "/EntregaEPI/drivers/nitgen/easyinstallation-3.12/EasyInstallation_v3.12-DriverWindows.zip",
+    "packageVersion": "3.12",
+    "bytes": 37964727,
+    "sha256": "5406b6503564e424d409ec837f5061b1fdb9d146b71646f971a3d47c5280f92d",
+    "source": "Original ZIP supplied by JP; bytes unchanged",
+    "entryPoint": "EasyInstallation_v3.12-DriverWindows/Setup.exe",
+    "installation": "manual"
+  },
+  "physicalReaderTestedByAutomation": false
+}

@@ -10,8 +10,8 @@ fs.mkdirSync(output,{recursive:true});
 const checks=[];
 const server=http.createServer((req,res)=>{
   let route=decodeURIComponent(new URL(req.url,'http://local').pathname).replace(/^\/EntregaEPI\/?/,'')||'index.html';
-  if(route.startsWith('updates/downloads-20261023-1/')&&!fs.existsSync(path.join(root,route)))route='assets/'+path.basename(route);
-  if(route.endsWith('.exe')){res.writeHead(200,{'Content-Type':'application/octet-stream','Content-Disposition':'attachment; filename="'+path.basename(route)+'"'});res.end('SYNTHETIC DOWNLOAD: file bytes verified separately');return;}
+  if(route.startsWith('updates/downloads-20261023-2/')&&!fs.existsSync(path.join(root,route)))route='assets/'+path.basename(route);
+  if((/\.(exe|zip)$/).test(route)){res.writeHead(200,{'Content-Type':'application/octet-stream','Content-Disposition':'attachment; filename="'+path.basename(route)+'"'});res.end('SYNTHETIC DOWNLOAD: file bytes verified separately');return;}
   const file=path.resolve(root,route);
   if(!file.startsWith(root+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end();return;}
   res.setHeader('Content-Type',({'.js':'text/javascript','.css':'text/css','.html':'text/html','.svg':'image/svg+xml','.json':'application/json','.png':'image/png'})[path.extname(file)]||'application/octet-stream');
@@ -32,7 +32,7 @@ async function createContext(role,width=1440){
   await ctx.route('**/*',async route=>{
     const req=route.request(),url=new URL(req.url());
     if(url.origin===origin){
-      if(url.pathname.endsWith('.exe'))return route.fulfill({status:200,contentType:'application/octet-stream',headers:{'Content-Disposition':'attachment; filename="'+path.basename(url.pathname)+'"'},body:'SYNTHETIC DOWNLOAD: file bytes verified separately'});
+      if((/\.(exe|zip)$/).test(url.pathname))return route.fulfill({status:200,contentType:'application/octet-stream',headers:{'Content-Disposition':'attachment; filename="'+path.basename(url.pathname)+'"'},body:'SYNTHETIC DOWNLOAD: file bytes verified separately'});
       return route.continue();
     }
     external.push(url.href);
@@ -54,6 +54,9 @@ async function createContext(role,width=1440){
 async function assertCenter(page){
   await page.locator('#jpDownloadProblem').waitFor({state:'visible'});
   assert.equal(await page.locator('[data-jp-download]').count(),2);
+  assert.ok((await page.locator('#downloadDriverAtualizadoLink').getAttribute('href')).endsWith('/Hamster-DX-III-Windows-Driver-1.4.0.0.zip'));
+  assert.ok((await page.locator('#downloadDriverLink').getAttribute('href')).endsWith('/EasyInstallation_v3.12-DriverWindows.zip'));
+  assert.match(await page.locator('.jp-driver-card-updated').innerText(),/UBio_Hamster_X_Driver_Setup_x64\.exe/);
   assert.ok((await page.locator('#downloadReparadorLink').getAttribute('href')).endsWith('/JP-Biometria-Reparador-12.10.1.exe'));
   assert.ok((await page.locator('#downloadBiometriaLink').getAttribute('href')).endsWith('/JP-Biometria-Instalador-Unico.exe'));
   for(const key of ['installation','install_failed','missing_file','network','permission','sdk','nitgen','reader','blocked']){
@@ -75,13 +78,13 @@ async function main(){
     await s.page.locator('.nav [data-screen="config"]').click();
     await assertCenter(s.page);pass(role+' reaches Configurações / Downloads and all nine guides');
     const downloads=[];
-    for(const id of ['downloadBiometriaLink','downloadReparadorLink']){
+    for(const id of ['downloadBiometriaLink','downloadReparadorLink','downloadDriverAtualizadoLink','downloadDriverLink']){
       const pending=s.page.waitForEvent('download');await s.page.locator('#'+id).click();
       const download=await pending;downloads.push(download.suggestedFilename());
     }
-    assert.deepEqual(downloads,['JP-Biometria-Instalador-Unico.exe','JP-Biometria-Reparador-12.10.1.exe']);
+    assert.deepEqual(downloads,['JP-Biometria-Instalador-Unico.exe','JP-Biometria-Reparador-12.10.1.exe','Hamster-DX-III-Windows-Driver-1.4.0.0.zip','EasyInstallation_v3.12-DriverWindows.zip']);
     assert.ok(await s.page.evaluate(()=>Number(sessionStorage.getItem('jp-biometria-install-until'))>Date.now()));
-    pass(role+' downloads both files and activates existing installation monitor');
+    pass(role+' downloads both JP components and both driver packages');
     await s.page.locator('#jpDownloadsTest').click();assert.ok(await s.page.locator('#screen-biometria').evaluate(n=>n.classList.contains('active')));
     await s.page.locator('#bioDownloadsCenter').click();assert.ok(await s.page.locator('#screen-config').evaluate(n=>n.classList.contains('active')));
     assert.equal(await s.page.locator('#jpDownloadProblem').evaluate(n=>n===document.activeElement),true);

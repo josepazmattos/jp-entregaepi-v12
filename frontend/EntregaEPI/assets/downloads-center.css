@@ -3,3 +3,5 @@
 .jp-downloads h1{font-size:27px;margin:8px 0}
 
 .jp-downloads .jp-driver-links .btn{display:flex;justify-content:center;align-items:center;min-height:44px;padding:12px 16px;text-decoration:none;white-space:normal;text-align:center;line-height:1.4;font-weight:800}.jp-driver-links small{font-size:11px;color:#52685c}.jp-downloads .jp-driver-card .jp-driver-compatibility{margin-top:10px;font-size:12px;color:#52685c}@media(max-width:760px){.jp-driver-links{width:100%}}
+
+.jp-driver-card-updated{border:1px solid #a7bfae;border-left:4px solid #146544;background:#f4f9f5}.jp-downloads .jp-driver-card-updated h3{margin-top:8px;font-size:18px}.jp-driver-card>div:first-child{min-width:0;overflow-wrap:anywhere}
