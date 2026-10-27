@@ -206,7 +206,7 @@ async function cognitoLogin(username,password){
     // A senha provisória atende à política do pool sem alterar o código inicial entregue à empresa.
     data=await authenticate("JpEpi1-Inicial-"+password.toUpperCase());
   }
-  if(data.ChallengeName&&!["NEW_PASSWORD_REQUIRED","SOFTWARE_TOKEN_MFA"].includes(data.ChallengeName))throw new Error("Este acesso exige uma verificação adicional. Solicite orientação ao administrador.");
+  if(data.ChallengeName&&!["NEW_PASSWORD_REQUIRED","SOFTWARE_TOKEN_MFA","EMAIL_OTP"].includes(data.ChallengeName))throw new Error("Este acesso exige uma verificação adicional. Solicite orientação ao administrador.");
   return {...data,resolvedUsername:resolved.username};
 }
 async function passwordDigest(value){return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value)))).map(byte=>byte.toString(16).padStart(2,"0")).join("");}

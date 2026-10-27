@@ -59,3 +59,25 @@ test('company account administration cannot promote a caller or target an arbitr
   record._passwordReset={actor:'another-master',status:'processando',startedAt:new Date().toISOString()};assert.equal((await h({action:'account-reset',company:'A',token:'t'})).status,409);
   record._passwordReset.actor=master.sub;assert.equal((await h({action:'account-reset',company:'A',token:'t'})).ok,true);assert.equal(calls[1].username,'company-login');
 });
+test('email MFA forwards only the bound Cognito challenge and rejects other challenge types',async()=>{
+  const calls=[],proofs=[];
+  const auth=createAuthSecurity({appClient:'client',verify:async()=>master,cognito:{send:async c=>{calls.push(c.input);return {AuthenticationResult:{IdToken:'email-issued'}};}},sessions:{record:async t=>proofs.push(t)},log:()=>{}});
+  const request={action:'challenge',username:'master',session:'email-session-1234567890',code:'123456',challengeName:'EMAIL_OTP',IdToken:'forged',email:'attacker@example.test'};
+  assert.equal((await auth(request)).ok,true);
+  assert.deepEqual(calls[0],{ClientId:'client',ChallengeName:'EMAIL_OTP',Session:request.session,ChallengeResponses:{USERNAME:'master',EMAIL_OTP_CODE:'123456'}});
+  assert.deepEqual(proofs,['email-issued']);
+  for(const challengeName of ['PASSWORD','NEW_PASSWORD_REQUIRED','CUSTOM_CHALLENGE','__proto__','toString',null])assert.equal((await auth({...request,challengeName})).code,'MFA_METHOD_INVALID');
+  assert.equal(calls.length,1);
+  const incomplete=createAuthSecurity({cognito:{send:async()=>({ChallengeName:'EMAIL_OTP',Session:'next',AuthenticationResult:{IdToken:'must-not-record'}})},sessions:{record:async()=>assert.fail('incomplete challenge recorded')},log:()=>{}});
+  assert.equal((await incomplete(request)).code,'MFA_NOT_COMPLETED');
+});
+test('concurrent Master email challenges produce independent session proofs',async()=>{
+  const recorded=new Set(),auth=createAuthSecurity({verify:async()=>master,cognito:{send:async c=>({AuthenticationResult:{IdToken:c.input.Session}})},sessions:{record:async t=>recorded.add(t)},log:()=>{}});
+  const results=await Promise.all(['A','B'].map(id=>auth({action:'challenge',username:'master',session:id.repeat(30),code:'123456',challengeName:'EMAIL_OTP'})));
+  assert.ok(results.every(x=>x.ok));assert.equal(recorded.size,2);
+});
+test('Master status recognizes email MFA without exposing the email address',async()=>{
+  const auth=createAuthSecurity({verify:async()=>master,sessions:{verified:async()=>false},cognito:{send:async()=>({UserMFASettingList:['EMAIL_OTP'],UserAttributes:[{Name:'email',Value:'private@example.test'}]})},log:()=>{}});
+  const result=await auth({action:'status',token:'password-only'});
+  assert.equal(result.data.method,'email');assert.equal(result.data.enrolled,true);assert.equal(result.data.verified,false);assert.ok(!JSON.stringify(result).includes('private@'));
+});

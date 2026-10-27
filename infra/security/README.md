@@ -7,7 +7,7 @@ Atualização de 27/10/2026: MFA obrigatório para Master, assinador isolado, ad
 | Serviço | Permissões e controles |
 | --- | --- |
 | API principal | Mantém os cadastros operacionais. Não cria usuários, altera grupos ou redefine senhas no Cognito; essas operações verificam Master+MFA no serviço administrativo. Consulta o JPGED; não grava seus registros nem assina/administra certificados. Encaminha o JWT original aos serviços isolados. |
-| auth-security | Completa exclusivamente o desafio Cognito SOFTWARE_TOKEN_MFA e grava a prova SHA-256 do ID token, sub, auth_time e exp. Único gravador dos registros MFA#. |
+| auth-security | Completa somente os desafios Cognito EMAIL_OTP e SOFTWARE_TOKEN_MFA e grava a prova SHA-256 do ID token, sub, auth_time e exp. Único gravador dos registros MFA#. |
 | signer | Verifica assinatura/issuer/audience/exp do JWT, empresa, papel e MFA do Master. Recebe identificadores de ficha/job/documento, sem aceitar digest/PDF/chave arbitrários. Assina pelo KMS e grava documentos/evidências. Não importa nem administra chaves. |
 | vault-admin | Verifica JWT, perfil Master, MFA e autenticação com até dez minutos para operações de certificado. Importa a chave já envelopada no navegador; não recebe PFX nem senha. Possui negação explícita de kms:Sign. Mantém provisionamento e restauração de acesso de empresas com Master+MFA, lendo o login e o vínculo somente do cadastro confirmado. O grupo de provisionamento é fixo em EMPRESA. Mantém a configuração do destino V10 com Master+MFA, sem exigir nova senha para essa configuração. |
 | security-alerts | Recebe eventos de segurança e envia resumos ao endereço configurado. Não inclui tokens, códigos MFA, certificados ou dados biométricos. Deduplicação por ID do evento. |
@@ -16,11 +16,13 @@ A leitura histórica de certificados e PDFs por Master permanece disponível mes
 
 ## MFA
 
-O pool Cognito disponibiliza TOTP como OPTIONAL para preservar os acessos de empresas. O requisito Master é imposto no backend, independentemente da interface: a sessão só é aceita se houver prova do desafio concluído para aquele ID token específico. Desabilitar uma opção de interface ou renovar um token sem passar pelo desafio não cria essa prova.
+O pool Cognito disponibiliza e-mail e TOTP como OPTIONAL para preservar os acessos de empresas. O requisito Master é imposto no backend, independentemente da interface: a sessão só é aceita se houver prova do desafio concluído para aquele ID token específico. Desabilitar uma opção de interface ou renovar um token sem passar pelo desafio não cria essa prova.
 
-No primeiro acesso do Master, o aplicativo mostra uma chave de configuração para cadastrar no Google Authenticator ou Microsoft Authenticator. A chave fica no navegador e no Cognito. Após confirmar o código, o usuário entra novamente com senha e autenticador. A etapa de pareamento depende do titular e não pode ser feita pelo agente. Alterar/desvincular certificado pede senha e novo código.
+O Master usa senha e código enviado ao e-mail da diretoria. O código expira em dez minutos, pode ser colado na tela e vale somente para a sessão de login que o solicitou. Não é necessário cadastrar aplicativo ou chave TOTP. A interface mantém compatibilidade com usuários que já utilizem TOTP. Alterar/desvincular certificado pede senha e novo código.
 
-A perda do autenticador exige recuperação por administrador AWS autorizado, após verificação da identidade. Não distribuir senhas ou sementes TOTP por e-mail. Proceder ao reset de MFA pelo Cognito, encerrar as sessões afetadas, invalidar suas provas MFA# na tabela de segurança e conferir os eventos de auditoria. Não desligar o requisito Master global para recuperar uma conta.
+O Cognito usa o SES verificado, com envio nativo de MFA. O cliente permite somente autenticação inicial por senha (USER_PASSWORD_AUTH/SRP), sem USER_AUTH/passwordless: EMAIL_OTP deve continuar sendo um segundo fator. O e-mail não pode ser alterado pelo cliente web; sua troca exige administração AWS autorizada. Os demais acessos de empresas conservam seus fluxos. A recuperação de senha continua administrativa no aplicativo; o Cognito não permite recuperar a senha pelo mesmo e-mail usado como MFA.
+
+Se várias pessoas compartilham Master e caixa postal, cada entrada recebe sua própria sessão, mas os registros identificam a conta compartilhada. Atribuição pessoal exige usuários individuais. Perda do e-mail exige recuperação por administrador AWS autorizado, com verificação de identidade, encerramento de sessões, invalidação das provas MFA# afetadas e conferência dos eventos. Não desligar o requisito Master global para recuperar uma conta.
 
 ## Auditoria e alertas
 
@@ -62,9 +64,9 @@ Em falha de implantação, preferir corrigir os componentes isolados. O rollback
 - Cognito real: pareamento TOTP, desafio obrigatório, rejeição de código inválido, prova vinculada ao token e recusa por falta de perfil nos serviços isolados; usuário temporário excluído.
 - Auditoria: CloudTrail registrando e entregando arquivos. Teste CloudWatch → EventBridge → Lambda → SES concluído com registro `outcome: sent` (aceite pelo SES, não confirmação de leitura do e-mail).
 
-Os testes não assinam documentos reais nem usam certificados privados de clientes. A continuidade operacional deve ser acompanhada após o pareamento do Master.
+Os testes não assinam documentos reais nem usam certificados privados de clientes. A continuidade operacional deve ser acompanhada após a confirmação por e-mail do Master.
 
-## Estado conferido após a publicação
+## Registro da publicação anterior (12.10.2-security2)
 
 API e interface publicadas na versão `12.10.2-security2`, com código `93015be954f9edb57ad13b583327cf6941a4bae9` e pacote SHA-256 base64 `5QfVDdj0gvOQWqnU1gioVFUeGfE9LR9/HQHGcTzq5To=`. A interface reutiliza os assets inalterados da release cfc016c. A API respondeu 403 `MFA_REQUIRED` a um evento Master sintético sem prova. A rota pública de desafio encaminhou o pedido e recusou código malformado com 400. As oito chaves permaneceram Enabled/EXTERNAL, sem principal da API em suas políticas. A simulação IAM confirmou assinatura permitida ao signer e negada à API e ao administrador do cofre; gravação JPGED e criação de prova MFA negadas à API.
 

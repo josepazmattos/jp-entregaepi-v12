@@ -41,8 +41,8 @@ app.get('/health', async (req, res) => {
 
 app.use('/api/caepi', caepiRoutes);
 app.post('/auth/mfa', async (req, res) => {
-  const { username, session, code } = req.body || {};
-  const data = await invokeSecurity(process.env.AUTH_SECURITY_FUNCTION, { action: 'challenge', username, session, code });
+  const { username, session, code, challengeName } = req.body || {};
+  const data = await invokeSecurity(process.env.AUTH_SECURITY_FUNCTION, { action: 'challenge', username, session, code, challengeName });
   res.json({ ok: true, ...data });
 });
 app.use('/auth', loginRoutes);
