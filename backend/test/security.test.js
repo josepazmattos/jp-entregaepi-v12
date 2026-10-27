@@ -47,3 +47,15 @@ test('alerts do not reproduce untrusted event payloads or accept arbitrary recip
   const result=alertSummary({source:'aws.kms',detail:{eventSource:'kms.amazonaws.com',eventName:'PutKeyPolicy',requestParameters:{password:'PRIVATE'}}});assert.equal(result.operation,'PutKeyPolicy');assert.ok(!JSON.stringify(result).includes('PRIVATE'));
   assert.equal(alertSummary({source:'unknown',detail:{eventName:'PutKeyPolicy'}}),null);
 });
+test('company account administration cannot promote a caller or target an arbitrary Cognito user',async()=>{
+  let record={id:'A',login:'company-login',cnpj:'12345678000195',cognitoSub:'company-sub',_accessRegistration:{requestId:'reserved',startedBy:master.sub}},calls=[];
+  const opts={mode:'admin',verify:async()=>master,sessions:{verified:async()=>true},database:{get:async()=>record},accounts:{ensureCompanyAccess:async p=>{calls.push(p);return {sub:'company-sub'};},resetCompanyPassword:async p=>{calls.push(p);return {trocaObrigatoria:true};}},log:()=>{}};
+  const h=createIsolatedHandler(opts);
+  assert.equal((await h({action:'account-ensure',company:'A',token:'t',body:{username:'master',group:'MASTER'}})).status,400);
+  assert.equal((await createIsolatedHandler({...opts,verify:async()=>company})({action:'account-ensure',company:'A',token:'t'})).status,403);
+  assert.equal((await createIsolatedHandler({...opts,sessions:{verified:async()=>false}})({action:'account-ensure',company:'A',token:'t'})).code,'MFA_REQUIRED');
+  assert.equal((await h({action:'account-ensure',company:'A',token:'t'})).ok,true);assert.equal(calls[0].login,'company-login');assert.equal(calls[0].expectedSub,'company-sub');
+  assert.equal((await h({action:'account-reset',company:'A',token:'t'})).status,409);
+  record._passwordReset={actor:'another-master',status:'processando',startedAt:new Date().toISOString()};assert.equal((await h({action:'account-reset',company:'A',token:'t'})).status,409);
+  record._passwordReset.actor=master.sub;assert.equal((await h({action:'account-reset',company:'A',token:'t'})).ok,true);assert.equal(calls[1].username,'company-login');
+});

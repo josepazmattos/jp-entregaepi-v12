@@ -4,17 +4,18 @@ import { gedStorage } from '../db/jpged.js';
 import * as store from '../db/store.js';
 import { createGedService } from '../services/jpged.service.js';
 import { createV10Destination } from '../services/v10-destination.js';
+import { companyAccounts } from '../services/company-accounts.js';
 const service = createGedService({ ged: gedStorage, store });
 const destination = createV10Destination({ ged: gedStorage });
 const id = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
-export function createIsolatedHandler({ mode, verify = verifyToken, sessions = mfaSessions, database = store, gedService = service, log = securityEvent } = {}) {
+export function createIsolatedHandler({ mode, verify = verifyToken, sessions = mfaSessions, database = store, gedService = service, accounts = companyAccounts, log = securityEvent } = {}) {
   return async event => {
     let actor, company;
     try {
       if (!event || !id(event.company) || typeof event.action !== 'string') throw httpError(400, 'Solicitação inválida.', 'SECURITY_REQUEST');
       const claims = await verify(event.token); actor = claims.sub; company = event.company;
       const master = isMaster(claims);
-      if (master) await requireVerifiedMaster(event.token, claims, { recent: mode === 'admin' && event.action !== 'destination', sessions });
+      if (master) await requireVerifiedMaster(event.token, claims, { recent: mode === 'admin' && ['start','prove','complete','cancel','disconnect'].includes(event.action), sessions });
       else if (mode === 'admin' || !claims['cognito:groups']?.includes('EMPRESA') || claims['custom:empresa_id'] !== company) throw httpError(403, 'Acesso não permitido a esta empresa.', 'EMPRESA_NAO_AUTORIZADA');
       const employer = await database.get('empresa', company);
       const historicalRead = master && mode === 'signer' && ['certificate','download'].includes(event.action);
@@ -37,12 +38,19 @@ export function createIsolatedHandler({ mode, verify = verifyToken, sessions = m
           else data = await gedService.reissueLayout(company, actor, event.id);
         }
       } else if (mode === 'admin') {
-        if (!['start','prove','complete','cancel','disconnect','destination'].includes(event.action)) throw httpError(403, 'Operação não permitida no cofre.', 'VAULT_ACTION');
+        if (!['start','prove','complete','cancel','disconnect','destination','account-ensure','account-reset'].includes(event.action)) throw httpError(403, 'Operação não permitida no cofre.', 'VAULT_ACTION');
         if (Object.keys(event).some(k => !['token','action','company','id','body'].includes(k))) throw httpError(400, 'Solicitação inválida.', 'VAULT_PAYLOAD');
-        const allowed = { start: ['chain'], prove: ['signature'], complete: ['wrappedKey'], cancel: [], disconnect: [], destination:['destinationId','version'] }[event.action];
+        const allowed = { start: ['chain'], prove: ['signature'], complete: ['wrappedKey'], cancel: [], disconnect: [], destination:['destinationId','version'], 'account-ensure':[], 'account-reset':[] }[event.action];
         const body = event.body || {};
         if (typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(k => !allowed.includes(k))) throw httpError(400, 'O cofre não recebe arquivos A1 ou senhas.', 'VAULT_PAYLOAD');
-        if (event.action === 'destination') data = await destination.save(employer, actor, body);
+        if (event.action === 'account-ensure') {
+          if(!employer._accessRegistration?.requestId||!employer._accessRegistration?.startedBy||!employer.login||!employer.cnpj)throw httpError(409,'Cadastro de acesso não reservado.','ACESSO_CADASTRO_NECESSARIO');
+          data=await accounts.ensureCompanyAccess({companyId:company,login:employer.login,cnpj:employer.cnpj,inscricaoTipo:employer.inscricaoTipo,expectedSub:employer.cognitoSub||''});
+        } else if(event.action === 'account-reset') {
+          const reset=employer._passwordReset,age=Date.now()-Date.parse(reset?.startedAt);
+          if(reset?.status!=='processando'||reset.actor!==actor||!Number.isFinite(age)||age<0||age>=60000)throw httpError(409,'Restauração de senha não reservada.','ACESSO_EM_ANDAMENTO');
+          data=await accounts.resetCompanyPassword({companyId:company,username:employer.cognitoUsername||employer.login,expectedSub:employer.cognitoSub,cnpj:employer.cnpj,inscricaoTipo:employer.inscricaoTipo});
+        } else if (event.action === 'destination') data = await destination.save(employer, actor, body);
         else if (event.action === 'start') data = await gedService.vaultAdmin.start(employer, actor, body);
         else if (event.action === 'disconnect') { await gedService.disconnect(company, actor); data = {}; }
         else {

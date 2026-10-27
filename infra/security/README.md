@@ -6,10 +6,10 @@ Atualização de 27/10/2026: MFA obrigatório para Master, assinador isolado, ad
 
 | Serviço | Permissões e controles |
 | --- | --- |
-| API principal | Mantém os cadastros operacionais. Consulta o JPGED; não grava seus registros nem assina/administra certificados. Encaminha o JWT original aos serviços isolados. |
+| API principal | Mantém os cadastros operacionais. Não cria usuários, altera grupos ou redefine senhas no Cognito; essas operações verificam Master+MFA no serviço administrativo. Consulta o JPGED; não grava seus registros nem assina/administra certificados. Encaminha o JWT original aos serviços isolados. |
 | auth-security | Completa exclusivamente o desafio Cognito SOFTWARE_TOKEN_MFA e grava a prova SHA-256 do ID token, sub, auth_time e exp. Único gravador dos registros MFA#. |
 | signer | Verifica assinatura/issuer/audience/exp do JWT, empresa, papel e MFA do Master. Recebe identificadores de ficha/job/documento, sem aceitar digest/PDF/chave arbitrários. Assina pelo KMS e grava documentos/evidências. Não importa nem administra chaves. |
-| vault-admin | Verifica JWT, perfil Master, MFA e autenticação com até dez minutos para operações de certificado. Importa a chave já envelopada no navegador; não recebe PFX nem senha. Possui negação explícita de kms:Sign. Mantém a configuração do destino V10 com Master+MFA, sem exigir nova senha para essa configuração. |
+| vault-admin | Verifica JWT, perfil Master, MFA e autenticação com até dez minutos para operações de certificado. Importa a chave já envelopada no navegador; não recebe PFX nem senha. Possui negação explícita de kms:Sign. Mantém provisionamento e restauração de acesso de empresas com Master+MFA, lendo o login e o vínculo somente do cadastro confirmado. O grupo de provisionamento é fixo em EMPRESA. Mantém a configuração do destino V10 com Master+MFA, sem exigir nova senha para essa configuração. |
 | security-alerts | Recebe eventos de segurança e envia resumos ao endereço configurado. Não inclui tokens, códigos MFA, certificados ou dados biométricos. Deduplicação por ID do evento. |
 
 A leitura histórica de certificados e PDFs por Master permanece disponível mesmo para empresa excluída. Novas assinaturas e operações de certificado continuam bloqueadas nesse caso. A separação reduz o alcance de uma falha da API, mas o assinador permanece um componente de confiança e deve receber manutenção e revisão de código.
@@ -56,7 +56,7 @@ Em falha de implantação, preferir corrigir os componentes isolados. O rollback
 
 ## Validação
 
-- Backend: 230 testes aprovados, incluindo isolamento de empresa, prova MFA, reautenticação, importação e assinatura.
+- Backend: 231 testes aprovados, incluindo isolamento de empresa, prova MFA, reautenticação, importação e assinatura.
 - Frontend: 81 testes unitários aprovados; navegador real cobrindo MFA, código inválido, bloqueio pré-MFA e tela móvel.
 - Navegador JPGED: instalação A1 com certificado sintético, senha errada, prova, certificação/retry, isolamento de empresas e permissões visuais aprovados.
 - Cognito real: pareamento TOTP, desafio obrigatório, rejeição de código inválido, prova vinculada ao token e recusa por falta de perfil nos serviços isolados; usuário temporário excluído.
@@ -69,3 +69,5 @@ Os testes não assinam documentos reais nem usam certificados privados de client
 API e interface publicadas com código `cfc016cd341e9ba777fb0df479b9e93fb8f0a2d0` e pacote SHA-256 base64 `dkwJZxqNqLSjIM9WmPsWbckrna/D4zmJ6bjdRqXLAXw=`. A API respondeu 403 `MFA_REQUIRED` a um evento Master sintético sem prova. A rota pública de desafio encaminhou o pedido e recusou código malformado com 400. As oito chaves permaneceram Enabled/EXTERNAL, sem principal da API em suas políticas. A simulação IAM confirmou assinatura permitida ao signer e negada à API e ao administrador do cofre; gravação JPGED e criação de prova MFA negadas à API.
 
 O usuário Master estava habilitado e ainda não tinha autenticador pareado ao encerrar a implantação. A interface exige esse cadastro. Os oito alertas PutKeyPolicy emitidos durante a mudança correspondem à separação autorizada das permissões das chaves. A confirmação de envio indica aceite pelo SES, não leitura pelo destinatário.
+
+A conferência das permissões removeu também o caminho indireto de administração de contas: a API conserva apenas AdminGetUser para leitura e deixa de possuir AdminCreateUser, AdminAddUserToGroup e AdminSetUserPassword. O serviço administrativo verifica JWT/MFA independentemente, usa somente dados do registro da empresa e não aceita username, grupo ou senha arbitrários.

@@ -377,6 +377,18 @@
                       "Arn"
                     ]
                   }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cognito-idp:AdminGetUser",
+                    "cognito-idp:AdminCreateUser",
+                    "cognito-idp:AdminAddUserToGroup",
+                    "cognito-idp:AdminSetUserPassword"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
+                  }
                 }
               ]
             }
@@ -642,7 +654,8 @@
             "V10_SYNC_ENABLED": "true",
             "ALERT_EMAIL": {
               "Ref": "AlertEmail"
-            }
+            },
+            "AUTH_COMPANY_CLAIM": "custom:empresa_id"
           }
         },
         "Tags": [
@@ -730,7 +743,8 @@
             "V10_SYNC_ENABLED": "true",
             "ALERT_EMAIL": {
               "Ref": "AlertEmail"
-            }
+            },
+            "AUTH_COMPANY_CLAIM": "custom:empresa_id"
           }
         },
         "Tags": [
@@ -818,7 +832,8 @@
             "V10_SYNC_ENABLED": "true",
             "ALERT_EMAIL": {
               "Ref": "AlertEmail"
-            }
+            },
+            "AUTH_COMPANY_CLAIM": "custom:empresa_id"
           }
         },
         "Tags": [
@@ -906,7 +921,8 @@
             "V10_SYNC_ENABLED": "true",
             "ALERT_EMAIL": {
               "Ref": "AlertEmail"
-            }
+            },
+            "AUTH_COMPANY_CLAIM": "custom:empresa_id"
           }
         },
         "Tags": [
