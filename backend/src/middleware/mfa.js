@@ -6,7 +6,7 @@ export function createMfaGuard({ enabled = process.env.MASTER_MFA_REQUIRED === '
     const token = bearer(req.headers);
     if (!await sessions.verified(token, { sub: req.auth.sub, auth_time: req.auth.authTime, exp: req.auth.expires })) {
       securityEvent('MASTER_ACCESS', 'denied', { actor: req.auth.sub, code: 'MFA_REQUIRED' });
-      throw httpError(403, 'Ative e confirme o autenticador para continuar como Master.', 'MFA_REQUIRED');
+      throw httpError(403, 'Confirme o código de acesso para continuar como Master.', 'MFA_REQUIRED');
     }
     next();
   };

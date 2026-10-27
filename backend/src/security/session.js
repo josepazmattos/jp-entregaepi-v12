@@ -30,7 +30,7 @@ export function createMfaSessions({ client = db, table = process.env.SECURITY_TA
     },
     async record(token, claims) {
       ready();
-      // Called exclusively after Cognito accepts SOFTWARE_TOKEN_MFA. Never
+      // Called only after Cognito accepts a supported MFA challenge. Never
       // accept a browser-supplied token or a browser claim as evidence of MFA.
       await client.send(new PutCommand({ TableName: table, Item: { pk: 'MFA#' + tokenHash(token), kind: 'mfa', sub: claims.sub, authTime: Number(claims.auth_time), expiresAtEpoch: Number(claims.exp) }, ConditionExpression: 'attribute_not_exists(pk)' }));
     }
@@ -39,9 +39,9 @@ export function createMfaSessions({ client = db, table = process.env.SECURITY_TA
 export const mfaSessions = createMfaSessions();
 export async function requireVerifiedMaster(token, claims, { recent = false, sessions = mfaSessions } = {}) {
   if (!isMaster(claims)) throw httpError(403, 'Esta operação exige o perfil Master.', 'PERFIL_NAO_AUTORIZADO');
-  if (!await sessions.verified(token, claims)) throw httpError(403, 'Confirme o código do autenticador para acessar como Master.', 'MFA_REQUIRED');
+  if (!await sessions.verified(token, claims)) throw httpError(403, 'Confirme o código de acesso para entrar como Master.', 'MFA_REQUIRED');
   const age = Date.now() / 1000 - Number(claims.auth_time);
-  if (recent && (!Number.isFinite(age) || age < -60 || age > 600)) throw httpError(401, 'Confirme novamente sua senha e o código do autenticador.', 'CERTIFICADO_REAUTENTICAR');
+  if (recent && (!Number.isFinite(age) || age < -60 || age > 600)) throw httpError(401, 'Confirme novamente sua senha e o código de acesso.', 'CERTIFICADO_REAUTENTICAR');
 }
 export function securityEvent(action, outcome, details = {}) {
   // Whitelist metadata: no token, MFA code, PFX, private key or request body.
