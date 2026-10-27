@@ -48,11 +48,11 @@ Ordem de implantação:
 1. Conferir estado atual e salvar pacote/configuração/políticas; preservar os snapshots CA/relatório existentes no pacote da API.
 2. Validar com cfn-lint, cfn-guard e change set; criar serviços/tabela/trilha/alertas e habilitar TOTP OPTIONAL.
 3. Testar em Cognito real com usuário temporário sem acesso às empresas, criado e excluído pelo `live-mfa-probe.mjs`. A função e a role temporárias também devem ser removidas. Não executar esse teste rotineiramente em produção sem uma manutenção autorizada.
-4. Publicar os arquivos alterados da interface sob um novo prefixo de release. Preservar os URLs dos demais assets e instaladores; atualizar o índice por último.
+4. Publicar os arquivos alterados da interface sob um novo prefixo de release. Preservar os URLs dos demais assets e instaladores; atualizar por último as três cópias de entrada: objetos S3 `EntregaEPI`, `EntregaEPI/` e `EntregaEPI/index.html`. Os endereços com e sem barra final usam objetos HTML próprios.
 5. Conceder à API a invocação das três funções e a leitura das provas; atualizar seu código/env com SIGNER_FUNCTION, VAULT_ADMIN_FUNCTION, AUTH_SECURITY_FUNCTION, SECURITY_TABLE e MASTER_MFA_REQUIRED=true.
 6. Remover a API das políticas KMS e as permissões de criação de chave e de gravação JPGED/S3. Adicionar negações explícitas. Conferir as políticas efetivas, as oito chaves Enabled, a saúde da API e os alertas.
 
-Em falha de implantação, preferir corrigir os componentes isolados. O rollback integral do pacote antigo exige restaurar também suas políticas anteriores, pois o código anterior assinava na API; essa medida reduz a separação de funções e deve ser tratada como exceção temporária e registrada. Não desabilitar MFA automaticamente. Para recuperação da interface, o índice anterior continua disponível no backup e referencia releases imutáveis.
+Em falha de implantação, preferir corrigir os componentes isolados. O rollback integral do pacote antigo exige restaurar também suas políticas anteriores, pois o código anterior assinava na API; essa medida reduz a separação de funções e deve ser tratada como exceção temporária e registrada. Não desabilitar MFA automaticamente. Para recuperação da interface, as três cópias anteriores da página de entrada continuam disponíveis no backup e referencia releases imutáveis.
 
 ## Validação
 
@@ -63,3 +63,9 @@ Em falha de implantação, preferir corrigir os componentes isolados. O rollback
 - Auditoria: CloudTrail registrando e entregando arquivos. Teste CloudWatch → EventBridge → Lambda → SES concluído com registro `outcome: sent` (aceite pelo SES, não confirmação de leitura do e-mail).
 
 Os testes não assinam documentos reais nem usam certificados privados de clientes. A continuidade operacional deve ser acompanhada após o pareamento do Master.
+
+## Estado conferido após a publicação
+
+API e interface publicadas com código `cfc016cd341e9ba777fb0df479b9e93fb8f0a2d0` e pacote SHA-256 base64 `dkwJZxqNqLSjIM9WmPsWbckrna/D4zmJ6bjdRqXLAXw=`. A API respondeu 403 `MFA_REQUIRED` a um evento Master sintético sem prova. A rota pública de desafio encaminhou o pedido e recusou código malformado com 400. As oito chaves permaneceram Enabled/EXTERNAL, sem principal da API em suas políticas. A simulação IAM confirmou assinatura permitida ao signer e negada à API e ao administrador do cofre; gravação JPGED e criação de prova MFA negadas à API.
+
+O usuário Master estava habilitado e ainda não tinha autenticador pareado ao encerrar a implantação. A interface exige esse cadastro. Os oito alertas PutKeyPolicy emitidos durante a mudança correspondem à separação autorizada das permissões das chaves. A confirmação de envio indica aceite pelo SES, não leitura pelo destinatário.
