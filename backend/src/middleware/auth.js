@@ -34,7 +34,7 @@ export function createAuthorization({ issuer, audience, companyClaim = '' } = {}
       if (typeof company === 'string' && company.trim() && company.length <= 128) empresaIds = [company.trim()];
     }
     if (!master && !empresaIds.length) return next(httpError(403, 'Perfil ou vínculo com a empresa não configurado. Solicite ajuste ao administrador.', 'PERFIL_NAO_CONFIGURADO'));
-    req.auth = Object.freeze({ sub: String(claims.sub), master, empresaIds: Object.freeze(empresaIds), authTime: Number(claims.auth_time)||0 });
+    req.auth = Object.freeze({ sub: String(claims.sub), master, empresaIds: Object.freeze(empresaIds), authTime: Number(claims.auth_time)||0, expires });
     next();
   };
 }

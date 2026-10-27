@@ -8,12 +8,36 @@ import {listEquipmentCatalog} from './epis.service.js';
 
 const fold=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR').trim();
 const compare=new Intl.Collator('pt-BR',{sensitivity:'base',numeric:true});
+const nameConnectors=new Set(['a','as','o','os','de','da','das','do','dos','e','para','contra']);
+function nameTokens(term){
+  const words=term.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const meaningful=words.filter(word=>!nameConnectors.has(word));
+  // "Luva de segurança" is a common name; official CA names describe the protection.
+  // Also accept the last word while the user is still typing "segurança".
+  const specific=meaningful.filter((word,index)=>word!=='seguranca'&&!(index===meaningful.length-1&&word.length>=4&&'seguranca'.startsWith(word)));
+  return (specific.length?specific:meaningful).map(word=>word.length>3&&word.endsWith('s')?word.slice(0,-1):word);
+}
+function matchesName(name,tokens,preparedWords){
+  const words=preparedWords||fold(name).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  return tokens.every(token=>words.some(word=>word.startsWith(token)));
+}
 const unavailable=()=>httpError(503,'O catálogo do relatório está indisponível. Os cadastros manuais continuam disponíveis.','EPI_RELATORIO_INDISPONIVEL');
 export function createReportCatalog({filePath=process.env.EPI_REPORT_PATH||new URL('../data/epi-report/manifest.json',import.meta.url)}={}){
   const folder=dirname(filePath instanceof URL?fileURLToPath(filePath):filePath);
   const required=process.env.EPI_REPORT_REQUIRED==='true'||existsSync(filePath);
   let manifest, records, byId, failure=false;
-  const details=new Map();
+  // Only immutable report text is reused. Live manual records are read and folded afresh.
+  const details=new Map(),reportNames=new Map(),reportText=new Map();
+  function preparedText(item,value){
+    if(item.origemCadastro!=='relatorio_ca')return fold(value);
+    if(!reportText.has(value))reportText.set(value,fold(value));
+    return reportText.get(value);
+  }
+  function preparedWords(item){
+    if(item.origemCadastro!=='relatorio_ca')return undefined;
+    if(!reportNames.has(item.nomeCurto))reportNames.set(item.nomeCurto,fold(item.nomeCurto).split(/[^\p{L}\p{N}]+/u).filter(Boolean));
+    return reportNames.get(item.nomeCurto);
+  }
   function load(){
     if(failure)throw unavailable();
     if(records)return;
@@ -45,15 +69,23 @@ export function createReportCatalog({filePath=process.env.EPI_REPORT_PATH||new U
       return {...metadata(),available:true,total:records.length-cas.size+existing.length,reportTotal:records.length,registeredTotal:existing.length};
     }catch{return {available:false,total:listEquipmentCatalog(manual).length,reportTotal:0,registeredTotal:manual.length};}
   }
-  function search(manual,{q='',page='1',origin='all',status='all'}={}){
-    if(typeof q!=='string'||q.length>160||!/^\d{1,6}$/.test(String(page))||Number(page)<1||!['all','registered','report','without-ca'].includes(origin)||!['all','valido','vencido','cancelado','suspenso','conferir dados'].includes(status))throw httpError(400,'Filtros do catálogo inválidos.','EPI_CATALOGO_FILTRO');
+  function search(manual,{q='',page='1',origin='all',status='all',field='all'}={}){
+    if(typeof q!=='string'||q.length>160||!/^\d{1,6}$/.test(String(page))||Number(page)<1||!['all','registered','report','without-ca'].includes(origin)||!['all','valido','vencido','cancelado','suspenso','conferir dados'].includes(status)||!['all','name','ca','manufacturer','model'].includes(field))throw httpError(400,'Filtros do catálogo inválidos.','EPI_CATALOGO_FILTRO');
     const existing=listEquipmentCatalog(manual),cas=new Set(existing.map(e=>e.ca).filter(Boolean));
     let imported=[];
     if(origin==='all'||origin==='report'){load();imported=records.filter(item=>!cas.has(item.ca));}
     const candidates=[...(origin==='report'?[]:existing.map(item=>({...item,origemCadastro:'cadastrado',ambiguous:false}))),...imported];
     const term=fold(q),caQuery=/^(?:ca\s*)?[\d.\s-]+$/i.test(term)?term.replace(/\D/g,'').replace(/^0+/,''):'';
     const tokens=term.split(/\s+/).filter(Boolean);
-    const filtered=candidates.filter(item=>(origin!=='without-ca'||item.semCA)&&(status==='all'||fold(item.situacao)===status)&&(!term||(caQuery?item.ca===caQuery:tokens.every(t=>(item.search||fold([item.nomeCurto,item.ca,item.fabricante,item.modelo,item.tamanho].join(' '))).includes(t)))));
+    const names=nameTokens(term);
+    function matches(item){
+      if(!term)return true;
+      if(field==='ca'||((field==='all'||field==='name')&&caQuery))return Boolean(caQuery)&&item.ca===caQuery;
+      if(field==='name')return matchesName(item.nomeCurto,names,preparedWords(item));
+      const text=field==='manufacturer'?preparedText(item,item.fabricante):field==='model'?preparedText(item,item.modelo):item.search||fold([item.nomeCurto,item.ca,item.fabricante,item.modelo,item.tamanho].join(' '));
+      return tokens.every(token=>text.includes(token));
+    }
+    const filtered=candidates.filter(item=>(origin!=='without-ca'||item.semCA)&&(status==='all'||preparedText(item,item.situacao)===status)&&matches(item));
     filtered.sort((a,b)=>compare.compare(a.nomeCurto,b.nomeCurto)||compare.compare(a.ca,b.ca)||compare.compare(a.id,b.id));
     const pages=Math.max(1,Math.ceil(filtered.length/15)),current=Math.min(Number(page),pages);
     return {items:filtered.slice((current-1)*15,current*15).map(item=>{const {descricao,name,...short}=publicItem(item);return short;}),page:current,pages,total:filtered.length,pageSize:15,source:metadataSafe()};

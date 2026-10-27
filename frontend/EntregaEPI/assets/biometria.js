@@ -86,7 +86,8 @@
     const queryPermission=options.queryPermission||(()=>root.navigator?.permissions?.query({name:'loopback-network'}));
     const statusTimeout=options.statusTimeout||800,primaryStatusTimeout=options.primaryStatusTimeout||8000,captureTimeout=options.captureTimeout||35000;
     const checkingTimeout=options.checkingTimeout||8000,discoveryTimeout=options.discoveryTimeout||20000,pollInterval=options.pollInterval||250;
-    let selected=null,operation=null,lastDiagnostics=[];
+    const now=options.now||(()=>root.performance?.now?.()??Date.now()),readyReuseMs=30000;
+    let selected=null,selectedAt=null,operation=null,lastDiagnostics=[];
     async function locked(callback,externalSignal,automatic=false){
       if(operation)throw failure('BIO_BUSY');
       const controller=new AbortController();operation=controller;
@@ -100,6 +101,7 @@
         if(automatic&&permission?.state!=='granted')throw failure('BIO_PERMISSION_REQUIRED');
         return await callback(controller.signal);
       }
+      catch(error){selectedAt=null;throw error;}
       finally{externalSignal?.removeEventListener('abort',abort);if(operation===controller)operation=null;}
     }
     async function request(port,path,signal,timeout,maxBytes,requestOptions={}){
@@ -132,10 +134,15 @@
         throw failure('BIO_NETWORK');
       }finally{clearTimeout(timer);signal.removeEventListener('abort',abort);}
     }
-    async function discover({signal,automatic=false,requireEnrollmentImage=false}={}){
+    async function discover({signal,automatic=false,requireEnrollmentImage=false,reuseRecent=false}={}){
       return locked(async operationSignal=>{
+        // Reuse only a recently confirmed connection. The POST still opens the
+        // physical reader and performs the full capture/verification. Manual
+        // diagnostics always probe; failures and cancellation expire this cache.
+        const age=selectedAt===null?Infinity:now()-selectedAt;
+        if(reuseRecent&&selected?.ready&&age>=0&&age<readyReuseMs&&(!requireEnrollmentImage||selected.enrollmentImageAvailable))return selected;
         const ports=selected?[selected.port,...PORTS.filter(port=>port!==selected.port)]:PORTS;
-        const diagnostics=[],deadline=Date.now()+discoveryTimeout;let recognized=null,winner=null,fatal=null;selected=null;
+        const diagnostics=[],deadline=Date.now()+discoveryTimeout;let recognized=null,winner=null,fatal=null;selected=null;selectedAt=null;
         const search=new AbortController(),abort=()=>search.abort();operationSignal.addEventListener('abort',abort,{once:true});
         if(operationSignal.aborted)search.abort();
         function pause(ms){return new Promise(resolve=>{if(search.signal.aborted)return resolve();const done=()=>{clearTimeout(timer);search.signal.removeEventListener('abort',done);resolve();};const timer=setTimeout(done,ms);search.signal.addEventListener('abort',done,{once:true});});}
@@ -166,7 +173,7 @@
           if(operationSignal.aborted)throw failure('BIO_CANCELLED');
           lastDiagnostics=diagnostics;
           if(fatal)throw fatal;
-          if(winner){selected=winner;return winner;}
+          if(winner){selected=winner;selectedAt=now();return winner;}
           if(recognized){selected=recognized;return recognized;}
           if(diagnostics.some(item=>item.code==='BIO_PROTOCOL'))throw failure('BIO_PROTOCOL');
           if(diagnostics.some(item=>item.code==='BIO_HTTP'))throw failure('BIO_HTTP');
@@ -185,6 +192,7 @@
         catch(error){if(error.code!=='BIO_HTTP'||![404,405].includes(error.httpStatus))throw error;response=await request(port,'/capture',operationSignal,captureTimeout,2*1024*1024,requestOptions);}
         if(!response||typeof response!=='object'||Array.isArray(response)||response.ok!==true)throw failure('BIO_CAPTURE_FAILED',{agentCode:safeCode(response?.code)});
         if(operationSignal.aborted)throw failure('BIO_CANCELLED');
+        selectedAt=now();
         // Older agents return a template even when requireTemplate=false. Keep
         // only image fields; the template must not enter UI state or diagnostics.
         return {ok:true,realFingerImage:response.realFingerImage,
@@ -198,10 +206,11 @@
       return locked(async operationSignal=>{
         const body=await request(selected.port,challenge.kind==='enroll'?'/api/enroll':'/api/signature',operationSignal,captureTimeout,2*1024*1024,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify(challenge)});
         if(!body?.ok||!body.proof||!body.proofSignature)throw failure('BIO_PROTOCOL');
+        selectedAt=now();
         return body;
       },signal);
     }
-    return Object.freeze({discover,capture,biometric,cancel(){operation?.abort();},clear(){operation?.abort();selected=null;lastDiagnostics=[];},getStatus:()=>selected,getDiagnostics:()=>lastDiagnostics.map(item=>({...item}))});
+    return Object.freeze({discover,capture,biometric,cancel(){if(operation){selectedAt=null;operation.abort();}},clear(){operation?.abort();selected=null;selectedAt=null;lastDiagnostics=[];},getStatus:()=>selected,getDiagnostics:()=>lastDiagnostics.map(item=>({...item}))});
   }
   function extractImage(body){
     if(!body||body.realFingerImage!==true)throw failure('BIO_IMAGE_MISSING');

@@ -13,6 +13,9 @@ import { probeStorage } from './db/store.js';
 import * as storage from './db/store.js';
 import { companyActive } from './middleware/company-active.js';
 import { caepiStatus } from './services/caepi.service.js';
+import { createMfaGuard } from './middleware/mfa.js';
+import { bearer } from './security/session.js';
+import { invokeSecurity } from './security/remote.js';
 
 const app = express();
 
@@ -37,8 +40,17 @@ app.get('/health', async (req, res) => {
 });
 
 app.use('/api/caepi', caepiRoutes);
+app.post('/auth/mfa', async (req, res) => {
+  const { username, session, code, challengeName } = req.body || {};
+  const data = await invokeSecurity(process.env.AUTH_SECURITY_FUNCTION, { action: 'challenge', username, session, code, challengeName });
+  res.json({ ok: true, ...data });
+});
 app.use('/auth', loginRoutes);
-app.use('/api', requireAuth, companyActive(storage));
+app.use('/api', requireAuth, createMfaGuard(), companyActive(storage));
+app.get('/api/seguranca/status', async (req, res) => {
+  const data = await invokeSecurity(process.env.AUTH_SECURITY_FUNCTION, { action: 'status', token: bearer(req.headers) });
+  res.json({ ok: true, ...data });
+});
 app.use('/api/empresas', empresasRoutes);
 app.use('/api/trabalhadores', trabalhadoresRoutes);
 app.use('/api/epis', episRoutes);

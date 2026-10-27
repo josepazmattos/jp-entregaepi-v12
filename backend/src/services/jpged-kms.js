@@ -5,7 +5,15 @@ const region=process.env.AWS_REGION||'sa-east-1';
 const client=new KMSClient({region,maxAttempts:1});
 export function createKeyVault(kms=client){
   const account=process.env.JPGED_KMS_ACCOUNT||'003020057405';
-  const policy=()=>JSON.stringify({Version:'2012-10-17',Statement:[{Sid:'AccountAdministration',Effect:'Allow',Principal:{AWS:'arn:aws:iam::'+account+':root'},Action:'kms:*',Resource:'*'},{Sid:'JPGEDOperationsForThisKeyOnly',Effect:'Allow',Principal:{AWS:'arn:aws:iam::'+account+':role/jp-entregaepi-v12-lambda-role'},Action:['kms:GetParametersForImport','kms:ImportKeyMaterial','kms:GetPublicKey','kms:Sign','kms:DescribeKey','kms:ScheduleKeyDeletion'],Resource:'*'}]});
+  const policy=()=>{
+    const signer=process.env.SIGNER_ROLE_ARN,admin=process.env.VAULT_ADMIN_ROLE_ARN;
+    if(!signer||!admin)throw httpError(503,'As permissões do cofre não estão configuradas.','COFRE_PERMISSOES');
+    return JSON.stringify({Version:'2012-10-17',Statement:[
+      {Sid:'AccountAdministration',Effect:'Allow',Principal:{AWS:'arn:aws:iam::'+account+':root'},Action:'kms:*',Resource:'*'},
+      {Sid:'IsolatedSigner',Effect:'Allow',Principal:{AWS:signer},Action:['kms:Sign','kms:DescribeKey'],Resource:'*'},
+      {Sid:'IsolatedVaultAdministration',Effect:'Allow',Principal:{AWS:admin},Action:['kms:GetParametersForImport','kms:ImportKeyMaterial','kms:GetPublicKey','kms:DescribeKey','kms:ScheduleKeyDeletion'],Resource:'*'}
+    ]});
+  };
   const key=arn=>{if(!new RegExp('^arn:aws:kms:'+region+':[0-9]{12}:key/[a-f0-9-]{36}$').test(arn))throw httpError(409,'Chave do cofre inválida.','COFRE_CHAVE');return arn;};
   return {
     async create(company,id,bits){
