@@ -58,7 +58,7 @@ Em falha de implantação, preferir corrigir os componentes isolados. O rollback
 
 ## Validação
 
-- Backend: 231 testes aprovados, incluindo isolamento de empresa, prova MFA, reautenticação, importação e assinatura.
+- Backend: 234 testes aprovados, incluindo isolamento de empresa, prova MFA, reautenticação, importação e assinatura.
 - Frontend: 81 testes unitários aprovados; navegador real cobrindo MFA, código inválido, bloqueio pré-MFA e tela móvel.
 - Navegador JPGED: instalação A1 com certificado sintético, senha errada, prova, certificação/retry, isolamento de empresas e permissões visuais aprovados.
 - Cognito real: pareamento TOTP, desafio obrigatório, rejeição de código inválido, prova vinculada ao token e recusa por falta de perfil nos serviços isolados; usuário temporário excluído.
@@ -75,3 +75,14 @@ O usuário Master estava habilitado e ainda não tinha autenticador pareado ao e
 A conferência das permissões removeu também o caminho indireto de administração de contas: a API conserva apenas AdminGetUser para leitura e deixa de possuir AdminCreateUser, AdminAddUserToGroup e AdminSetUserPassword. O serviço administrativo verifica JWT/MFA independentemente, usa somente dados do registro da empresa e não aceita username, grupo ou senha arbitrários.
 
 Na verificação final, as cinco funções estavam Active/Successful com o pacote acima. IAM confirmou AdminGetUser permitido e AdminCreateUser/AdminAddUserToGroup/AdminSetUserPassword explicitamente negados à API. Uma chamada administrativa com JWT inválido retornou 401 SESSAO_INVALIDA. A página pública e a API de saúde exibiram a revisão final, e o CloudTrail permaneceu entregando registros.
+
+
+## Atualização de acesso por e-mail (12.10.3-email)
+
+Publicada em 27/10/2026 com código `fb678248ae46b67cf4a4dd39a33e3049370737ab`, API Lambda versão 6 e pacote SHA-256 base64 `UGRJSFXdOVw6g+JkamjOTTEVIfhQuwUeguk0Ss6UtWU=`. As cinco funções estão Active/Successful. O Master usa EMAIL_OTP preferencial para o endereço da diretoria; TOTP está desativado nesse usuário. O SES é DEVELOPER com identidade verificada. A duração do desafio é dez minutos. Senha continua obrigatória e o cliente não pode editar o endereço de e-mail.
+
+A configuração anterior do Cognito/API e os três HTMLs foram salvos no bucket privado antes da atualização. Os três endereços de entrada referenciam a nova configuração; os scripts alterados usam a release `14cbe6fb0f0e2c85a70d257eefcfa9cf9a7c57c5`. Os demais assets e instaladores foram preservados. A invalidação CloudFront terminou.
+
+Validação: 234 testes de backend, 81 de frontend, teste de navegador com código inválido, colagem, tela móvel, reautenticação e recusa de sessão sem MFA. O teste Cognito/SES com usuário temporário sem perfil e destino exclusivo do simulador retornou EMAIL_OTP sem emitir token após apenas a senha; o serviço recusou código malformado. O usuário de teste foi excluído. O endereço genérico do simulador retornou limite de tentativas; o teste com rótulo exclusivo passou. A recepção na caixa da diretoria e a conclusão da entrada precisam ser confirmadas pelo usuário, sem compartilhar senha ou código com o agente.
+
+As oito chaves continuam Enabled/EXTERNAL. A simulação IAM mantém kms:Sign permitido ao assinador e explicitamente negado à API e ao administrador do cofre. CloudTrail continua registrando e entregando arquivos. Compartilhar Master limita a atribuição individual das ações; use contas nominativas quando essa identificação for necessária.
