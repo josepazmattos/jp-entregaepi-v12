@@ -1,0 +1,29 @@
+let buckets = Resources.*[ Type == 'AWS::S3::Bucket' ]
+rule private_buckets when %buckets !empty {
+    %buckets.Properties.PublicAccessBlockConfiguration.BlockPublicAcls == true
+    %buckets.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy == true
+    %buckets.Properties.PublicAccessBlockConfiguration.IgnorePublicAcls == true
+    %buckets.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets == true
+    %buckets.Properties.VersioningConfiguration.Status == 'Enabled'
+    %buckets.Properties.BucketEncryption exists
+    %buckets.DeletionPolicy == 'Retain'
+}
+let tables = Resources.*[ Type == 'AWS::DynamoDB::Table' ]
+rule durable_tables when %tables !empty {
+    %tables.Properties.SSESpecification.SSEEnabled == true
+    %tables.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled == true
+    %tables.Properties.DeletionProtectionEnabled == true
+    %tables.DeletionPolicy == 'Retain'
+}
+let trails = Resources.*[ Type == 'AWS::CloudTrail::Trail' ]
+rule persistent_audit when %trails !empty {
+    %trails.Properties.IsLogging == true
+    %trails.Properties.EnableLogFileValidation == true
+    %trails.Properties.IsMultiRegionTrail == true
+    %trails.Properties.KMSKeyId exists
+}
+let functions = Resources.*[ Type == 'AWS::Lambda::Function' ]
+rule bounded_functions when %functions !empty {
+    %functions.Properties.ReservedConcurrentExecutions > 0
+    %functions.Properties.Runtime == 'nodejs22.x'
+}

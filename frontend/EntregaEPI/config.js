@@ -1,5 +1,6 @@
 window.JP_CONFIG = {
-  version: "12.10.0",
+  version: "12.10.2-security1",
+  masterMfaRequired: true,
   appBasePath: "/EntregaEPI/",
   apiBaseUrl: "https://g4pdu3t1va.execute-api.sa-east-1.amazonaws.com",
   cognitoRegion: "sa-east-1",

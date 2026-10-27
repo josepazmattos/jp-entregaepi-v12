@@ -139,7 +139,7 @@ function renderBiometricDialog(dialog,worker,ficha){
       if(!completedBody){
         dialogMessage(dialog,'Localizando o leitor. Aguarde...');
         const client=getBiometricClient(),base=ficha?'/api/fichas/'+encodeURIComponent(ficha.id):'/api/trabalhadores/'+encodeURIComponent(worker.id);
-        const status=await client.discover({signal:controller.signal,requireEnrollmentImage:!ficha});assertOperationContext(context);
+        const status=await client.discover({signal:controller.signal,requireEnrollmentImage:!ficha,reuseRecent:true});assertOperationContext(context);
         if(!status.ready)throw window.JP_BIOMETRIA.unavailableError(status);
         if(!ficha&&!status.enrollmentImageAvailable){const error=new Error('O JP Biometria deste computador precisa ser atualizado para recadastrar com imagem. Instale a atualização abaixo e tente novamente. A digital anterior foi preservada.');error.code='BIO_AGENT_IMAGE_UPDATE';throw error;}
         if(ficha&&!status.documentHashAvailable)throw new Error('Atualize o JP Biometria para confirmar o conteúdo completo da ficha.');

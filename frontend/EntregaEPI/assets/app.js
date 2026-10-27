@@ -1,5 +1,6 @@
 (function ensureConfig(){if(!window.JP_CONFIG||!window.JP_CONFIG.apiBaseUrl){window.JP_CONFIG={version:"12.10.0",appBasePath:"/EntregaEPI/",apiBaseUrl:"https://g4pdu3t1va.execute-api.sa-east-1.amazonaws.com",cognitoRegion:"sa-east-1",userPoolId:"sa-east-1_3FNCoTvr0",clientId:"2q2inha617oeer4vb0m0hjoja0",ambiente:"producao"}}})();
 const $=id=>document.getElementById(id), tokenKey="jp-v12-auth", rememberedUserKey="jp-v12-remembered-user", activeCompanyKey="jp-v12-active-company";
+const appAssetBase=document.currentScript?.src?new URL('.',document.currentScript.src).href:(window.JP_CONFIG.appBasePath||'/EntregaEPI/').replace(/\/?$/, '/')+'assets/';
 let sessionGeneration=0,companyGeneration=0,authAttempt=0,importAttempt=0,logoCreateGeneration=0,logoEditGeneration=0;let lastSessionUsername="";let cache={empresas:[],trabalhadores:[],epis:[],fichas:[]};let activeEmpresaId=sessionStorage.getItem(activeCompanyKey)||"";
 let firstAccessChallenge=null,empresaLogoDraft="",empresaLogoEdit=null,empresaRequestId="",importPreview=null,companyLoginAutomatic=true;
 let logoCreateLoading=false,companySaving=false;
@@ -136,16 +137,38 @@ function resetDiagnostics(){
   setText("apiOutput","Nenhuma verificação realizada nesta sessão.");setText("bioOutput","Nenhuma verificação realizada nesta sessão.");
   ["healthTestButton","caTestButton","bioTestButton"].forEach(id=>{if($(id))$(id).disabled=false;});
 }
+// Desktop space preference affects presentation only; mobile remains a drawer.
+const sidebarPreferenceKey="jp-epi-sidebar-collapsed";
+let desktopSidebarCollapsed=false;
+try{desktopSidebarCollapsed=localStorage.getItem(sidebarPreferenceKey)==="1";}catch{}
 function setSidebarOpen(open,returnFocus=false){
-  const mobile=navigationMedia?.matches===true,expanded=mobile&&open;
-  $("appShell").classList.toggle("sidebar-open",expanded);
-  document.body.classList.toggle("menu-open",expanded);
+  const mobile=navigationMedia?.matches===true,drawerOpen=mobile&&Boolean(open);
+  const expanded=mobile?drawerOpen:!desktopSidebarCollapsed;
+  $("appShell").classList.toggle("sidebar-open",drawerOpen);
+  $("appShell").classList.toggle("sidebar-collapsed",!mobile&&desktopSidebarCollapsed);
+  document.body.classList.toggle("menu-open",drawerOpen);
   const sidebar=$("primarySidebar"),main=$("mainContent"),toggle=$("menuToggle");
-  if(sidebar)sidebar.inert=mobile&&!expanded;
-  if(main)main.inert=expanded;
-  if(toggle){toggle.setAttribute("aria-expanded",String(expanded));toggle.setAttribute("aria-label",expanded?"Fechar menu":"Abrir menu");}
-  if(expanded)$("sidebarClose")?.focus();
-  else if(returnFocus&&mobile)toggle?.focus();
+  if(sidebar)sidebar.inert=!expanded;
+  if(main)main.inert=drawerOpen;
+  const label=mobile?(expanded?"Fechar menu":"Abrir menu"):(expanded?"Ocultar menu":"Mostrar menu");
+  if(toggle){toggle.setAttribute("aria-expanded",String(expanded));toggle.setAttribute("aria-label",label);toggle.setAttribute("title",label);}
+  setText("menuToggleLabel",label);
+  if(drawerOpen){
+    // Wait for the drawer to become visible before moving keyboard focus.
+    const focusMenu=()=>{if($("appShell").classList.contains("sidebar-open"))$("sidebarClose")?.focus();};
+    const afterVisible=()=>{
+      const animations=typeof sidebar?.getAnimations==="function"?sidebar.getAnimations():[];
+      if(animations.length)Promise.all(animations.map(animation=>animation.finished.catch(()=>{}))).then(focusMenu);
+      else focusMenu();
+    };
+    if(typeof window.requestAnimationFrame==="function")window.requestAnimationFrame(afterVisible);else afterVisible();
+  }else if(returnFocus)toggle?.focus();
+}
+function toggleSidebar(){
+  if(navigationMedia?.matches===true){setSidebarOpen(!$("appShell").classList.contains("sidebar-open"),true);return;}
+  desktopSidebarCollapsed=!desktopSidebarCollapsed;
+  try{localStorage.setItem(sidebarPreferenceKey,desktopSidebarCollapsed?"1":"0");}catch{}
+  setSidebarOpen(false,true);
 }
 function activateScreen(screen,focusContent=true){
   if(!Object.prototype.hasOwnProperty.call(screenLabels,screen))return;
@@ -183,7 +206,7 @@ async function cognitoLogin(username,password){
     // A senha provisória atende à política do pool sem alterar o código inicial entregue à empresa.
     data=await authenticate("JpEpi1-Inicial-"+password.toUpperCase());
   }
-  if(data.ChallengeName&&data.ChallengeName!=="NEW_PASSWORD_REQUIRED")throw new Error("Este acesso exige uma verificação adicional. Solicite orientação ao administrador.");
+  if(data.ChallengeName&&!["NEW_PASSWORD_REQUIRED","SOFTWARE_TOKEN_MFA"].includes(data.ChallengeName))throw new Error("Este acesso exige uma verificação adicional. Solicite orientação ao administrador.");
   return {...data,resolvedUsername:resolved.username};
 }
 async function passwordDigest(value){return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value)))).map(byte=>byte.toString(16).padStart(2,"0")).join("");}
@@ -302,30 +325,33 @@ async function testCA(){
   }catch(error){if(generation!==sessionGeneration||error.code==="SESSION_CHANGED")return;setStatusBadge("caStatusBadge","Indisponível","error");setText("caStatusText","Não foi possível consultar o CA. Tente novamente ou abra a consulta oficial do MTE.");write(error.message);}
   finally{if(button&&generation===sessionGeneration)button.disabled=false;}
 }
-async function refreshAll(){
-  clearAppError();
-  await Promise.all([refreshEpis(false),(async()=>{
-  await refreshEmpresas(false);
+function renderOverview(){
+  $("metricEmpresas").textContent=cache.empresas.length;
+  $("metricTrabalhadores").textContent=cache.trabalhadores.length;
+  $("metricEpis").textContent=equipmentCatalogSummary?.total??cache.epis.length;
+  $("metricFichas").textContent=cache.fichas.length;
+  renderDashboard();renderConfigSummary();
+}
+async function refreshCompanyData(){
+  const session=sessionGeneration,company=companyGeneration;
   if(typeof loadCompanyCertificate==='function')loadCompanyCertificate();
-  if(activeEmpresaId){
-    await Promise.all([refreshTrabalhadores(false),refreshFichas(false)]);
-  }else{
+  if(activeEmpresaId)await Promise.all([refreshTrabalhadores(false),refreshFichas(false)]);
+  else{
     cache.trabalhadores=[];cache.fichas=[];
     $("trabalhadoresList").textContent="Selecione uma empresa.";
     $("fichasList").textContent="Selecione uma empresa.";
     renderEntregaOptions();
   }
-  })()]);
-  $("metricEmpresas").textContent=cache.empresas.length;
-  $("metricTrabalhadores").textContent=cache.trabalhadores.length;
-  $("metricEpis").textContent=equipmentCatalogSummary?.total??cache.epis.length;
-  $("metricFichas").textContent=cache.fichas.length;
-  renderDashboard();
-  renderConfigSummary();
-  await restoreImportPreview();
+  if(session!==sessionGeneration||company!==companyGeneration)return;
+  renderOverview();await restoreImportPreview();
+}
+async function refreshAll(){
+  clearAppError();
+  await Promise.all([refreshEpis(false),refreshEmpresas(false).then(()=>refreshCompanyData())]);
+  renderOverview();
 }
 function renderDashboard(){const banner=$("actionBanner");if(!activeEmpresaId&&isMaster()){banner.classList.remove("hidden")}else banner.classList.add("hidden");const actions=[];if(!cache.empresas.length)actions.push(isMaster()?"Cadastre a primeira empresa cliente.":"Solicite ao administrador a vinculação deste acesso à sua empresa.");if(activeEmpresaId&&!cache.trabalhadores.length)actions.push(isMaster()?"Cadastre trabalhadores ou importe a equipe pelo Excel.":"Inclua sua equipe pelo botão Novo colaborador.");if(activeEmpresaId&&!cache.epis.length)actions.push("Cadastre equipamentos no catálogo compartilhado.");if(activeEmpresaId&&cache.trabalhadores.length&&cache.epis.length)actions.push("Gere uma ficha de EPI.");$("nextActions").innerHTML=actions.length?actions.map(a=>`<div class="item"><strong>${escapeHtml(a)}</strong></div>`).join(""):'<div class="item"><strong>Fluxo inicial concluído.</strong><small>Você já pode gerar e acompanhar fichas de EPI.</small></div>';$("dashboardFichas").innerHTML=cache.fichas.length?cache.fichas.slice(0,6).map(f=>itemHtml(f,[f.trabalhadorNome||f.trabalhadorId,f.tipo,f.status,f.data])).join(""):"Nenhuma ficha gerada para a empresa selecionada."}
-async function refreshEmpresas(update=true){const r=await api("/api/empresas");ensureSuccess(r,"Não foi possível carregar as empresas.");cache.empresas=asArray(r);renderEmpresas();if(update)await refreshAllSafe();return r}
+async function refreshEmpresas(update=true){const previousCompany=activeEmpresaId;const r=await api("/api/empresas");ensureSuccess(r,"Não foi possível carregar as empresas.");cache.empresas=alphabetical(asArray(r),e=>String(e.nome||"Empresa").trim());renderEmpresas();if(update){if(previousCompany!==activeEmpresaId)await refreshCompanyData();renderEntregaOptions();renderOverview();}return r}
 function renderEmpresas(){
   const el=$("empresasList"),sel=$("empresaAtivaSelect");if(!el||!sel)return;sel.innerHTML='<option value="">Selecione uma empresa</option>';
   if(!cache.empresas.some(e=>String(e.id)===String(activeEmpresaId))){companyGeneration++;closeOperations();if(biometricCapture)resetBiometricCapture();clearImportPreview();saveActiveCompany(cache.empresas[0]?.id||"");}
@@ -350,7 +376,7 @@ function renderTrabalhadores(){
   if($('workerPagePrevious'))$('workerPagePrevious').disabled=workerListPage<=1;
   if($('workerPageNext'))$('workerPageNext').disabled=workerListPage>=pages;
 }
-async function refreshTrabalhadores(update=true){if(!activeEmpresaId){$("trabalhadoresList").textContent="Selecione uma empresa.";return;}const r=await api("/api/trabalhadores");ensureSuccess(r,"Não foi possível carregar os trabalhadores.");cache.trabalhadores=alphabetical(asArray(r),t=>t.nomeCompleto||t.nome||t.name);renderTrabalhadores();renderEntregaOptions();if(update)await refreshAllSafe();return r;}
+async function refreshTrabalhadores(update=true){if(!activeEmpresaId){$("trabalhadoresList").textContent="Selecione uma empresa.";return;}const r=await api("/api/trabalhadores");ensureSuccess(r,"Não foi possível carregar os trabalhadores.");cache.trabalhadores=alphabetical(asArray(r),t=>t.nomeCompleto||t.nome||t.name);renderTrabalhadores();renderEntregaOptions();if(update)renderOverview();return r;}
 function isWithoutCA(item){return item.tipo==="sem_ca"||item.semCA===true;}
 function equipmentLabel(item){return isWithoutCA(item)?"Sem CA":"CA "+(item.ca||"não informado");}
 function equipmentDescription(item){return [item.nomeCurto||window.JP_FICHA.equipmentName(item)||"Equipamento",item.modelo?"Modelo: "+item.modelo:"",item.tamanho?"Tamanho: "+item.tamanho:""].filter(Boolean).join(" · ");}
@@ -360,13 +386,13 @@ function renderEpis(){
   setText('episList',`${total.toLocaleString('pt-BR')} equipamentos disponíveis`);
   setText('epiCatalogSource',equipmentCatalogSummary?.sourceDate?`Relatório CA de ${window.JP_FICHA.formatDate(equipmentCatalogSummary.sourceDate)} · Compartilhado com todas as empresas`:'Catálogo compartilhado com todas as empresas');
 }
-async function refreshEpis(update=true){const r=await api("/api/epis");ensureSuccess(r,"Não foi possível carregar o catálogo de equipamentos.");equipmentCatalogSummary=r.body?.catalogo||null;const retained=cache.epis.filter(e=>e.origemCadastro==='relatorio_ca');cache.epis=alphabetical([...asArray(r),...retained.filter(item=>!asArray(r).some(e=>e.ca===item.ca))],e=>e.descricao||e.name||e.nomeCurto);renderEpis();renderEntregaOptions();if(update)await refreshAllSafe();return r;}
+async function refreshEpis(update=true){const r=await api("/api/epis");ensureSuccess(r,"Não foi possível carregar o catálogo de equipamentos.");equipmentCatalogSummary=r.body?.catalogo||null;const retained=cache.epis.filter(e=>e.origemCadastro==='relatorio_ca');cache.epis=alphabetical([...asArray(r),...retained.filter(item=>!asArray(r).some(e=>e.ca===item.ca))],e=>e.descricao||e.name||e.nomeCurto);renderEpis();renderEntregaOptions();if(update)renderOverview();return r;}
 function renderFichas(){
   const showDeleted=$('showDeletedFichas')?.checked===true;
   const rows=cache.fichas.filter(f=>showDeleted||f.status!=='cancelada');
   $('fichasList').innerHTML=rows.length?rows.map(f=>`<div class="ficha-row"><div><strong>${escapeHtml(f.trabalhadorNome||f.trabalhadorId)}</strong><small>${escapeHtml(f.numero||f.id)} · ${escapeHtml(f.tipo)} · ${escapeHtml(f.data)}</small></div><div class="item-actions"><span class="ficha-state ${f.status==='assinada'&&f.assinaturaBiometrica?.verificada===true?'signed':''}">${escapeHtml(typeof fichaStatus==='function'?fichaStatus(f):f.status==='pendente'?'Não assinada':f.status)}</span><button class="btn btn-secondary" type="button" data-ficha-id="${escapeHtml(f.id)}" onclick="imprimirFicha(this.dataset.fichaId)">Imprimir</button>${f.status!=='cancelada'?`<button class="btn btn-danger" type="button" data-delete-ficha="${escapeHtml(f.id)}" onclick="deleteFicha(this.dataset.deleteFicha)">Excluir</button>`:''}</div></div>`).join(''):'Nenhuma ficha cadastrada.';
 }
-async function refreshFichas(update=true){if(!activeEmpresaId){$("fichasList").textContent="Selecione uma empresa.";return}const r=await api("/api/fichas");ensureSuccess(r,"Não foi possível carregar as fichas.");cache.fichas=asArray(r);renderFichas();if(update)await refreshAllSafe();return r}
+async function refreshFichas(update=true){if(!activeEmpresaId){$("fichasList").textContent="Selecione uma empresa.";return}const r=await api("/api/fichas");ensureSuccess(r,"Não foi possível carregar as fichas.");cache.fichas=asArray(r);renderFichas();if(update)renderOverview();return r}
 async function refreshAllSafe(){try{await refreshAll()}catch(error){handleAppError(error)}}
 function renderEntregaOptions(preserveWorker=false){
   const companySelect=$("entregaEmpresa");
@@ -441,8 +467,7 @@ async function previewCompanyPdf(event){
   companyPdfLoading=true;updateCompanySubmitButton();$("empresaPdfFile").disabled=true;
   const message=$("empresaPdfMessage");message.className="message warn";message.textContent="Lendo o cartão CNPJ…";
   try{
-    const base=(window.JP_CONFIG.appBasePath||"/EntregaEPI/").replace(/\/?$/, "/");
-    const {readCompanyPdf}=await import(base+"assets/company-pdf.mjs?v=20261010-empresas");
+    const {readCompanyPdf}=await import(appAssetBase+"company-pdf.mjs?v=20261010-empresas");
     if(!current())return;
     const result=await readCompanyPdf(file,{signal:controller.signal});if(!current())return;
     companyPdfDraft=result.fields;
@@ -708,7 +733,7 @@ async function confirmWorkersImport(){
 function downloadWorkersTemplate(){
   if(!isMaster())return;
   if(!workerRegistrationCompany||workerRegistrationCompany!==activeEmpresaId){$("workerCompanySelect")?.focus();return;}
-  const anchor=document.createElement("a");anchor.href=(window.JP_CONFIG.appBasePath||"/EntregaEPI/").replace(/\/?$/, "/")+"assets/modelo-trabalhadores.xlsx";anchor.download="Modelo_Trabalhadores_JP_EntregaEPI.xlsx";document.body.appendChild(anchor);anchor.click();anchor.remove();
+  const anchor=document.createElement("a");anchor.href=appAssetBase+"modelo-trabalhadores.xlsx";anchor.download="Modelo_Trabalhadores_JP_EntregaEPI.xlsx";document.body.appendChild(anchor);anchor.click();anchor.remove();
 }
 async function consultarCA(){
   if($("epiSemCa")?.checked)return;
@@ -895,18 +920,23 @@ async function captureBiometricImage(){
   clearBiometricImage();context.fingerCode=fingerCode;
   const controller=new AbortController();biometricAbort=controller;setBiometricControls(true);
   setText('bioCaptureButton','Capturando...');biometricMessage('warn','Mantenha o dedo selecionado no leitor quando a luz acender. Feche o diagnóstico NITGEN se ele estiver aberto.');
+  const startedAt=performance.now();
   try{
-    const client=getBiometricClient(),status=await client.discover({signal:controller.signal});
+    const client=getBiometricClient(),status=await client.discover({signal:controller.signal,reuseRecent:true});
     if(!biometricContextCurrent(context,generation))return;showBiometricStatus(status);
     if(!status.ready)throw window.JP_BIOMETRIA.unavailableError(status);
+    const readyAt=performance.now();
     const response=await client.capture({fingerCode,purpose:context.fichaId?'signature':'test',signal:controller.signal});
     if(!biometricContextCurrent(context,generation))return;
+    const capturedAt=performance.now();
     const image=await window.JP_BIOMETRIA.prepareCaptureImage(response,{signal:controller.signal});
     if(!biometricContextCurrent(context,generation))return;
     context.image=image;
     const preview=$('bioCaptureImage');preview.src=image;preview.classList.remove('hidden');$('bioCapturePlaceholder').classList.add('hidden');
     $('bioRegisterButton').classList.toggle('hidden',!context.fichaId);
-    biometricMessage('success',context.fichaId?'Captura recebida. Confira o trabalhador e a ficha acima; depois clique em Registrar captura na ficha.':'Captura de teste recebida. A imagem será descartada ao fechar; nenhum cadastro ou ficha foi alterado.');
+    const completedAt=performance.now(),temposMs={conexao:Math.round(readyAt-startedAt),capturaLocal:Math.round(capturedAt-readyAt),preparacaoImagem:Math.round(completedAt-capturedAt),total:Math.round(completedAt-startedAt)};
+    setText('bioOutput',JSON.stringify({agente:status.service,versao:status.version,porta:status.port,resultado:'CAPTURA_RECEBIDA',temposMs},null,2));
+    biometricMessage('success',(context.fichaId?'Captura recebida. Confira o trabalhador e a ficha acima; depois clique em Registrar captura na ficha.':'Captura de teste recebida. A imagem será descartada ao fechar; nenhum cadastro ou ficha foi alterado.')+' Tempo total: '+(temposMs.total/1000).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+' s.');
   }catch(error){if(!biometricContextCurrent(context,generation)||error.code==='BIO_CANCELLED')return;biometricMessage('error',showBiometricFailure(error,'captura'));}
   finally{if(biometricContextCurrent(context,generation)){biometricAbort=null;setBiometricControls(false);setText('bioCaptureButton','Capturar novamente');setText('bioCheckedAt','Última verificação: '+new Date().toLocaleString('pt-BR'));}}
 }
@@ -952,7 +982,7 @@ function imprimirFicha(id){
   }catch(error){releaseDocument();handleAppError(error);}
 }
 function goScreen(screen){document.querySelector(`[data-screen="${screen}"]`)?.click()}
-function showApp(){const auth=getAuth();if(!auth)return;$("loginPage").classList.add("hidden");$("appShell").classList.remove("hidden");$("userBadge").textContent=auth.username||"Usuário autenticado";renderConfigSummary();renderRoleAccess();activateScreen("dashboard",false);refreshAll().catch(handleAppError);runStartupChecks()}
+async function showApp(){const auth=getAuth();if(!auth)return;if(window.JP_CONFIG.masterMfaRequired&&isMaster()){try{if(document.readyState==='loading')await new Promise(resolve=>document.addEventListener('DOMContentLoaded',resolve,{once:true}));if(!await allowMasterSession())return;}catch(error){showLogin();setMsg('error',error.message);return;}}$("loginPage").classList.add("hidden");$("appShell").classList.remove("hidden");$("userBadge").textContent=auth.username||"Usuário autenticado";renderConfigSummary();renderRoleAccess();activateScreen("dashboard",false);refreshAll().catch(handleAppError);runStartupChecks()}
 function showLogin(clearDrafts=false){clearSessionData(clearDrafts);if(clearDrafts)$("password").value="";$("appShell").classList.add("hidden");$("loginPage").classList.remove("hidden")}
 async function changeActiveCompany(id){
   if(typeof closeOperations==='function')closeOperations();
@@ -963,9 +993,9 @@ async function changeActiveCompany(id){
   clearEntregaDraft();
   ["trabalhadorForm","entregaForm"].forEach(id=>{$(id).reset();const button=$(id).querySelector('button[type="submit"]');if(button)button.disabled=false;});if($("trabalhadorSearch"))$("trabalhadorSearch").value="";
   saveActiveCompany(id);cache.trabalhadores=[];cache.fichas=[];$("trabalhadoresList").textContent="Carregando...";$("fichasList").textContent="Carregando...";$("dashboardFichas").textContent="";renderEntregaOptions();
-  await refreshAllSafe();
+  renderEmpresas();
+  try{await refreshCompanyData();}catch(error){handleAppError(error);}
   if(document.querySelector("#screen-jpged.active"))loadJpged();
-  if(document.querySelector("#screen-certificado.active"))loadCompanyCertificate();
 }
 $("empresaAtivaSelect").addEventListener("change",event=>changeActiveCompany(event.target.value));
 $("entregaEmpresa").addEventListener("change",event=>{const id=event.target.value;if(!isMaster()||!cache.empresas.some(item=>String(item.id)===String(id))){renderEntregaOptions();return;}if(id!==activeEmpresaId)changeActiveCompany(id);});
@@ -988,7 +1018,7 @@ $("loginForm").addEventListener("submit",async e=>{
   const attempt=++authAttempt;$("loginButton").disabled=true;$("loginButton").textContent="Entrando...";
   try{
     const result=await cognitoLogin(username,password);if(attempt!==authAttempt)return;
-    if(result.ChallengeName==="NEW_PASSWORD_REQUIRED")await beginFirstAccess(result,username,password);else finishLogin(result.AuthenticationResult,username);
+    if(result.ChallengeName==="NEW_PASSWORD_REQUIRED")await beginFirstAccess(result,username,password);else{const verified=await finishMfaChallenge(result,username);if(attempt===authAttempt)finishLogin(verified.AuthenticationResult,username);}
   }catch(error){if(attempt===authAttempt)setMsg("error",error.code==="NotAuthorizedException"?"Usuário ou senha inválidos. Confira o acesso informado pelo administrador.":error.message||"Não foi possível entrar.");}
   finally{if(attempt===authAttempt){$("loginButton").disabled=false;$("loginButton").textContent="Entrar";}}
 });
@@ -1006,8 +1036,8 @@ $("newPasswordForm").addEventListener("submit",async event=>{
     if(attempt!==authAttempt)return;
     const result=await cognitoRequest("RespondToAuthChallenge",{ChallengeName:"NEW_PASSWORD_REQUIRED",Session:challenge.session,ChallengeResponses:{USERNAME:challenge.cognitoUsername,NEW_PASSWORD:password}});
     if(attempt!==authAttempt)return;
-    if(result.ChallengeName)throw new Error("Este acesso exige uma verificação adicional. Solicite orientação ao administrador.");
-    finishLogin(result.AuthenticationResult,challenge.username);
+    const verified=await finishMfaChallenge(result,challenge.username);
+    if(attempt===authAttempt)finishLogin(verified.AuthenticationResult,challenge.username);
   }catch(error){if(attempt===authAttempt){message.className="message error";message.textContent=error.code==="InvalidPasswordException"?"A senha não atende aos requisitos. Use ao menos 8 caracteres, com letras maiúsculas, minúsculas e números.":error.code==="NotAuthorizedException"?"O primeiro acesso expirou. Volte à tela de acesso e entre novamente com a senha inicial.":error.message||"Não foi possível definir a senha.";}}
   finally{if(attempt===authAttempt)button.disabled=false;}
 });
@@ -1097,14 +1127,14 @@ $("entregaForm").addEventListener("submit",async event=>{
 });
 $("logoutButton").addEventListener("click",()=>{sessionStorage.removeItem(tokenKey);showLogin(true)});$("refreshButton").addEventListener("click",()=>refreshAllSafe());
 document.querySelectorAll(".nav button").forEach(btn=>btn.addEventListener("click",()=>activateScreen(btn.dataset.screen)));
-$("menuToggle")?.addEventListener("click",()=>setSidebarOpen(!$("appShell").classList.contains("sidebar-open"),true));
+$("menuToggle")?.addEventListener("click",toggleSidebar);
 $("sidebarClose")?.addEventListener("click",()=>setSidebarOpen(false,true));
 $("sidebarBackdrop")?.addEventListener("click",()=>setSidebarOpen(false,true));
 document.addEventListener("keydown",event=>{
   if(!$("appShell").classList.contains("sidebar-open"))return;
   if(event.key==="Escape"){event.preventDefault();setSidebarOpen(false,true);return;}
   if(event.key==="Tab"){
-    const controls=Array.from($("primarySidebar").querySelectorAll('button:not([disabled]),a[href],select:not([disabled]),input:not([disabled])'));
+    const controls=Array.from($("primarySidebar").querySelectorAll('button:not([disabled]),a[href],select:not([disabled]),input:not([disabled])')).filter(node=>node.getClientRects().length>0);
     const first=controls[0],last=controls[controls.length-1];
     if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
     else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
@@ -1113,7 +1143,9 @@ document.addEventListener("keydown",event=>{
 if(navigationMedia?.addEventListener)navigationMedia.addEventListener("change",()=>setSidebarOpen(false));
 setSidebarOpen(false);
 renderRoleAccess();updateEquipmentKind();
-const remembered=localStorage.getItem(rememberedUserKey);if(remembered){$("username").value=remembered;$("rememberUser").checked=true}if(getAuth())showApp();
+const remembered=localStorage.getItem(rememberedUserKey);if(remembered){$("username").value=remembered;$("rememberUser").checked=true}
+// Start a restored session only after the ordered deferred scripts are ready.
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",()=>{if(getAuth())showApp();},{once:true});else if(getAuth())showApp();
 
 $("bioFingerSelect").addEventListener("change",()=>{if(biometricCapture&&!biometricBusy&&!biometricCapture.confirmationStarted){clearBiometricImage();biometricCapture.fingerCode=$("bioFingerSelect").value;setBiometricControls(false);}});
 window.addEventListener("pagehide",()=>resetBiometricCapture(true));

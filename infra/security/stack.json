@@ -1,0 +1,1670 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "EntregaEPI: isolated KMS signer, TOTP proof, persistent audit and alerts",
+  "Parameters": {
+    "ArtifactBucket": {
+      "Type": "String",
+      "AllowedPattern": "[a-z0-9.-]+"
+    },
+    "ArtifactKey": {
+      "Type": "String",
+      "AllowedPattern": ".+\\.zip"
+    },
+    "OperationalTable": {
+      "Type": "String",
+      "Default": "jp-entregaepi-v12"
+    },
+    "GedTable": {
+      "Type": "String",
+      "Default": "JPGED"
+    },
+    "DocumentsBucket": {
+      "Type": "String",
+      "Default": "jpged-documentos-003020057405"
+    },
+    "UserPoolId": {
+      "Type": "String",
+      "Default": "sa-east-1_3FNCoTvr0"
+    },
+    "ClientId": {
+      "Type": "String",
+      "Default": "2q2inha617oeer4vb0m0hjoja0"
+    },
+    "CertificateKeyArns": {
+      "Type": "CommaDelimitedList"
+    },
+    "AlertEmail": {
+      "Type": "String",
+      "AllowedPattern": "[^@ ]+@[^@ ]+",
+      "Default": "diretoria@jptreinamentos.com.br"
+    }
+  },
+  "Resources": {
+    "SecurityTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "${AWS::StackName}-sessions"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "pk",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "pk",
+            "KeyType": "HASH"
+          }
+        ],
+        "TimeToLiveSpecification": {
+          "AttributeName": "expiresAtEpoch",
+          "Enabled": true
+        },
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS"
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "DeletionProtectionEnabled": true
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "SignerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "jp-entregaepi-signer-role",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "isolated-access",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/jp-entregaepi-signer:*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:GetItem",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "SecurityTable",
+                      "Arn"
+                    ]
+                  },
+                  "Condition": {
+                    "ForAllValues:StringLike": {
+                      "dynamodb:LeadingKeys": [
+                        "MFA#*"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:GetItem",
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${OperationalTable}"
+                  },
+                  "Condition": {
+                    "ForAllValues:StringLike": {
+                      "dynamodb:LeadingKeys": [
+                        "empresa#*",
+                        "ficha#*"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:PutItem",
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${OperationalTable}"
+                  },
+                  "Condition": {
+                    "ForAllValues:StringLike": {
+                      "dynamodb:LeadingKeys": [
+                        "ficha#*"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:Query"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${GedTable}"
+                  },
+                  "Condition": {
+                    "ForAllValues:StringLike": {
+                      "dynamodb:LeadingKeys": [
+                        "EMPRESA#*"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${DocumentsBucket}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Sign",
+                    "kms:DescribeKey"
+                  ],
+                  "Resource": {
+                    "Ref": "CertificateKeyArns"
+                  }
+                },
+                {
+                  "Effect": "Deny",
+                  "Action": [
+                    "kms:CreateKey",
+                    "kms:PutKeyPolicy",
+                    "kms:CreateGrant",
+                    "kms:ImportKeyMaterial",
+                    "kms:DeleteImportedKeyMaterial",
+                    "kms:DisableKey",
+                    "kms:ScheduleKeyDeletion",
+                    "kms:GetParametersForImport"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Deny",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "SecurityTable",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AdminRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "jp-entregaepi-vault-admin-role",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "isolated-access",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/jp-entregaepi-vault-admin:*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:GetItem",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "SecurityTable",
+                      "Arn"
+                    ]
+                  },
+                  "Condition": {
+                    "ForAllValues:StringLike": {
+                      "dynamodb:LeadingKeys": [
+                        "MFA#*"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:GetItem",
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${OperationalTable}"
+                  },
+                  "Condition": {
+                    "ForAllValues:StringLike": {
+                      "dynamodb:LeadingKeys": [
+                        "empresa#*"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:Query"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${GedTable}"
+                  },
+                  "Condition": {
+                    "ForAllValues:StringLike": {
+                      "dynamodb:LeadingKeys": [
+                        "EMPRESA#*"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${DocumentsBucket}/evidence/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "kms:CreateKey",
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEquals": {
+                      "kms:KeyUsage": "SIGN_VERIFY",
+                      "kms:KeySpec": [
+                        "RSA_2048",
+                        "RSA_3072",
+                        "RSA_4096"
+                      ],
+                      "kms:KeyOrigin": "EXTERNAL"
+                    },
+                    "Bool": {
+                      "kms:MultiRegion": "false"
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:GetParametersForImport",
+                    "kms:ImportKeyMaterial",
+                    "kms:GetPublicKey",
+                    "kms:DescribeKey",
+                    "kms:ScheduleKeyDeletion"
+                  ],
+                  "Resource": {
+                    "Ref": "CertificateKeyArns"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "lambda:InvokeFunction",
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:jp-v10-empresas-r44"
+                  }
+                },
+                {
+                  "Effect": "Deny",
+                  "Action": [
+                    "kms:Sign",
+                    "kms:PutKeyPolicy",
+                    "kms:CreateGrant"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Deny",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "SecurityTable",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AuthRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "jp-entregaepi-auth-security-role",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "isolated-access",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/jp-entregaepi-auth-security:*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:GetItem",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "SecurityTable",
+                      "Arn"
+                    ]
+                  },
+                  "Condition": {
+                    "ForAllValues:StringLike": {
+                      "dynamodb:LeadingKeys": [
+                        "MFA#*"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:PutItem",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "SecurityTable",
+                      "Arn"
+                    ]
+                  },
+                  "Condition": {
+                    "ForAllValues:StringLike": {
+                      "dynamodb:LeadingKeys": [
+                        "MFA#*"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "cognito-idp:AdminGetUser",
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
+                  }
+                },
+                {
+                  "Effect": "Deny",
+                  "Action": [
+                    "kms:Sign",
+                    "kms:CreateKey",
+                    "kms:ImportKeyMaterial",
+                    "kms:ScheduleKeyDeletion",
+                    "kms:PutKeyPolicy",
+                    "kms:CreateGrant",
+                    "kms:DisableKey",
+                    "kms:DeleteImportedKeyMaterial",
+                    "kms:GetParametersForImport"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AlertRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "jp-entregaepi-security-alerts-role",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "isolated-access",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/jp-entregaepi-security-alerts:*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:DeleteItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "SecurityTable",
+                      "Arn"
+                    ]
+                  },
+                  "Condition": {
+                    "ForAllValues:StringLike": {
+                      "dynamodb:LeadingKeys": [
+                        "ALERT#*"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "ses:SendEmail",
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${AlertEmail}"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "ses:FromAddress": {
+                        "Ref": "AlertEmail"
+                      }
+                    },
+                    "ForAllValues:StringEquals": {
+                      "ses:Recipients": [
+                        {
+                          "Ref": "AlertEmail"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Effect": "Deny",
+                  "Action": [
+                    "kms:Sign",
+                    "kms:CreateKey",
+                    "kms:ImportKeyMaterial",
+                    "kms:ScheduleKeyDeletion",
+                    "kms:PutKeyPolicy",
+                    "kms:CreateGrant",
+                    "kms:DisableKey",
+                    "kms:DeleteImportedKeyMaterial",
+                    "kms:GetParametersForImport"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "SignerLog": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/jp-entregaepi-signer",
+        "RetentionInDays": 90
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "SignerFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "jp-entregaepi-signer",
+        "Runtime": "nodejs22.x",
+        "Architectures": [
+          "x86_64"
+        ],
+        "Handler": "src/security/isolated-handler.signerHandler",
+        "MemorySize": 1024,
+        "Timeout": 60,
+        "ReservedConcurrentExecutions": 10,
+        "Role": {
+          "Fn::GetAtt": [
+            "SignerRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "S3Bucket": {
+            "Ref": "ArtifactBucket"
+          },
+          "S3Key": {
+            "Ref": "ArtifactKey"
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "COGNITO_USER_POOL_ID": {
+              "Ref": "UserPoolId"
+            },
+            "COGNITO_CLIENT_ID": {
+              "Ref": "ClientId"
+            },
+            "SECURITY_TABLE": {
+              "Ref": "SecurityTable"
+            },
+            "TABLE_NAME": {
+              "Ref": "OperationalTable"
+            },
+            "JPGED_TABLE": {
+              "Ref": "GedTable"
+            },
+            "JPGED_BUCKET": {
+              "Ref": "DocumentsBucket"
+            },
+            "SIGNER_ROLE_ARN": {
+              "Fn::GetAtt": [
+                "SignerRole",
+                "Arn"
+              ]
+            },
+            "VAULT_ADMIN_ROLE_ARN": {
+              "Fn::GetAtt": [
+                "AdminRole",
+                "Arn"
+              ]
+            },
+            "V10_SYNC_ENABLED": "true",
+            "ALERT_EMAIL": {
+              "Ref": "AlertEmail"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "JP-EntregaEPI"
+          },
+          {
+            "Key": "SecurityComponent",
+            "Value": "Signer"
+          }
+        ]
+      },
+      "DependsOn": [
+        "SignerLog"
+      ]
+    },
+    "AdminLog": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/jp-entregaepi-vault-admin",
+        "RetentionInDays": 90
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "AdminFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "jp-entregaepi-vault-admin",
+        "Runtime": "nodejs22.x",
+        "Architectures": [
+          "x86_64"
+        ],
+        "Handler": "src/security/isolated-handler.adminHandler",
+        "MemorySize": 512,
+        "Timeout": 60,
+        "ReservedConcurrentExecutions": 3,
+        "Role": {
+          "Fn::GetAtt": [
+            "AdminRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "S3Bucket": {
+            "Ref": "ArtifactBucket"
+          },
+          "S3Key": {
+            "Ref": "ArtifactKey"
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "COGNITO_USER_POOL_ID": {
+              "Ref": "UserPoolId"
+            },
+            "COGNITO_CLIENT_ID": {
+              "Ref": "ClientId"
+            },
+            "SECURITY_TABLE": {
+              "Ref": "SecurityTable"
+            },
+            "TABLE_NAME": {
+              "Ref": "OperationalTable"
+            },
+            "JPGED_TABLE": {
+              "Ref": "GedTable"
+            },
+            "JPGED_BUCKET": {
+              "Ref": "DocumentsBucket"
+            },
+            "SIGNER_ROLE_ARN": {
+              "Fn::GetAtt": [
+                "SignerRole",
+                "Arn"
+              ]
+            },
+            "VAULT_ADMIN_ROLE_ARN": {
+              "Fn::GetAtt": [
+                "AdminRole",
+                "Arn"
+              ]
+            },
+            "V10_SYNC_ENABLED": "true",
+            "ALERT_EMAIL": {
+              "Ref": "AlertEmail"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "JP-EntregaEPI"
+          },
+          {
+            "Key": "SecurityComponent",
+            "Value": "Admin"
+          }
+        ]
+      },
+      "DependsOn": [
+        "AdminLog"
+      ]
+    },
+    "AuthLog": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/jp-entregaepi-auth-security",
+        "RetentionInDays": 90
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "AuthFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "jp-entregaepi-auth-security",
+        "Runtime": "nodejs22.x",
+        "Architectures": [
+          "x86_64"
+        ],
+        "Handler": "src/security/auth-handler.handler",
+        "MemorySize": 256,
+        "Timeout": 20,
+        "ReservedConcurrentExecutions": 5,
+        "Role": {
+          "Fn::GetAtt": [
+            "AuthRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "S3Bucket": {
+            "Ref": "ArtifactBucket"
+          },
+          "S3Key": {
+            "Ref": "ArtifactKey"
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "COGNITO_USER_POOL_ID": {
+              "Ref": "UserPoolId"
+            },
+            "COGNITO_CLIENT_ID": {
+              "Ref": "ClientId"
+            },
+            "SECURITY_TABLE": {
+              "Ref": "SecurityTable"
+            },
+            "TABLE_NAME": {
+              "Ref": "OperationalTable"
+            },
+            "JPGED_TABLE": {
+              "Ref": "GedTable"
+            },
+            "JPGED_BUCKET": {
+              "Ref": "DocumentsBucket"
+            },
+            "SIGNER_ROLE_ARN": {
+              "Fn::GetAtt": [
+                "SignerRole",
+                "Arn"
+              ]
+            },
+            "VAULT_ADMIN_ROLE_ARN": {
+              "Fn::GetAtt": [
+                "AdminRole",
+                "Arn"
+              ]
+            },
+            "V10_SYNC_ENABLED": "true",
+            "ALERT_EMAIL": {
+              "Ref": "AlertEmail"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "JP-EntregaEPI"
+          },
+          {
+            "Key": "SecurityComponent",
+            "Value": "Auth"
+          }
+        ]
+      },
+      "DependsOn": [
+        "AuthLog"
+      ]
+    },
+    "AlertsLog": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/jp-entregaepi-security-alerts",
+        "RetentionInDays": 90
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "AlertsFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "jp-entregaepi-security-alerts",
+        "Runtime": "nodejs22.x",
+        "Architectures": [
+          "x86_64"
+        ],
+        "Handler": "src/security/alert-handler.handler",
+        "MemorySize": 256,
+        "Timeout": 20,
+        "ReservedConcurrentExecutions": 2,
+        "Role": {
+          "Fn::GetAtt": [
+            "AlertRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "S3Bucket": {
+            "Ref": "ArtifactBucket"
+          },
+          "S3Key": {
+            "Ref": "ArtifactKey"
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "COGNITO_USER_POOL_ID": {
+              "Ref": "UserPoolId"
+            },
+            "COGNITO_CLIENT_ID": {
+              "Ref": "ClientId"
+            },
+            "SECURITY_TABLE": {
+              "Ref": "SecurityTable"
+            },
+            "TABLE_NAME": {
+              "Ref": "OperationalTable"
+            },
+            "JPGED_TABLE": {
+              "Ref": "GedTable"
+            },
+            "JPGED_BUCKET": {
+              "Ref": "DocumentsBucket"
+            },
+            "SIGNER_ROLE_ARN": {
+              "Fn::GetAtt": [
+                "SignerRole",
+                "Arn"
+              ]
+            },
+            "VAULT_ADMIN_ROLE_ARN": {
+              "Fn::GetAtt": [
+                "AdminRole",
+                "Arn"
+              ]
+            },
+            "V10_SYNC_ENABLED": "true",
+            "ALERT_EMAIL": {
+              "Ref": "AlertEmail"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": "JP-EntregaEPI"
+          },
+          {
+            "Key": "SecurityComponent",
+            "Value": "Alerts"
+          }
+        ]
+      },
+      "DependsOn": [
+        "AlertsLog"
+      ]
+    },
+    "AuditKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": "EntregaEPI persistent security audit",
+        "EnableKeyRotation": true,
+        "PendingWindowInDays": 30,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": [
+                "kms:GenerateDataKey*"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}"
+                  }
+                },
+                "StringLike": {
+                  "kms:EncryptionContext:aws:cloudtrail:arn": {
+                    "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}"
+                  }
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "kms:DescribeKey",
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "AuditBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${AWS::StackName}-audit-${AWS::AccountId}"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {
+                  "Fn::GetAtt": [
+                    "AuditKey",
+                    "Arn"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "AuditBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "AuditBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "AuditBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${AuditBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "AuditBucket",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}"
+                  }
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${AuditBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}"
+                  },
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "Trail": {
+      "Type": "AWS::CloudTrail::Trail",
+      "Properties": {
+        "TrailName": {
+          "Fn::Sub": "${AWS::StackName}"
+        },
+        "S3BucketName": {
+          "Ref": "AuditBucket"
+        },
+        "KMSKeyId": {
+          "Fn::GetAtt": [
+            "AuditKey",
+            "Arn"
+          ]
+        },
+        "IsLogging": true,
+        "IsMultiRegionTrail": true,
+        "IncludeGlobalServiceEvents": true,
+        "EnableLogFileValidation": true,
+        "EventSelectors": [
+          {
+            "ReadWriteType": "All",
+            "IncludeManagementEvents": true,
+            "DataResources": [
+              {
+                "Type": "AWS::S3::Object",
+                "Values": [
+                  {
+                    "Fn::Sub": "arn:aws:s3:::${DocumentsBucket}/"
+                  }
+                ]
+              },
+              {
+                "Type": "AWS::DynamoDB::Table",
+                "Values": [
+                  {
+                    "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${GedTable}"
+                  },
+                  {
+                    "Fn::GetAtt": [
+                      "SecurityTable",
+                      "Arn"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "DependsOn": [
+        "AuditBucketPolicy"
+      ]
+    },
+    "KmsEvents": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-kmsevents"
+        },
+        "State": "ENABLED",
+        "EventPattern": {
+          "source": [
+            "aws.kms"
+          ],
+          "detail-type": [
+            "AWS API Call via CloudTrail"
+          ],
+          "detail": {
+            "eventSource": [
+              "kms.amazonaws.com"
+            ],
+            "eventName": [
+              "ScheduleKeyDeletion",
+              "DisableKey",
+              "DeleteImportedKeyMaterial",
+              "PutKeyPolicy",
+              "ImportKeyMaterial",
+              "CreateGrant"
+            ]
+          }
+        },
+        "Targets": [
+          {
+            "Id": "security-email",
+            "Arn": {
+              "Fn::GetAtt": [
+                "AlertsFunction",
+                "Arn"
+              ]
+            },
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 10,
+              "MaximumEventAgeInSeconds": 3600
+            }
+          }
+        ]
+      }
+    },
+    "KmsEventsPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "AlertsFunction"
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "KmsEvents",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "TrailEvents": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-trailevents"
+        },
+        "State": "ENABLED",
+        "EventPattern": {
+          "source": [
+            "aws.cloudtrail"
+          ],
+          "detail-type": [
+            "AWS API Call via CloudTrail"
+          ],
+          "detail": {
+            "eventSource": [
+              "cloudtrail.amazonaws.com"
+            ],
+            "eventName": [
+              "StopLogging",
+              "DeleteTrail",
+              "UpdateTrail",
+              "PutEventSelectors"
+            ],
+            "requestParameters": {
+              "name": [
+                {
+                  "Fn::Sub": "${AWS::StackName}"
+                },
+                {
+                  "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}"
+                }
+              ]
+            }
+          }
+        },
+        "Targets": [
+          {
+            "Id": "security-email",
+            "Arn": {
+              "Fn::GetAtt": [
+                "AlertsFunction",
+                "Arn"
+              ]
+            },
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 10,
+              "MaximumEventAgeInSeconds": 3600
+            }
+          }
+        ]
+      }
+    },
+    "TrailEventsPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "AlertsFunction"
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "TrailEvents",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "AlarmEvents": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-alarmevents"
+        },
+        "State": "ENABLED",
+        "EventPattern": {
+          "source": [
+            "aws.cloudwatch"
+          ],
+          "detail-type": [
+            "CloudWatch Alarm State Change"
+          ],
+          "detail": {
+            "alarmName": [
+              {
+                "prefix": {
+                  "Fn::Sub": "${AWS::StackName}-"
+                }
+              }
+            ],
+            "state": {
+              "value": [
+                "ALARM"
+              ]
+            }
+          }
+        },
+        "Targets": [
+          {
+            "Id": "security-email",
+            "Arn": {
+              "Fn::GetAtt": [
+                "AlertsFunction",
+                "Arn"
+              ]
+            },
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 10,
+              "MaximumEventAgeInSeconds": 3600
+            }
+          }
+        ]
+      }
+    },
+    "AlarmEventsPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "AlertsFunction"
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "AlarmEvents",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "SignerDeniedMetric": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "SignerLog"
+        },
+        "FilterPattern": "{ $.event = \"JP_SECURITY\" && $.outcome = \"denied\" }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "JP/EntregaEPISecurity",
+            "MetricName": "DeniedOperations",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "AdminDeniedMetric": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "AdminLog"
+        },
+        "FilterPattern": "{ $.event = \"JP_SECURITY\" && $.outcome = \"denied\" }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "JP/EntregaEPISecurity",
+            "MetricName": "DeniedOperations",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "AuthDeniedMetric": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "AuthLog"
+        },
+        "FilterPattern": "{ $.event = \"JP_SECURITY\" && $.outcome = \"denied\" }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "JP/EntregaEPISecurity",
+            "MetricName": "DeniedOperations",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "SignatureMetric": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "SignerLog"
+        },
+        "FilterPattern": "{ $.event = \"JP_SECURITY\" && $.outcome = \"success\" && ($.operation = \"certify\" || $.operation = \"layout\") }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "JP/EntregaEPISecurity",
+            "MetricName": "Signatures",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "DeniedAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-deniedalarm"
+        },
+        "Namespace": "JP/EntregaEPISecurity",
+        "MetricName": "DeniedOperations",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "SignatureAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-signaturealarm"
+        },
+        "Namespace": "JP/EntregaEPISecurity",
+        "MetricName": "Signatures",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 100,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "SignerErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-signererrors"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": "jp-entregaepi-signer"
+          }
+        ]
+      }
+    },
+    "AdminErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-adminerrors"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": "jp-entregaepi-vault-admin"
+          }
+        ]
+      }
+    },
+    "AuthErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-autherrors"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": "jp-entregaepi-auth-security"
+          }
+        ]
+      }
+    },
+    "AlertsErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-alertserrors"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "TreatMissingData": "notBreaching",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": "jp-entregaepi-security-alerts"
+          }
+        ]
+      }
+    },
+    "ApiDeniedMetric": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": "/aws/lambda/jp-entregaepi-v12-api",
+        "FilterPattern": "{ $.event = \"JP_SECURITY\" && $.outcome = \"denied\" }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "JP/EntregaEPISecurity",
+            "MetricName": "DeniedOperations",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "CognitoEvents": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-cognitoevents"
+        },
+        "State": "ENABLED",
+        "EventPattern": {
+          "source": [
+            "aws.cognito-idp"
+          ],
+          "detail-type": [
+            "AWS API Call via CloudTrail"
+          ],
+          "detail": {
+            "eventSource": [
+              "cognito-idp.amazonaws.com"
+            ],
+            "eventName": [
+              "AdminSetUserMFAPreference",
+              "SetUserPoolMfaConfig",
+              "UpdateUserPool",
+              "UpdateUserPoolClient",
+              "AdminAddUserToGroup",
+              "AdminRemoveUserFromGroup",
+              "AdminDeleteUser"
+            ],
+            "requestParameters": {
+              "userPoolId": [
+                {
+                  "Ref": "UserPoolId"
+                }
+              ]
+            }
+          }
+        },
+        "Targets": [
+          {
+            "Id": "security-email",
+            "Arn": {
+              "Fn::GetAtt": [
+                "AlertsFunction",
+                "Arn"
+              ]
+            },
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 10,
+              "MaximumEventAgeInSeconds": 3600
+            }
+          }
+        ]
+      }
+    },
+    "CognitoEventsPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "AlertsFunction"
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "CognitoEvents",
+            "Arn"
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "SecurityTable": {
+      "Value": {
+        "Ref": "SecurityTable"
+      }
+    },
+    "AuditBucket": {
+      "Value": {
+        "Ref": "AuditBucket"
+      }
+    },
+    "AuditKeyArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "AuditKey",
+          "Arn"
+        ]
+      }
+    },
+    "SignerArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "SignerFunction",
+          "Arn"
+        ]
+      }
+    },
+    "AdminArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "AdminFunction",
+          "Arn"
+        ]
+      }
+    },
+    "AuthArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "AuthFunction",
+          "Arn"
+        ]
+      }
+    },
+    "AlertsArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "AlertsFunction",
+          "Arn"
+        ]
+      }
+    }
+  }
+}

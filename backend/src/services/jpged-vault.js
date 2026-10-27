@@ -54,9 +54,11 @@ export function createVaultService({ged,vault,validate=verifyCompanyCms,audit}){
     try{
       const spki=await vault.import(item.keyArn,wrapped,item.importToken,item.metadata.validTo);
       if(!spki.equals(publicChain(item.chain)[0].publicKey.export({type:'spki',format:'der'})))fail('A chave importada não corresponde ao certificado.','COFRE_CHAVE_DIVERGENTE');
-      // A real KMS signature verifies both custody and possession before activation.
-      const built=cms(item),proof=built.complete(await vault.sign(item.keyArn,built.signedBytes));
-      const result=await validate(proof,content(item),item.target);
+      // GetPublicKey above confirms the imported key. Revalidate the saved
+      // authorization without granting signing rights to the administrator.
+      const evidence=JSON.parse((await ged.readBlob(`evidence/${company.id}/vault/${id}.json`)).toString('utf8'));
+      if(evidence.content!==content(item).toString('base64'))fail('A autorização de importação foi alterada.','COFRE_AUTORIZACAO');
+      const result=await validate(Buffer.from(evidence.cms,'base64'),content(item),item.target);
       const previous=await ged.get(company.id,'CERT','current');
       const saved=await ged.put(company.id,'CERT','current',{...result.certificate,mode:'vault',keyArn:item.keyArn,chain:result.evidence.certificates,target:item.target,authorizationPath:`evidence/${company.id}/vault/${id}.json`,active:true,configuredAt:new Date().toISOString(),configuredBy:actor},item.previousVersion);
       committed=true;

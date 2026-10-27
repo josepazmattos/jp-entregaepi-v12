@@ -105,7 +105,18 @@ export function createGedService({ged,store,validate=verifyCompanyCms,buildPdf=b
     return finish(company,actor,id,{cms:cms.toString('base64')},true);
   }
   async function publicCertificate(company){const cert=await certificate(company);if(!cert)return null;const {keyArn,chain,pk,sk,target,authorizationPath,configuredBy,...publicData}=cert;return {...publicData,...(cert.mode==='vault'?{vaultState:await vault.status(cert.keyArn)}:{})};}
-  async function documents(company,cursor) {const result=await ged.list(company,'DOC',cursor);return {...result,items:await Promise.all(result.items.map(async({path,evidencePath,pk,sk,...item})=>({...item,compactRevision:layouts.summary(await layouts.revision(company,item))})))};}
+  async function documents(company,cursor) {
+    const result=await ged.list(company,'DOC',cursor);
+    return {...result,items:await Promise.all(result.items.map(async({path,evidencePath,pk,sk,...item})=>{
+      const compactRevision=layouts.summary(await layouts.revision(company,item));
+      if(process.env.V10_SYNC_ENABLED!=='true')return {...item,compactRevision};
+      const sync=await ged.get(company,'SYNCV10',item.id),hash=compactRevision?.pdfHash||item.pdfHash;
+      const synced=sync?.status==='synced'&&sync.pdfHash===hash;
+      return {...item,compactRevision,v10Sync:{status:synced?'synced':'pending',
+        message:synced?'':sync?.pdfHash===hash&&sync.message?sync.message:'Envio pendente. O sistema tentará automaticamente.',
+        ...(synced?{syncedAt:sync.syncedAt}:{})}};
+    }))};
+  }
   async function download(company,actor,id,{original=false}={}) {
     const item=await ged.get(company,'DOC',id);if(!item)error(404,'Documento não encontrado.','JPGED_DOCUMENTO');
     const selected=original?item:(await layouts.revision(company,item)||item);

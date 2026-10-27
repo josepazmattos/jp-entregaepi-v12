@@ -31,6 +31,7 @@ async function scenario(options={}){
     const json=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)}).catch(()=>{});
     if(url.pathname==='/api/jpged/certificado')return json({ok:true,certificate:state.certificate||null});
     state.requests.push({path:url.pathname,host:url.hostname,port:url.port,method:request.method(),headers:request.headers()});
+    if(url.pathname==='/api/seguranca/status')return json({ok:true,required:true,enrolled:true,verified:true});
     if(url.pathname==='/auth/resolver')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,username:request.postDataJSON().login})});
     if(url.hostname.startsWith('cognito-idp.')){
       const input=request.postDataJSON();state.username=input.AuthParameters?.USERNAME||input.ChallengeResponses?.USERNAME;

@@ -1,0 +1,6 @@
+.jp-v10-pending{color:#8a4700!important;background:#fff2db!important;border:1px solid #e7b765;white-space:normal;line-height:1.35;cursor:help}
+.jp-v10-pending:focus{outline:2px solid #8a4700;outline-offset:3px}
+@media(max-width:680px){.document-list .item-actions{flex-wrap:wrap;justify-content:flex-start;gap:8px}.jp-v10-pending{max-width:100%}}
+.jp-v10-destination{padding:18px;margin:12px 0 20px;background:#fffaf0;border:1px solid #e7c990;border-radius:12px}
+.jp-v10-destination h3{margin-top:0}.jp-v10-destination select{width:100%;max-width:100%;min-height:116px}.jp-v10-destination small{display:block;margin-bottom:12px}.jp-v10-destination .btn{margin-top:8px}
+.jp-v10-edit{margin:0 0 16px}.jp-v10-destination .btn+.btn{margin-left:8px}
