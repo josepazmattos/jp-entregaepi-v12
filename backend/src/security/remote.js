@@ -10,3 +10,12 @@ export async function invokeSecurity(functionName, payload) {
   if (!response.ok) throw httpError(response.status || 500, response.error || 'A operação não foi concluída.', response.code || 'SEGURANCA_ERRO');
   return response.data;
 }
+
+// Event invocation outlives the HTTP request. Only the certificate worker
+// receives the existing JWT and protected payload; it verifies JWT/MFA again.
+export async function enqueueVault(functionName, payload, lambda = client) {
+  if (!functionName || !['prove','complete'].includes(payload.action)) throw httpError(400, 'Etapa inválida.', 'VAULT_ACTION');
+  const result = await lambda.send(new InvokeCommand({ FunctionName: functionName, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify(payload)) }));
+  if (result.StatusCode !== 202) throw httpError(503, 'Não foi possível iniciar a etapa. Atualize a situação.', 'COFRE_FILA_INDISPONIVEL');
+  return { pending: true };
+}

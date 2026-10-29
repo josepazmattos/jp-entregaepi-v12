@@ -16,7 +16,7 @@ const seconds=()=>Math.floor(Date.now()/1000);
 const cmsBytes=value=>{if(typeof value!=='string'||value.length>45000||!/^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value))error(400,'Assinatura digital inválida.','JPGED_CMS');return Buffer.from(value,'base64');};
 export function createGedService({ged,store,validate=verifyCompanyCms,buildPdf=buildSigningPdf,vault=keyVault}) {
   async function audit(company,actor,action,details={}) {return ged.put(company,'AUDIT',`${Date.now()}-${randomUUID()}`,{actor,action,at:new Date().toISOString(),...details});}
-  const vaultAdmin=createVaultService({ged,vault,validate,audit});
+  const vaultAdmin=createVaultService({ged,vault,validate,audit,loadCompany:id=>store.get('empresa',id)});
   const layouts=createLayoutService({ged,store,certificate,confirmedContent,buildPdf,validate,vault,audit});
   async function certificate(company) {const item=await ged.get(company,'CERT','current');return item?.active?item:null;}
   const configurationContent=(companyId,id,item)=>Buffer.from(JSON.stringify({schema:'JPGED-CONFIG-2',companyId,id,identity:canonicalEmployerTarget(item.target),companyName:item.companyName,nonce:item.nonce,scope:'Certificar fichas de EPI desta empresa confirmadas biometricamente',expiresAtEpoch:item.expiresAtEpoch}));

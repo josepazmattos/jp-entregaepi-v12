@@ -15,7 +15,7 @@ export function createIsolatedHandler({ mode, verify = verifyToken, sessions = m
       if (!event || !id(event.company) || typeof event.action !== 'string') throw httpError(400, 'Solicitação inválida.', 'SECURITY_REQUEST');
       const claims = await verify(event.token); actor = claims.sub; company = event.company;
       const master = isMaster(claims);
-      if (master) await requireVerifiedMaster(event.token, claims, { recent: mode === 'admin' && ['start','prove','complete','cancel','disconnect'].includes(event.action), sessions });
+      if (master) await requireVerifiedMaster(event.token, claims, { recent: mode === 'admin' && ['start','prove','complete','cancel','check','disconnect'].includes(event.action), sessions });
       else if (mode === 'admin' || !claims['cognito:groups']?.includes('EMPRESA') || claims['custom:empresa_id'] !== company) throw httpError(403, 'Acesso não permitido a esta empresa.', 'EMPRESA_NAO_AUTORIZADA');
       const employer = await database.get('empresa', company);
       const historicalRead = master && mode === 'signer' && ['certificate','download'].includes(event.action);
@@ -38,9 +38,9 @@ export function createIsolatedHandler({ mode, verify = verifyToken, sessions = m
           else data = await gedService.reissueLayout(company, actor, event.id);
         }
       } else if (mode === 'admin') {
-        if (!['start','prove','complete','cancel','disconnect','destination','account-ensure','account-reset'].includes(event.action)) throw httpError(403, 'Operação não permitida no cofre.', 'VAULT_ACTION');
+        if (!['start','prove','complete','cancel','status','check','disconnect','destination','account-ensure','account-reset'].includes(event.action)) throw httpError(403, 'Operação não permitida no cofre.', 'VAULT_ACTION');
         if (Object.keys(event).some(k => !['token','action','company','id','body'].includes(k))) throw httpError(400, 'Solicitação inválida.', 'VAULT_PAYLOAD');
-        const allowed = { start: ['chain'], prove: ['signature'], complete: ['wrappedKey'], cancel: [], disconnect: [], destination:['destinationId','version'], 'account-ensure':[], 'account-reset':[] }[event.action];
+        const allowed = { start: ['chain'], prove: ['signature'], complete: ['wrappedKey'], cancel: [], status: [], check: [], disconnect: [], destination:['destinationId','version'], 'account-ensure':[], 'account-reset':[] }[event.action];
         const body = event.body || {};
         if (typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(k => !allowed.includes(k))) throw httpError(400, 'O cofre não recebe arquivos A1 ou senhas.', 'VAULT_PAYLOAD');
         if (event.action === 'account-ensure') {
@@ -55,9 +55,9 @@ export function createIsolatedHandler({ mode, verify = verifyToken, sessions = m
         else if (event.action === 'disconnect') { await gedService.disconnect(company, actor); data = {}; }
         else {
           if (!id(event.id)) throw httpError(400, 'Identificação inválida.', 'VAULT_ID');
-          data = await gedService.vaultAdmin[event.action](employer, actor, event.id, body);
+          data = await gedService.vaultAdmin[event.action==='check'?'status':event.action](employer, actor, event.id, body);
           // Administration never needs kms:Sign or returns internal key references.
-          if (event.action === 'complete') data = { installed: true };
+          if (event.action === 'complete') data = data?.pending ? { pending: true } : { installed: true };
         }
       } else throw httpError(503, 'Serviço de segurança não configurado.', 'SECURITY_MODE');
       log(mode === 'signer' ? 'SIGNER_OPERATION' : 'VAULT_OPERATION', 'success', { actor, company, operation: event.action });

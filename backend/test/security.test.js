@@ -81,3 +81,13 @@ test('Master status recognizes email MFA without exposing the email address',asy
   const result=await auth({action:'status',token:'password-only'});
   assert.equal(result.data.method,'email');assert.equal(result.data.enrolled,true);assert.equal(result.data.verified,false);assert.ok(!JSON.stringify(result).includes('private@'));
 });
+test('status do cofre exige Master+MFA; envio exige autenticação recente',async()=>{
+ const seen=[],opts={mode:'admin',verify:async()=>master,sessions:{verified:async()=>true},database:{get:async()=>({id:'A'})},gedService:{vaultAdmin:{status:async(...args)=>{seen.push(args);return {phase:'proving'};}}},log:()=>{}};
+ const request={action:'status',company:'A',id:'attempt',token:'t'};
+ assert.equal((await createIsolatedHandler(opts)(request)).data.phase,'proving');
+ assert.equal((await createIsolatedHandler({...opts,verify:async()=>company})(request)).status,403);
+ assert.equal((await createIsolatedHandler({...opts,sessions:{verified:async()=>false}})(request)).code,'MFA_REQUIRED');
+ const stale=createIsolatedHandler({...opts,verify:async()=>({...master,auth_time:now-601})});
+ assert.equal((await stale(request)).ok,true);assert.equal((await stale({...request,action:'check'})).code,'CERTIFICADO_REAUTENTICAR');
+ assert.equal((await createIsolatedHandler(opts)({...request,body:{importToken:'forbidden'}})).code,'VAULT_PAYLOAD');
+});
