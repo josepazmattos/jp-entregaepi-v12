@@ -11,21 +11,22 @@ const template='SYNTHETIC_TEMPLATE_NO_REAL_BIOMETRY_'.repeat(3),keyPair=()=>{con
 let browser;
 (async()=>{
  const store=await import('../backend/src/db/store.js'),{handler}=await import('../backend/src/lambda.js'),{createBiometricsService,hash}=await import('../backend/src/services/biometria.service.js');
+ const {modeloFichaParaItens}=await import('../backend/src/services/ficha-modelo.js');
  const a=keyPair(),b=keyPair(),company=await store.create('empresa',{nome:'EMPRESA SINTÉTICA',cnpj:'00000000000000',status:'Ativa'}),bio=createBiometricsService(store),fichas=[];
  const attest=(p,c)=>{const proof=JSON.stringify({v:1,kind:c.kind,challengeId:c.challengeId,workerId:c.workerId,fichaId:c.fichaId,fingerCode:c.fingerCode,documentHash:c.documentHash,templateHash:hash(template),imageHash:hash(Buffer.from(PNG.split(',')[1],'base64')),...(c.kind==='enroll'?{enrolled:true}:{matched:true})});return {ok:true,challengeId:c.challengeId,template,publicKey:p.key,proof,proofSignature:sign('sha256',Buffer.from(proof),p.privateKey).toString('base64'),fingerImageDataUrl:PNG,matched:true,realFingerImage:true};};
  for(let i=0;i<2;i++){
   let worker=await store.create('trabalhador',{empresaId:company.id,nomeCompleto:'COLABORADOR SINTÉTICO '+i,status:'Ativo',cpf:'00000000000'});
   const c=await bio.challenge({worker,actor:'previous-enrollment',kind:'enroll',fingerCode:'R_INDEX'});await bio.complete({worker,actor:'previous-enrollment',kind:'enroll',body:attest(a,c)});
-  fichas.push(await store.create('ficha',{empresaId:company.id,trabalhadorId:worker.id,trabalhadorNome:worker.nomeCompleto,numero:'SINTÉTICA-'+i,status:'pendente',tipo:'Entrega',data:'11/10/2026',itens:[{epiNome:'Capacete',quantidade:1,ca:'365',datasMovimentacao:{entrega:'11/10/2026'}}]}));
+  fichas.push(await store.create('ficha',{empresaId:company.id,trabalhadorId:worker.id,trabalhadorNome:worker.nomeCompleto,numero:'SINTÉTICA-'+i,modeloFicha:modeloFichaParaItens(),status:'pendente',tipo:'Entrega',data:'11/10/2026',itens:[{epiNome:'Capacete',quantidade:1,ca:'365',datasMovimentacao:{entrega:'11/10/2026'}}]}));
  }
  const claims={sub:'same-company-account',iss:process.env.COGNITO_ISSUER,aud:'synthetic',exp:Math.floor(Date.now()/1000)+3600,token_use:'id','cognito:groups':['EMPRESA'],'custom:empresa_id':company.id};
  const token='header.'+Buffer.from(JSON.stringify(claims)).toString('base64url')+'.synthetic';
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin=`http://127.0.0.1:${server.address().port}`;
  browser=await chromium.launch({...(process.env.JP_TEST_CHROMIUM?{executablePath:process.env.JP_TEST_CHROMIUM}:{}),headless:true,args:['--no-sandbox']});
  async function session(pair,legacy,ip){
-  const state={logins:0,captures:0,match:false,deviceCalls:0,errors:[]},context=await browser.newContext({viewport:{width:1440,height:1000},locale:'pt-BR'});
+  const state={logins:0,captures:0,match:false,deviceCalls:0,errors:[]},context=await browser.newContext({viewport:{width:1440,height:1000},locale:'pt-BR',userAgent:'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/134.0.0.0 Safari/537.36'});
   context.on('page',p=>p.on('pageerror',e=>state.errors.push(e.message)));
-  await context.addInitScript(()=>Object.defineProperty(navigator.permissions,'query',{value:async()=>({state:'granted'})}));
+  await context.addInitScript(()=>{Object.defineProperty(navigator,'platform',{value:'Win32'});Object.defineProperty(navigator,'userAgentData',{value:undefined});Object.defineProperty(navigator.permissions,'query',{value:async()=>({state:'granted'})});});
   await context.route(url=>url.origin!==origin,async route=>{
    const request=route.request(),url=new URL(request.url()),json=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
    if(url.pathname==='/auth/resolver')return json({ok:true,username:'EMPRESA-TESTE'});
@@ -51,7 +52,7 @@ let browser;
  }
  const sessions=await Promise.all([session(a,true,'192.0.2.10'),session(b,false,'198.51.100.20')]),popups=[];
  for(let i=0;i<2;i++){
-  const s=sessions[i],opened=s.context.waitForEvent('page');await s.page.locator(`[data-ficha-id="${fichas[i].id}"]`).click();const popup=await opened;await popup.locator('#signDocument').click();await popup.waitForSelector('#verifyFingerprint');assert.equal(await popup.locator('#operationFinger option').count(),1);popups.push(popup);
+  const s=sessions[i],opened=s.context.waitForEvent('page');await s.page.locator(`[data-ficha-id="${fichas[i].id}"]`).click();const popup=await opened;await popup.locator('#signDocument').click();assert.equal(await popup.locator('#chooseDigital').isDisabled(),true);await popup.locator('#signatureAcceptance').check();await popup.locator('#chooseDigital').click();await popup.waitForSelector('#verifyFingerprint');assert.equal(await popup.locator('#operationFinger option').count(),1);popups.push(popup);
  }
  await popups[1].locator('#verifyFingerprint').click();await popups[1].waitForFunction(()=>document.querySelector('.dialog-message')?.textContent.includes('não corresponde'));assert.equal((await store.get('ficha',fichas[1].id)).status,'pendente');pass('Outro computador bloqueia digital divergente sem autorização Master e sem alterar cadastro');
  sessions.forEach(s=>s.state.match=true);

@@ -1,12 +1,13 @@
 // Editors and biometric operations remain scoped to the authenticated company/session.
 let workerEdit=null;
+const facialAssetsBase=new URL('.',document.currentScript?.src||location.href).href;
 const operationWindows=new Set(),operationDialogs=new Set(),operationControllers=new Set();
 function closeOperations(){
   if(typeof resetJpged==='function')resetJpged();
   const editing=Boolean(workerEdit);workerEdit=null;
   const form=$('trabalhadorForm');if(form&&editing){form.reset();setText('workerFormTitle','Novo trabalhador');$('workerEditCancel')?.classList.add('hidden');}
   for(const controller of operationControllers)controller.abort();operationControllers.clear();
-  for(const dialog of operationDialogs)dialog.remove();operationDialogs.clear();
+  for(const dialog of operationDialogs){if(dialog.open)dialog.close();else dialog.remove();}operationDialogs.clear();
   for(const preview of operationWindows)if(!preview.closed)preview.close();operationWindows.clear();
 }
 function operationContext(){return {session:sessionGeneration,company:companyGeneration,empresa:activeEmpresaId};}
@@ -143,7 +144,7 @@ function printBiometricEnrollment(id){
   const worker=cache.trabalhadores.find(x=>x.id===id);if(!worker||String(worker.empresaId)!==String(activeEmpresaId))return;
   return openBiometricRecord('/api/trabalhadores/'+encodeURIComponent(id)+'/cadastro-biometrico','enrollment',id);
 }
-function renderBiometricDialog(dialog,worker,ficha){
+function renderBiometricDialog(dialog,worker,ficha,acceptance={}){
   const context=operationContext(),content=dialog.querySelector('.dialog-content'),entries=Object.keys(worker.biometrias||{}),kind=ficha?'verify':'enroll';
   const fingers=ficha?window.JP_BIOMETRIA.FINGERS.filter(x=>entries.includes(x[0])):window.JP_BIOMETRIA.FINGERS;
   const company=cache.empresas.find(x=>String(x.id)===String(activeEmpresaId));
@@ -171,7 +172,7 @@ function renderBiometricDialog(dialog,worker,ficha){
         if(!ficha&&!status.enrollmentImageAvailable){const error=new Error('O JP Biometria deste computador precisa ser atualizado para recadastrar com imagem. Instale a atualização abaixo e tente novamente. A digital anterior foi preservada.');error.code='BIO_AGENT_IMAGE_UPDATE';throw error;}
         if(ficha&&!status.documentHashAvailable)throw new Error('Atualize o JP Biometria para confirmar o conteúdo completo da ficha.');
         if(!status.verificationAvailable)throw new Error('Atualize o JP Biometria para cadastrar e comparar digitais.');
-        const start=ensureSuccess(await api(base+'/biometria/desafio',{method:'POST',body:JSON.stringify({fingerCode,...(ficha&&status.devicePublicKey?{devicePublicKey:status.devicePublicKey}:{})}),signal:controller.signal}));assertOperationContext(context);
+        const start=ensureSuccess(await api(base+'/biometria/desafio',{method:'POST',body:JSON.stringify({fingerCode,...acceptance,...(ficha&&status.devicePublicKey?{devicePublicKey:status.devicePublicKey}:{})}),signal:controller.signal}));assertOperationContext(context);
         dialogMessage(dialog,'Posicione o '+fingerLabel(fingerCode).toLocaleLowerCase('pt-BR')+' no leitor. Aguarde a captura e a conferência.');
         const response=await client.biometric(start.body.challenge,{signal:controller.signal});assertOperationContext(context);
         if(controller.signal.aborted)throw new Error('Operação cancelada.');
@@ -217,14 +218,16 @@ function setupPrintWindow(preview,ficha,context){
   toolbar.querySelector('#certifyDocument').onclick=async()=>{const button=doc.getElementById('certifyDocument');button.disabled=true;try{await certifyFicha(ficha.id,preview,context);}catch(error){doc.getElementById('printSignatureStatus').textContent='Biometria confirmada · Certificação pendente: '+error.message;}finally{button.disabled=false;}};
   toolbar.querySelector('#downloadOriginal').onclick=()=>downloadJpged(preview.jpgedDocumentId).catch(error=>{doc.getElementById('printSignatureStatus').textContent=error.message;});
   toolbar.querySelector('#signDocument').onclick=async()=>{
+    if(preview.jpSignatureDialog?.isConnected||preview.signingContextLoading)return;preview.signingContextLoading=true;
     try{assertOperationContext(context);const result=ensureSuccess(await api('/api/fichas/'+encodeURIComponent(ficha.id)+'/assinatura-contexto'));assertOperationContext(context);
       const current=result.body.ficha,worker=result.body.worker;
       if(current?.id!==ficha.id||current?.empresaId!==context.empresa||worker?.id!==current.trabalhadorId||worker?.empresaId!==context.empresa)throw new Error('O cadastro não corresponde à ficha selecionada.');
       cache.fichas=cache.fichas.map(x=>x.id===current.id?current:x);cache.trabalhadores=cache.trabalhadores.map(x=>x.id===worker.id?worker:x);
       if(!current||!canSignFicha(current)){if(current)updatePrintWindow(preview,current);throw new Error('Esta ficha não está pendente. Confira a situação atual.');}
       if(!worker)throw new Error('Cadastro do trabalhador não localizado.');
-      const dialog=dialogShell(doc,'Assinar biometricamente',current.trabalhadorSnapshot?.nomeCompleto||current.trabalhadorNome||worker.nomeCompleto);renderBiometricDialog(dialog,worker,current);
-    }catch(error){toolbar.querySelector('#printSignatureStatus').textContent=error.message;}
+      updatePrintWindow(preview,current);
+      renderSignatureChoice(preview,worker,current,result.body.facial);
+    }catch(error){toolbar.querySelector('#printSignatureStatus').textContent=error.message;}finally{preview.signingContextLoading=false;}
   };
   updatePrintWindow(preview,ficha);operationWindows.add(preview);preview.addEventListener('pagehide',()=>operationWindows.delete(preview),{once:true});
 }
@@ -247,5 +250,68 @@ function deleteFicha(id){
   button.onclick=async()=>{if(button.disabled)return;const motivo=dialog.querySelector('input')?.value.trim()||'';if(signed&&!motivo){dialogMessage(dialog,'Informe o motivo da exclusão.','error');return;}button.disabled=true;
     try{assertOperationContext(context);ensureSuccess(await api('/api/fichas/'+encodeURIComponent(id),{method:'DELETE',body:JSON.stringify({motivo})}));await refreshFichas(false);assertOperationContext(context);dialog.close();renderDashboard();}
     catch(error){dialogMessage(dialog,error.message,'error');button.disabled=false;}
+  };
+}
+
+function createSignatureDialog(preview,title,worker){
+  const dialog=dialogShell(preview.document,title,worker.nomeCompleto||worker.nome||'Trabalhador');preview.jpSignatureDialog=dialog;
+  const close=()=>{if(dialog.open)dialog.close();};preview.addEventListener('pagehide',close,{once:true});
+  dialog.addEventListener('close',()=>preview.removeEventListener('pagehide',close),{once:true});return dialog;
+}
+function renderSignatureChoice(preview,worker,ficha,facial){
+  const dialog=createSignatureDialog(preview,'Conferir ficha e escolher assinatura',worker),content=dialog.querySelector('.dialog-content');
+  const term=ficha.modeloFicha?.termoAssinatura;
+  content.innerHTML=`<p>Ficha <strong>${escapeHtml(ficha.numero||ficha.id)}</strong> gerada. Confira os itens, as quantidades e as datas na ficha antes de continuar.</p>${term?`<p class="signature-term">${escapeHtml(term)}</p><label style="display:flex;gap:12px;align-items:flex-start"><input id="signatureAcceptance" type="checkbox" style="width:24px;height:24px;flex:none"><span>Conferi a ficha e confirmo o termo acima.</span></label>`:'<p>Esta ficha usa um modelo anterior. A assinatura digital permanece disponível.</p>'}<p>Escolha uma forma de assinatura para esta ficha.</p>`;
+  const accept=content.querySelector('#signatureAcceptance');
+  const digital=dialog.ownerDocument.createElement('button'),face=dialog.ownerDocument.createElement('button');
+  digital.type=face.type='button';digital.className=face.className='btn btn-primary';digital.textContent='1 · Biometria Digital';face.textContent='2 · Biometria Facial';digital.id='chooseDigital';face.id='chooseFacial';
+  dialog.querySelector('.dialog-actions').prepend(digital,face);
+  const ready=()=>{digital.disabled=Boolean(term&&!accept.checked);face.disabled=Boolean(!term||!facial?.enabled||!accept?.checked);};ready();if(accept)accept.onchange=ready;
+  if(!facial?.enabled){const info=dialog.ownerDocument.createElement('p');info.textContent='A opção facial está em preparação para uso nas fichas do aplicativo.';content.append(info);}
+  const acceptance=()=>term?{aceiteTermo:true,termoAssinaturaId:ficha.modeloFicha.termoAssinaturaId}:{};
+  digital.onclick=()=>{if(digital.disabled)return;const body=acceptance();dialog.close();const next=createSignatureDialog(preview,'Assinar por biometria digital',worker);renderBiometricDialog(next,worker,ficha,body);};
+  face.onclick=()=>{if(face.disabled)return;const body=acceptance();dialog.close();renderFacialDialog(preview,worker,ficha,facial,body);};
+}
+function loadFacialWidget(preview){
+  if(preview.JP_FACIAL_WIDGET)return Promise.resolve(preview.JP_FACIAL_WIDGET);
+  if(preview.facialWidgetLoading)return preview.facialWidgetLoading;
+  preview.facialWidgetLoading=new Promise((resolve,reject)=>{
+    const css=preview.document.createElement('link');css.rel='stylesheet';css.href=facialAssetsBase+'facial-widget.css';preview.document.head.append(css);
+    const script=preview.document.createElement('script');script.src=facialAssetsBase+'facial-widget.js';script.onload=()=>preview.JP_FACIAL_WIDGET?resolve(preview.JP_FACIAL_WIDGET):reject(new Error('Componente facial indisponível.'));script.onerror=()=>{preview.facialWidgetLoading=null;reject(new Error('Não foi possível carregar a câmera. Confira a conexão.'));};preview.document.head.append(script);
+  });return preview.facialWidgetLoading;
+}
+function renderFacialDialog(preview,worker,ficha,info,acceptance){
+  const context=operationContext(),enroll=!info.enrollment,dialog=createSignatureDialog(preview,enroll?'Cadastrar rosto antes de assinar':'Assinar por biometria facial',worker),content=dialog.querySelector('.dialog-content');
+  const base=enroll?'/api/trabalhadores/'+encodeURIComponent(worker.id):'/api/fichas/'+encodeURIComponent(ficha.id);
+  content.innerHTML=`<p>${enroll?'O responsável deve conferir a identidade do trabalhador. Este cadastro não assina a ficha; depois, confira a ficha e faça a captura de assinatura.':'A câmera fará a prova de vida e a comparação com o rosto cadastrado deste trabalhador.'}</p><details open><summary>Uso dos dados faciais</summary><p>A biometria é um dado pessoal sensível. A empresa identificada na ficha utiliza o rosto para confirmar a identidade e registrar a assinatura. O AWS Rekognition processa a captura. Imagens de referência e evidências ficam com acesso restrito, vinculadas ao cadastro e à ficha, conforme a política de conservação aplicável. O aplicativo não guarda o vídeo.</p><p>Você pode interromper e escolher a digital. Não se deve condicionar a entrega do EPI à captura facial. A verificação usa luzes coloridas; pessoas com fotossensibilidade podem escolher outra forma de confirmação. Para informações sobre tratamento, conservação e exercício de direitos, procure o responsável da empresa ou sac@jptreinamentos.com.br.</p></details><label style="display:flex;gap:12px;align-items:flex-start"><input id="facialNotice" type="checkbox" style="width:24px;height:24px;flex:none"><span>Li o aviso sobre o uso dos dados faciais.</span></label>${enroll?'<label style="display:flex;gap:12px;align-items:flex-start;margin-top:12px"><input id="facialIdentity" type="checkbox" style="width:24px;height:24px;flex:none"><span>Como responsável, conferi a identidade deste trabalhador.</span></label>':''}<p>Use boa iluminação, câmera frontal e internet. No celular, mantenha a tela na vertical.</p><div class="facial-mount"></div>`;
+  const button=dialog.ownerDocument.createElement('button');button.type='button';button.id='startFacial';button.className='btn btn-primary';button.textContent=enroll?'Cadastrar rosto':'Capturar e assinar';button.disabled=true;dialog.querySelector('.dialog-actions').prepend(button);
+  const checks=[...content.querySelectorAll('input')],ready=()=>{button.disabled=checks.some(x=>!x.checked);};checks.forEach(x=>x.onchange=ready);
+  let session=null,disposed=false,busy=false,unmount=()=>{},controller=new AbortController();operationControllers.add(controller);
+  const clean=()=>{unmount();unmount=()=>{};content.querySelectorAll('video').forEach(v=>v.srcObject?.getTracks?.().forEach(t=>t.stop()));};
+  const cancel=()=>{if(disposed)return;disposed=true;clean();controller.abort();operationControllers.delete(controller);if(session)api(base+'/facial/cancelar',{method:'POST',body:JSON.stringify({attemptId:session.attemptId})}).catch(()=>{});};
+  const offline=()=>{dialogMessage(dialog,'Sem conexão. A captura foi encerrada. Feche e inicie novamente.','error');cancel();};
+  dialog.querySelector('.dialog-close').onclick=()=>{cancel();dialog.close();};dialog.addEventListener('cancel',cancel);preview.addEventListener('pagehide',cancel,{once:true});
+  dialog.addEventListener('close',()=>{cancel();preview.removeEventListener('offline',offline);preview.removeEventListener('pagehide',cancel);},{once:true});preview.addEventListener('offline',offline);
+  const alive=()=>{assertOperationContext(context);if(disposed||!dialog.open||!dialog.isConnected||preview.closed)throw new Error('Operação encerrada.');};
+  const post=async(path,body)=>{const r=ensureSuccess(await api(base+path,{method:'POST',body:JSON.stringify(body),signal:controller.signal}));alive();return r.body;};
+  const complete=async()=>{
+    if(busy||disposed||!dialog.open)return;busy=true;clean();dialogMessage(dialog,'Validando a captura e o vínculo com a ficha…');
+    try{
+      alive();let result;
+      for(let n=0;n<5;n++){result=await post('/facial/concluir',{attemptId:session.attemptId});if(!result.pending)break;await new Promise(r=>setTimeout(r,900));alive();}
+      if(!result?.approved)throw new Error('A captura ainda não foi confirmada. Feche e confira a ficha antes de tentar novamente.');
+      session=null;
+      if(enroll){if(result.item?.id!==worker.id)throw new Error('Cadastro não confirmado.');cache.trabalhadores=cache.trabalhadores.map(x=>x.id===worker.id?result.item:x);dialog.close();preview.document.getElementById('printSignatureStatus').textContent='Rosto cadastrado. Confira a ficha e escolha a assinatura facial para assiná-la.';}
+      else{const item=result.item;if(item?.id!==ficha.id||item.assinaturaBiometrica?.metodo!=='AWS_REKOGNITION_FACE_LIVENESS'||item.assinaturaBiometrica?.verificada!==true)throw new Error('Assinatura não confirmada.');cache.fichas=cache.fichas.map(x=>x.id===item.id?item:x);renderFichas();renderDashboard();updatePrintWindow(preview,item);dialog.close();if(typeof certifyFicha==='function')try{await certifyFicha(item.id,preview,context);}catch(error){if(!preview.closed)preview.document.getElementById('printSignatureStatus').textContent='Biometria confirmada · Certificação pendente: '+error.message;}}
+    }catch(error){if(!disposed){clean();dialogMessage(dialog,error.message,'error');cancel();}}finally{busy=false;}
+  };
+  button.onclick=async()=>{
+    if(button.disabled||disposed)return;button.disabled=true;checks.forEach(x=>x.disabled=true);
+    try{alive();if(!preview.isSecureContext||!preview.navigator.mediaDevices?.getUserMedia)throw new Error('Use HTTPS e um navegador com acesso à câmera.');
+      const widget=await loadFacialWidget(preview);alive();
+      const result=ensureSuccess(await api(base+'/facial/desafio',{method:'POST',body:JSON.stringify({requestId:createRequestId(),noticeId:info.noticeId,cienciaDados:true,identidadeConferida:enroll,...acceptance}),signal:controller.signal}));
+      session=result.body;if(disposed){api(base+'/facial/cancelar',{method:'POST',body:JSON.stringify({attemptId:session.attemptId})}).catch(()=>{});return;}alive();
+      unmount=widget.mount(content.querySelector('.facial-mount'),session,{complete,cancel:()=>dialog.close(),error:message=>{if(!disposed){dialogMessage(dialog,message,'error');cancel();}}});
+    }catch(error){if(!disposed){dialogMessage(dialog,error.message,'error');cancel();}}
   };
 }

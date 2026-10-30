@@ -16,7 +16,7 @@ async function request(method,path,body,company,auth=claims){const r=await handl
 function attestation(challenge,changes={}){const proof=JSON.stringify({v:1,kind:challenge.kind,challengeId:challenge.challengeId,workerId:challenge.workerId,fichaId:challenge.fichaId,fingerCode:challenge.fingerCode,documentHash:challenge.documentHash,templateHash:hash(template),...(challenge.kind==='enroll'?{enrolled:true,imageHash:hash(Buffer.from(PNG.split(',')[1],'base64'))}:{matched:true,imageHash:hash(Buffer.from(PNG.split(',')[1],'base64'))}),...changes});return {challengeId:challenge.challengeId,template,publicKey,fingerImageDataUrl:PNG,proof,proofSignature:sign('sha256',Buffer.from(proof),pair.privateKey).toString('base64')};}
 async function fixture(){const company=await store.create('empresa',{nome:'EMPRESA SINTÉTICA'});const worker=await store.create('trabalhador',{empresaId:company.id,nomeCompleto:'TRABALHADOR SINTÉTICO',cpf:'00000000000',matriculaESocial:'00A',funcao:'TESTE',localidade:'TESTE',status:'Ativo'});const ficha=await store.create('ficha',{empresaId:company.id,trabalhadorId:worker.id,status:'pendente',itens:[{quantidade:1,epiNome:'CAPACETE'}]});return {company,worker,ficha};}
 async function enroll(f){const r=await request('POST',`/api/trabalhadores/${f.worker.id}/biometria/desafio`,{fingerCode:'R_INDEX'},f.company.id);assert.equal(r.status,200);const body=attestation(r.body.challenge);const saved=await request('POST',`/api/trabalhadores/${f.worker.id}/biometria`,body,f.company.id);assert.equal(saved.status,200);return body;}
-async function verification(f){const r=await request('POST',`/api/fichas/${f.ficha.id}/biometria/desafio`,{fingerCode:'R_INDEX'},f.company.id);assert.equal(r.status,200);return attestation(r.body.challenge);}
+async function verification(f){const r=await request('POST',`/api/fichas/${f.ficha.id}/biometria/desafio`,{fingerCode:'R_INDEX',...(f.ficha.modeloFicha?.termoAssinatura?{aceiteTermo:true,termoAssinaturaId:f.ficha.modeloFicha.termoAssinaturaId}:{})},f.company.id);assert.equal(r.status,200);return attestation(r.body.challenge);}
 const finish=(f,body,auth=claims,company=f.company.id)=>request('POST',`/api/fichas/${f.ficha.id}/assinar`,body,company,auth);
 
 test('somente login EMPRESA usa digital cadastrada em outro agente, com isolamento e sem senha Master recente',async()=>{
@@ -77,4 +77,19 @@ test('devolução de ativo ou inativo permite assinatura conferida e preserva a 
     const current={...f,ficha:created.body.item};const signed=await finish(current,await verification(current));assert.equal(signed.status,200);assert.equal(signed.body.item.assinaturaBiometrica.verificada,true);
   }
   assert.deepEqual(await store.get('ficha',f.ficha.id),previous);
+});
+
+test('ficha nova exige aceite do termo antes da digital e preserva aceite na assinatura',async()=>{
+ const f=await fixture();await enroll(f);const {modeloFichaParaItens}=await import('../src/services/ficha-modelo.js');f.ficha=await store.update('ficha',f.ficha.id,{modeloFicha:modeloFichaParaItens()});
+ const path=`/api/fichas/${f.ficha.id}/biometria/desafio`;
+ for(const body of [{fingerCode:'R_INDEX'},{fingerCode:'R_INDEX',aceiteTermo:true,termoAssinaturaId:'antigo'}])assert.equal((await request('POST',path,body,f.company.id)).body.code,'ASSINATURA_ACEITE_OBRIGATORIO');
+ const r=await finish(f,await verification(f));assert.equal(r.status,200);assert.equal(r.body.item.assinaturaBiometrica.aceiteTermo.metodo,'DIGITAL');assert.equal(r.body.item.assinaturaBiometrica.aceiteTermo.texto,f.ficha.modeloFicha.termoAssinatura);
+});
+test('facial exige autenticação, empresa da ficha e liberação explícita; pontuação do cliente não assina',async()=>{
+ const f=await fixture(),g=await fixture();const path=`/api/fichas/${f.ficha.id}/facial/desafio`;
+ assert.equal((await request('POST',path,{},f.company.id,null)).status,401);
+ assert.equal((await request('POST',path,{},g.company.id)).status,403);
+ assert.equal((await request('POST',path,{matched:true,similarity:100},f.company.id)).body.code,'FACIAL_INDISPONIVEL');
+ assert.equal((await request('POST',`/api/fichas/${f.ficha.id}/facial/concluir`,{matched:true,similarity:100},f.company.id)).status,400);
+ assert.equal((await store.get('ficha',f.ficha.id)).status,'pendente');
 });

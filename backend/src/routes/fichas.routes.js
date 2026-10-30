@@ -6,6 +6,7 @@ import { httpError } from '../middleware/auth.js';
 import { createBiometricsService } from '../services/biometria.service.js';
 import { buildFicha } from '../services/ficha.service.js';
 import { reportCatalog } from '../services/epi-report.js';
+import { facial } from '../services/facial-instance.js';
 
 const router = Router();
 
@@ -47,11 +48,14 @@ async function signingContext(req) {
   if(ficha.trabalhadorSnapshot?.cpf && String(ficha.trabalhadorSnapshot.cpf).replace(/\D/g,'')!==String(worker.cpf).replace(/\D/g,'')) throw httpError(409,'O CPF atual diverge do registrado na ficha. Confira a identidade do trabalhador.');
   return {ficha,worker,actor:req.auth.sub,kind:'verify'};
 }
-router.get('/:id/assinatura-contexto',async(req,res)=>{const {ficha,worker}=await signingContext(req);ok(res,{ficha,worker});});
+router.get('/:id/assinatura-contexto',async(req,res)=>{const {ficha,worker}=await signingContext(req);ok(res,{ficha,worker,facial:await facial.info(worker)});});
+router.post('/:id/facial/desafio',async(req,res)=>ok(res,await facial.begin({...await signingContext(req),body:objectBody(req)})));
+router.post('/:id/facial/concluir',async(req,res)=>ok(res,await facial.complete({...await signingContext(req),body:objectBody(req)})));
+router.post('/:id/facial/cancelar',async(req,res)=>ok(res,await facial.cancel({...await signingContext(req),body:objectBody(req)})));
 router.post('/:id/biometria/desafio',async(req,res)=>{
   const context=await signingContext(req);
   const body=objectBody(req);
-  ok(res,{challenge:await biometrics.challenge({...context,fingerCode:body.fingerCode,devicePublicKey:body.devicePublicKey})});
+  ok(res,{challenge:await biometrics.challenge({...context,fingerCode:body.fingerCode,devicePublicKey:body.devicePublicKey,acceptance:body})});
 });
 router.post('/:id/assinar',async(req,res)=>{
   const context=await signingContext(req);

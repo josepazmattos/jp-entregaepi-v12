@@ -145,7 +145,7 @@ function appHarness(route){
   const elements=Object.fromEntries([...index.matchAll(/\bid="([^"]+)"/g)].map(match=>[match[1],element(match[1])]));
   const nav=[...index.matchAll(/<button[^>]*data-screen="([^"]+)"/g)].map(match=>{const button=element('nav-'+match[1]);button.dataset.screen=match[1];return button});
   const documentListeners={},windowListeners={};
-  const document={getElementById:id=>elements[id]||null,createElement:tag=>element(tag),body:element('body'),activeElement:null,
+  const document={currentScript:{src:'https://synthetic.invalid/assets/operations.js'},getElementById:id=>elements[id]||null,createElement:tag=>element(tag),body:element('body'),activeElement:null,
     addEventListener(event,listener){(documentListeners[event]||=[]).push(listener)},
     querySelectorAll:selector=>selector==='.nav button'?nav:selector==='[data-master-only]'?[elements.empresaForm]:selector==='.screen'?Object.values(elements).filter(item=>item.id.startsWith('screen-')):[],
     querySelector:selector=>selector==='.brand-logo'?{src:pixel}:nav.find(item=>selector===`[data-screen="${item.dataset.screen}"]`)||null};

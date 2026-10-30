@@ -4,6 +4,7 @@ import { list, listForDisplay, get, create, update, listWithRevision, transact }
 import { ok, fail, empresaIdFrom, objectBody, assertRecordAccess, recentListIds } from './_helpers.js';
 import { httpError, requireMaster } from '../middleware/auth.js';
 import { createBiometricsService } from '../services/biometria.service.js';
+import { facial } from '../services/facial-instance.js';
 import { sortWorkers } from '../services/trabalhadores.service.js';
 import { createWorkerImportService } from '../services/trabalhadores-import.service.js';
 import { companyForReport, workerForReport, workerEnrollmentSummary } from '../services/biometric-records.js';
@@ -93,4 +94,8 @@ router.post('/:id/biometria', async (req,res) => {
   const worker=await selectedWorker(req);
   ok(res,await biometrics.complete({body:objectBody(req),worker,actor:req.auth.sub,kind:'enroll'}));
 });
+router.get('/:id/facial',async(req,res)=>ok(res,await facial.info(await selectedWorker(req))));
+router.post('/:id/facial/desafio',async(req,res)=>ok(res,await facial.begin({worker:await selectedWorker(req),actor:req.auth.sub,kind:'enroll',body:objectBody(req)})));
+router.post('/:id/facial/concluir',async(req,res)=>ok(res,await facial.complete({worker:await selectedWorker(req),actor:req.auth.sub,kind:'enroll',body:objectBody(req)})));
+router.post('/:id/facial/cancelar',async(req,res)=>ok(res,await facial.cancel({worker:await selectedWorker(req),actor:req.auth.sub,kind:'enroll',body:objectBody(req)})));
 export default router;

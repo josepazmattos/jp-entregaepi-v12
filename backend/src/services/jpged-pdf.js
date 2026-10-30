@@ -52,8 +52,11 @@ export async function buildSigningPdf(ficha, certificate) {
   text(`Movimentação: ${ficha.tipo}    Data: ${ficha.data}    Ficha: ${ficha.numero || ficha.id}`, { size: 10, gap: 12 });
   text('TERMO DE RESPONSABILIDADE', { type: bold, size: 13, center: true, gap: 8 });
   text(ficha.modeloFicha?.termoResponsabilidade || '', { size: 11 });
+  if(ficha.modeloFicha?.termoAssinatura)text('Confirmação da assinatura eletrônica: '+ficha.modeloFicha.termoAssinatura,{size:9.5,gap:8});
   text(`${company.localidade || worker.localidade || ''}${company.uf ? '/' + company.uf : ''} — ${ficha.data}`, { type: bold, gap: 10 });
   const imageUrl = bio.realFingerImage;
+  const facial=bio.metodo==='AWS_REKOGNITION_FACE_LIVENESS';
+  if(facial)text('ASSINATURA BIOMÉTRICA FACIAL VERIFICADA',{center:true,type:bold,size:10});
   if (/^data:image\/(png|jpeg);base64,/.test(imageUrl || '')) {
     ensure(112); const bytes = Buffer.from(imageUrl.split(',')[1], 'base64');
     const img = imageUrl.startsWith('data:image/png') ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
@@ -61,7 +64,7 @@ export async function buildSigningPdf(ficha, certificate) {
     page.drawImage(img, { x: (width - dims.width) / 2, y: y - dims.height, width: dims.width, height: dims.height }); y -= dims.height + 5;
   }
   text(worker.nomeCompleto || ficha.trabalhadorNome, { center: true, type: bold });
-  text(`Biometria confirmada em ${bio.signedAt} · ${bio.dedo}`, { center: true, size: 8, gap: 12 });
+  text(`Biometria confirmada em ${bio.signedAt} · ${facial?'Facial':bio.dedo}`, { center: true, size: 8, gap: 12 });
   const cols = [30, 179, 67, 64, 64, available - 404];
   function row(values, heading = false) {
     const all = values.map((value, i) => lines(value, cols[i] - 8, 9, heading ? bold : font));
@@ -74,7 +77,7 @@ export async function buildSigningPdf(ficha, certificate) {
   }
   function tableHeader() { row(['Qtd.','Equipamento','CA','Entrega','Devolução','Confirmação'], true); }
   tableHeader();
-  for (const item of ficha.itens) row([item.quantidade, equipmentPrintName(item), equipmentCaLabel(item), item.datasMovimentacao?.entrega || '', item.datasMovimentacao?.devolucao || '', 'Biometria confirmada']);
+  for (const item of ficha.itens) row([item.quantidade, equipmentPrintName(item), equipmentCaLabel(item), item.datasMovimentacao?.entrega || '', item.datasMovimentacao?.devolucao || '', facial?'Biometria facial':'Biometria confirmada']);
   y -= 12;
   // Only the printed appearance is abbreviated. Full subject remains in the
   // PDF signature dictionary/CMS; complete evidence is still embedded below.
@@ -94,6 +97,7 @@ export async function buildSigningPdf(ficha, certificate) {
   for(const item of authentication){page.drawText(item.value,{x:margin+8,y:authenticationY-item.size,size:item.size,font:item.type});authenticationY-=item.size*1.35;}
   y-=authenticationHeight;
   const evidence = { schema: 'JPGED-1', document: documentContent(ficha), documentHash: documentHash(ficha), biometric: { id: bio.id, signedAt: bio.signedAt, finger: bio.dedo, proof: bio.proof, proofSignature: bio.proofSignature, publicKey: bio.publicKey } };
+  if(facial)Object.assign(evidence.biometric,{method:bio.metodo,keyArn:bio.keyArn,acceptance:bio.aceiteTermo});
   await doc.attach(Buffer.from(JSON.stringify(evidence)), 'evidencias-jpged.json', { mimeType: 'application/json', description: 'Conteúdo confirmado e prova biométrica. Sem template biométrico.' });
   doc.getPages().forEach((p, i, pages) => p.drawText(`JPGED · ${ficha.numero || ficha.id} · Página ${i+1}/${pages.length}`, { x: margin, y: 20, size: 8, font }));
   pdflibAddPlaceholder({ pdfDoc: doc, reason: 'Registro das movimentações de EPI confirmadas biometricamente', contactInfo: '', name: clean(certificate.subject), location: clean(company.localidade || ''), signatureLength: 65536, subFilter: 'ETSI.CAdES.detached', appName: 'JPGED' });

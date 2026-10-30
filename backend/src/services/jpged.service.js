@@ -10,6 +10,7 @@ import { detachedCms } from './jpged-cms.js';
 import { createVaultService } from './jpged-vault.js';
 import { documentFilename } from './document-filename.js';
 import { createLayoutService, COMPACT_LAYOUT } from './jpged-layout.js';
+import { FACIAL_METHOD, verifyFacialProof } from './facial-proof.js';
 
 const error=(status,message,code)=>{throw httpError(status,message,code);};
 const seconds=()=>Math.floor(Date.now()/1000);
@@ -45,6 +46,7 @@ export function createGedService({ged,store,validate=verifyCompanyCms,buildPdf=b
   function confirmedContent(ficha) {
     if(ficha.status!=='assinada'||ficha.assinaturaBiometrica?.verificada!==true)error(409,'Confirme a biometria antes de certificar o documento.','JPGED_BIOMETRIA_PENDENTE');
     const bio=ficha.assinaturaBiometrica;let proof;
+    if(bio.metodo===FACIAL_METHOD)return verifyFacialProof(ficha);
     try {proof=JSON.parse(bio.proof);if(!verify('sha256',Buffer.from(bio.proof),createPublicKey({key:Buffer.from(bio.publicKey,'base64'),format:'der',type:'spki'}),Buffer.from(bio.proofSignature,'base64')))throw new Error();}
     catch{error(409,'A prova biométrica não pôde ser validada.','JPGED_PROVA_INVALIDA');}
     if(!proof.documentHash)error(409,'Esta ficha possui um registro biométrico anterior ao JPGED. O original permanece disponível no fluxo anterior.','JPGED_REGISTRO_ANTERIOR');

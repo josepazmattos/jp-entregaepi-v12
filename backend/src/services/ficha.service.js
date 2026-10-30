@@ -76,7 +76,7 @@ export function buildFicha({ empresaId, empresa, trabalhador, items, body, actor
     if (typeof model !== 'object' || Array.isArray(model) || model.id !== MODELO_FICHA_ID) {
       throw httpError(400, 'Modelo de ficha não reconhecido. Atualize o aplicativo.', 'MODELO_FICHA_INVALIDO');
     }
-    if (model.termoResponsabilidade !== modeloFicha.termoResponsabilidade || model.titulo !== modeloFicha.titulo) {
+    if (model.termoResponsabilidade !== modeloFicha.termoResponsabilidade || model.titulo !== modeloFicha.titulo || model.termoAssinatura !== modeloFicha.termoAssinatura || model.termoAssinaturaId !== modeloFicha.termoAssinaturaId) {
       throw httpError(400, 'O Termo de Responsabilidade diverge do modelo atual. Atualize o aplicativo para emitir a ficha.', 'TERMO_FICHA_DIVERGENTE');
     }
   }

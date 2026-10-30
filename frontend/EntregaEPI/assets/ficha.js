@@ -4,7 +4,9 @@
 // Cada ficha conserva o texto e a versão confirmados pelo trabalhador.
 const MODELO_LEGADO_ID = "JP-DOCX-11.10.6";
 const TERMO_LEGADO = "Declaro sob minha inteira responsabilidade a guarda e conservação dos equipamentos de proteção individual constantes nesta ficha-controle. Assumo também a responsabilidade de os devolver integralmente ou parcialmente, quando solicitado, ou por ocasião de eventual rescisão de contrato, na data do respectivo aviso de qualquer das partes.\n\nTambém estou ciente que, na eventualidade de danificar ou extraviar o equipamento por ato doloso ou culposo, estarei sujeito ao desconto do valor em meu salário, conforme parágrafo único do art. 158 da CLT. Também me comprometo a utilizá-los de forma correta e de acordo com as instruções de treinamento referentes ao uso correto, guarda conservação e higienização dos EPI, recebidas na presente data, fornecidas por profissional Técnico de Segurança do Trabalho. Também estou ciente que a não utilização dos mesmos em minhas atividades profissionais, é ato faltoso e passível de punições legais e disciplinares de acordo com a Consolidação das leis do Trabalho (CLT) – Capítulo V – Seção I – Art. 158o. c/c Norma Regulamentadora (NR) - NR-1 e NR-6, alínea 6.7, disciplinadas pela Portaria MTb. nº 3.214/78 e artigo 191, itens I e II da CLT e súmula n. 80 do TST.";
-const MODELO_FICHA_ID = "JP-FICHA-20261030";
+const MODELO_FICHA_ID = "JP-FICHA-20261030-ASSINATURA";
+const TERMO_ASSINATURA_ID = "JP-ASSINATURA-BIOMETRICA-20261030-v1";
+const TERMO_ASSINATURA = "Após conferir os itens, quantidades, datas e declarações desta ficha, confirmo seu conteúdo e reconheço a captura biométrica realizada por mim, digital ou facial conforme o método registrado, como minha assinatura eletrônica deste documento. Esta confirmação é vinculada exclusivamente a esta ficha e às evidências de autoria e integridade registradas pelo sistema.";
 const RESPONSABILIDADE = "Comprometo-me a utilizar os EPIs para a finalidade prevista, cumprir as orientações recebidas e comunicar dúvidas, danos, extravio ou condições que os tornem impróprios para uso. Responsabilizo-me pela limpeza, guarda e conservação que me competem, sem afastar as obrigações da empresa previstas na NR-6. A recusa injustificada ao uso dos EPIs poderá caracterizar ato faltoso, conforme o art. 158 da CLT. Eventual desconto por dano dependerá de apuração e do atendimento ao art. 462, § 1º, da CLT; não será automático nem decorrente do desgaste normal.";
 const TREINAMENTO_ANTERIOR = "Declaro que fui treinado e orientado anteriormente à entrega dos EPIs recebidos, quanto ao uso, ajuste, limitações de proteção, limpeza, guarda, conservação e necessidade de substituição.";
 const RECEBIMENTO = "Declaro ter recebido gratuitamente os itens relacionados nesta ficha, nas quantidades e datas de entrega discriminadas.";
@@ -20,7 +22,7 @@ function modeloFichaParaItens(itens = []) {
   const outros = itens.some(item => item.semCA === true || item.tipo === 'sem_ca');
   return { id: MODELO_FICHA_ID, formato: 'A4-retrato',
     titulo: outros ? 'FICHA DE CONTROLE DE EPIs E OUTROS EQUIPAMENTOS' : 'FICHA DE CONTROLE DE EQUIPAMENTOS DE PROTEÇÃO INDIVIDUAL',
-    termoResponsabilidade };
+    termoResponsabilidade,termoAssinatura:TERMO_ASSINATURA,termoAssinaturaId:TERMO_ASSINATURA_ID };
 }
 const MODELO_FICHA_APROVADO = Object.freeze(modeloFichaParaItens());
 const TERMO_APROVADO = MODELO_FICHA_APROVADO.termoResponsabilidade;
@@ -29,7 +31,7 @@ const TERMO_APROVADO = MODELO_FICHA_APROVADO.termoResponsabilidade;
   const CSS_IMPRESSAO = `
     *{box-sizing:border-box}
     .sheet.docx-template-a4{width:194.5mm;max-width:194.5mm}
-    .docx-term p{line-height:1.4}
+    .docx-term p{line-height:1.4}.docx-term .docx-signature-term{font-size:10pt;line-height:1.25}
     .docx-meta{table-layout:fixed}.docx-meta td{overflow-wrap:anywhere}
     .docx-top,.docx-meta,.docx-sign-area{break-inside:avoid;page-break-inside:avoid}
     .docx-term-title{break-after:avoid;page-break-after:avoid}
@@ -101,16 +103,18 @@ const TERMO_APROVADO = MODELO_FICHA_APROVADO.termoResponsabilidade;
     const record = ficha.assinaturaBiometrica || {};
     const image = [record.realFingerImage, record.fingerImageDataUrl, record.imageDataUrl, record.image].map(value => imageSource(value)).find(Boolean) || "";
     const signed = ficha.status === "assinada" || ficha.statusAnterior === "assinada" || ficha.signed === true;
-    const verified = signed && record.verificada === true && !!image;
+    const facial = record.metodo === 'AWS_REKOGNITION_FACE_LIVENESS';
+    const verified = signed && record.verificada === true && (facial ? !!record.proofSignature && !!record.keyArn : !!image);
     let rowText = "Pendente";
     let note = "";
-    if (verified) rowText = "Assinado Biometricamente";
+    if (verified) rowText = facial ? "Biometria Facial" : ficha.modeloFicha?.termoAssinatura ? "Biometria Digital" : "Assinado Biometricamente";
     else if (signed) {
       rowText = "Assinatura registrada";
       note = "Registro de assinatura sem verificação biométrica disponível.";
     } else if (image) note = "Captura registrada; assinatura pendente de verificação.";
     const details = [];
     if (verified || image || signed) {
+      if(verified&&(facial||ficha.modeloFicha?.termoAssinatura))details.push(facial ? "Método facial" : "Método digital");
       const finger = first(record.dedo, record.fingerCode);
       if (finger) details.push(fingerNames[finger] || finger);
       if (record.quality != null || record.qualidade != null) details.push(`Qualidade ${first(record.quality, record.qualidade)}`);
@@ -118,7 +122,7 @@ const TERMO_APROVADO = MODELO_FICHA_APROVADO.termoResponsabilidade;
       if (first(record.id, record.auditoriaId)) details.push(`Auditoria ${first(record.id, record.auditoriaId)}`);
       if (record.signedAt) details.push(`Data/hora ${record.signedAt}`);
     }
-    return {image, verified, signed, rowText, note, details};
+    return {image, verified, signed, rowText, note, details,facial};
   }
 
 // Used only as a fallback for old records that predate a separate display name.
@@ -179,7 +183,7 @@ function equipmentName(item = {}) {
       const detail = item.enquadramento ? [NON_EPI[item.enquadramento] || (item.enquadramento === "epi" ? "EPI" : "Enquadramento não informado"), item.fabricante, item.modelo, item.tamanho].filter(Boolean).join(" · ") : "";
       return `<tr><td>${esc(first(item.quantidade, item.qty, 1))}</td><td>${esc(name)}${detail ? `<br><small>${esc(detail)}</small>` : ""}</td><td>${esc(caLabel)}</td><td>${esc(itemType)}</td><td>${esc(deliveryDate)}</td><td class="docx-sign-cell">${esc(signText)}</td><td>${esc(returnDate)}</td></tr>`;
     }).join("");
-    const fingerprint = signature.image ? `<div class="docx-fingerprint"><img src="${esc(signature.image)}" alt="Imagem da captura biométrica registrada"></div>` : '<div class="docx-sign-space"></div>';
+    const fingerprint = signature.verified && signature.facial ? `<div class="docx-fingerprint missing"><strong>ASSINATURA<br>BIOMÉTRICA FACIAL<br>VERIFICADA</strong></div>` : signature.image ? `<div class="docx-fingerprint"><img src="${esc(signature.image)}" alt="Imagem da captura biométrica registrada"></div>` : '<div class="docx-sign-space"></div>';
     const signatureNote = signature.note ? `<p class="docx-sign-note">${esc(signature.note)}</p>` : "";
     const footer = signature.details.length || signature.note ? `<div class="docx-validation-footer">${esc(signature.verified ? "Validação biométrica: " : "Registro de assinatura: ")}${esc([signature.note, ...signature.details].filter(Boolean).join(" | "))}</div>` : "";
     const content = `<main class="sheet docx-template-a4" data-template="${esc(ficha.modeloFicha?.id || MODELO_LEGADO_ID)}">
@@ -192,10 +196,11 @@ function equipmentName(item = {}) {
       </tbody></table>
       ${cancelled ? `<div class="docx-cancelled">FICHA CANCELADA${ficha.motivoCancelamento ? ` - ${esc(ficha.motivoCancelamento)}` : ""}</div>` : ""}
       <section class="docx-term"><h1 class="docx-term-title">TERMO DE RESPONSABILIDADE</h1>${text(term).split(/\n\s*\n/).map(paragraph => `<p>${esc(paragraph)}</p>`).join("")}
+        ${ficha.modeloFicha?.termoAssinatura ? `<p class="docx-signature-term"><strong>Confirmação da assinatura eletrônica:</strong> ${esc(ficha.modeloFicha.termoAssinatura)}</p>` : ""}
         <p class="docx-local"><strong>Localidade da Empresa:</strong> ${esc(localityWithUf)} <span class="docx-date-spacer"></span> <strong>${mixedMovement?'Data das Movimentações:':returnOnly?'Data da Devolução:':'Data da Entrega:'}</strong> ${esc(returnOnly?formatDate(ficha.datasMovimentacao.devolucao):date)}.</p>
         <div class="docx-sign-area">${fingerprint}${signatureNote}<div class="docx-sign-line"></div><div class="docx-worker-name">${esc(workerName)}</div></div>
       </section>
-      <p class="docx-scroll-hint">Deslize a tabela para consultar todas as colunas.</p><div class="docx-table-scroll" role="region" tabindex="0" aria-label="Equipamentos da ficha — tabela com rolagem horizontal"><table class="docx-epi-table${itemMovements?' docx-item-movements':''}" aria-label="Relação dos EPIs"><colgroup>${columnWidths.map(width=>`<col style="width:${width}%">`).join('')}</colgroup><thead><tr><th>QTD</th><th>${ficha.modeloFicha?.id === MODELO_FICHA_ID ? "EQUIPAMENTO" : "EPI"}</th><th>CA</th><th>STATUS</th><th>${itemMovements?'DATA ENTREGA':'DATA'}</th><th>ASSINATURA</th><th>DATA DEVOLUÇÃO</th></tr></thead><tbody>${rows}</tbody></table></div>${footer}
+      <p class="docx-scroll-hint">Deslize a tabela para consultar todas as colunas.</p><div class="docx-table-scroll" role="region" tabindex="0" aria-label="Equipamentos da ficha — tabela com rolagem horizontal"><table class="docx-epi-table${itemMovements?' docx-item-movements':''}" aria-label="Relação dos EPIs"><colgroup>${columnWidths.map(width=>`<col style="width:${width}%">`).join('')}</colgroup><thead><tr><th>QTD</th><th>${(ficha.modeloFicha?.id || "").startsWith("JP-FICHA-20261030") ? "EQUIPAMENTO" : "EPI"}</th><th>CA</th><th>STATUS</th><th>${itemMovements?'DATA ENTREGA':'DATA'}</th><th>ASSINATURA</th><th>DATA DEVOLUÇÃO</th></tr></thead><tbody>${rows}</tbody></table></div>${footer}
     </main>`;
     return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${CSS_APROVADO}${CSS_IMPRESSAO}${itemMovements?'.docx-item-movements td:nth-child(1),.docx-item-movements td:nth-child(4){white-space:nowrap}':''}</style></head><body>${content}</body></html>`;
   }

@@ -4,6 +4,7 @@ import { validateCaptureImage } from './capture-image.js';
 import { workerScope } from './trabalhadores-import.service.js';
 import { documentHash } from './document-integrity.js';
 import {verificationKey} from './biometria-agent-key.js';
+import {acceptanceFor} from './assinatura-termo.js';
 
 export const hash = value => createHash('sha256').update(value).digest('hex');
 export const fingerValid = value => typeof value === 'string' && /^(R|L)_(THUMB|INDEX|MIDDLE|RING|LITTLE)$/.test(value);
@@ -30,7 +31,7 @@ function readProof(body, challenge, publicKey) {
 }
 
 export function createBiometricsService(store) {
-  async function challenge({ worker, ficha = null, fingerCode, actor, kind, devicePublicKey }) {
+  async function challenge({ worker, ficha = null, fingerCode, actor, kind, devicePublicKey,acceptance }) {
     if (!fingerValid(fingerCode) || !['enroll','verify'].includes(kind)) bad('Selecione o dedo que será utilizado.');
     if (worker.status === 'Inativo' && !(kind === 'verify' && ficha?.tipo === 'Devolução')) bad('O trabalhador está inativo.', 'TRABALHADOR_INATIVO', 409);
     let enrollment;
@@ -45,7 +46,7 @@ export function createBiometricsService(store) {
     const item = await store.create('biometria_desafio', {
       empresaId: worker.empresaId, trabalhadorId: worker.id, workerVersion: worker._version || 1,
       fichaId: ficha?.id || '', fichaVersion: ficha?._version || 0,
-      ...(ficha ? { documentHash: documentHash(ficha) } : {}),
+      ...(ficha ? { documentHash: documentHash(ficha),aceiteTermo:acceptanceFor(ficha,acceptance,actor,'DIGITAL') } : {}),
       fingerCode, kind, actor, expiresAtEpoch: Math.floor(Date.now()/1000)+300,
       enrollmentVersion: enrollment?._version || 0, enrollmentId: enrollment?.id || '', used: false,
       ...(agentKey?{verificationKey:agentKey}:{})
@@ -86,7 +87,7 @@ export function createBiometricsService(store) {
       const capture = validateCaptureImage(body.fingerImageDataUrl);
       if (proof.imageHash !== hash(capture.bytes)) bad('A imagem não corresponde à captura verificada.', 'BIOMETRIA_IMAGEM_DIVERGENTE');
       if(ficha.assinaturaBiometrica)operations.push({type:'create',entity:'assinatura_anterior',id:randomUUID(),data:{empresaId:worker.empresaId,fichaId:ficha.id,assinaturaBiometrica:ficha.assinaturaBiometrica,substituidaEm:now,substituidaPor:actor}});
-      operations.push({type:'update',entity:'ficha',id:ficha.id,expectedVersion:ficha._version || 1,data:{status:'assinada',assinaturaStatus:'verificada',dataAssinatura:now,assinaturaBiometrica:{id:randomUUID(),dedo:challenge.fingerCode,realFingerImage:capture.dataUrl,verificada:true,metodo:'NITGEN_VERIFY_MATCH',signedAt:now,capturadoPor:actor,challengeId:challenge.id,templateHash:proof.templateHash,proof:body.proof,proofSignature:body.proofSignature,publicKey}}});
+      operations.push({type:'update',entity:'ficha',id:ficha.id,expectedVersion:ficha._version || 1,data:{status:'assinada',assinaturaStatus:'verificada',dataAssinatura:now,assinaturaBiometrica:{id:randomUUID(),dedo:challenge.fingerCode,realFingerImage:capture.dataUrl,verificada:true,metodo:'NITGEN_VERIFY_MATCH',...(challenge.aceiteTermo?{aceiteTermo:challenge.aceiteTermo}:{}),signedAt:now,capturadoPor:actor,challengeId:challenge.id,templateHash:proof.templateHash,proof:body.proof,proofSignature:body.proofSignature,publicKey}}});
       operations.push({type:'update',entity:'trabalhador',id:worker.id,expectedVersion:worker._version || 1,data:{ultimaAssinaturaEm:now}});
       // Pin the enrollment revision while signing: a concurrent re-enrollment must conflict.
       operations.push({type:'update',entity:'biometria',id,expectedVersion:previous._version,data:{ultimaVerificacao:now}});

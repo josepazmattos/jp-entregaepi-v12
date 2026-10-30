@@ -32,3 +32,8 @@ test('nome extenso do signatário quebra linhas sem perder a identidade',async()
  const long={...cert,subject:'CN='+('NOME SINTÉTICO EXTENSO '.repeat(12)).trim()+':00000000000'};
  const {text}=await inspect(ficha,long);assert.equal((text.replace(/\s+/g,' ').match(/NOME SINTÉTICO EXTENSO/g)||[]).length,12);assert.ok(text.includes(documentHash(ficha)));
 });
+test('termo das duas capturas e confirmação facial ficam no PDF sem fotografia de rosto',async()=>{
+ const record={...ficha,assinaturaBiometrica:{...ficha.assinaturaBiometrica,metodo:'AWS_REKOGNITION_FACE_LIVENESS',dedo:undefined,realFingerImage:undefined,keyArn:'synthetic-key',aceiteTermo:{confirmado:true,metodo:'FACIAL'}}};
+ const {built,doc,text}=await inspect(record);assert.equal(doc.getPageCount(),1);assert.match(text.replace(/\s+/g,' '),/captura biométrica realizada por mim, digital ou facial/);assert.match(text,/BIOMÉTRICA FACIAL VERIFICADA/);assert.doesNotMatch(text,/undefined|L_THUMB/);assert.match(text,/Biometria facial/);
+ if(process.env.JPGED_LAYOUT_OUTPUT)writeFileSync(join(process.env.JPGED_LAYOUT_OUTPUT,'ficha-facial-sintetica.pdf'),built.pdf);
+});

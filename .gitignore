@@ -15,3 +15,7 @@ frontend/EntregaEPI/assets/biometria-release.json
 
 frontend/EntregaEPI/assets/JP-Biometria-Completo-*.exe
 frontend/EntregaEPI/assets/biometria-complete-release.json
+backend/src/services/facial-provider.runtime.mjs
+frontend/EntregaEPI/assets/facial-widget.js
+frontend/EntregaEPI/assets/facial-widget.css
+frontend/EntregaEPI/assets/facial-widget.js.LEGAL.txt
