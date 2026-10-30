@@ -508,6 +508,27 @@
         "AuthorizationType": "NONE"
       }
     },
+    "Preflight": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Api"
+        },
+        "RouteKey": "OPTIONS /{proxy+}",
+        "Target": {
+          "Fn::Join": [
+            "/",
+            [
+              "integrations",
+              {
+                "Ref": "Integration"
+              }
+            ]
+          ]
+        },
+        "AuthorizationType": "NONE"
+      }
+    },
     "Stage": {
       "Type": "AWS::ApiGatewayV2::Stage",
       "Properties": {

@@ -9,6 +9,9 @@ export function createHandler({verify,hasMfa,api,pdf=makePdf}) {
   return async event=>{
     const method=event.requestContext?.http?.method,path=event.rawPath||'';
     try{
+      // API Gateway supplies the configured CORS headers. Preflight has no
+      // authorization token and must never invoke a protected operation.
+      if(method==='OPTIONS')return {statusCode:204,headers,body:''};
       if(method==='GET'&&path==='/health')return {statusCode:200,headers,body:JSON.stringify({ok:true,testOnly:true,version:'0.1.0',noticeVersion:NOTICE_VERSION})};
       const value=event.headers?.authorization||event.headers?.Authorization||'';
       if(!/^Bearer [A-Za-z0-9_.-]{50,16000}$/.test(value))fail(401,'LOGIN_REQUIRED','Entre com seu acesso Master.');

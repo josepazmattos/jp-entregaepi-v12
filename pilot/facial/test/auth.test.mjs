@@ -5,6 +5,7 @@ const {createHandler}=await import('../backend/handler.mjs');
 const event=(method='GET',path='/records')=>({rawPath:path,requestContext:{http:{method}},headers:{authorization:'Bearer '+'a'.repeat(60)}});
 const base={verify:async()=>({sub:'master-a','cognito:groups':['MASTER']}),hasMfa:async()=>true,api:{list:async()=>[],begin:async()=>({})}};
 test('missing token returns 401',async()=>{const e=event();e.headers={};assert.equal((await createHandler(base)(e)).statusCode,401);});
+test('preflight succeeds without invoking authentication or protected data',async()=>{const e=event('OPTIONS','/sessions');e.headers={origin:'https://www.jptreinamentos.com.br','access-control-request-method':'POST','access-control-request-headers':'authorization,content-type'};const unexpected=async()=>{throw Error('Preflight must not invoke protected dependencies');};const r=await createHandler({verify:unexpected,hasMfa:unexpected,api:{begin:unexpected,list:unexpected}})(e);assert.equal(r.statusCode,204);assert.equal(r.body,'');});
 test('invalid signature returns 401',async()=>{assert.equal((await createHandler({...base,verify:async()=>{throw Error('bad jwt');}})(event())).statusCode,401);});
 test('non-master is denied',async()=>{assert.equal((await createHandler({...base,verify:async()=>({sub:'company','cognito:groups':['EMPRESA']})})(event())).statusCode,403);});
 test('master without established MFA session is denied',async()=>{assert.equal((await createHandler({...base,hasMfa:async()=>false})(event())).statusCode,403);});

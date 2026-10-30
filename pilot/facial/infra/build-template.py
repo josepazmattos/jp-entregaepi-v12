@@ -37,7 +37,7 @@ r['Function']=resource('AWS::Lambda::Function',{'FunctionName':sub('${AWS::Stack
 r['Api']=resource('AWS::ApiGatewayV2::Api',{'Name':sub('${AWS::StackName}-api'),'ProtocolType':'HTTP','CorsConfiguration':{'AllowOrigins':['https://www.jptreinamentos.com.br','https://jptreinamentos.com.br'],'AllowMethods':['GET','POST','DELETE','OPTIONS'],'AllowHeaders':['authorization','content-type'],'MaxAge':300}})
 r['Jwt']=resource('AWS::ApiGatewayV2::Authorizer',{'ApiId':ref('Api'),'Name':'master-cognito','AuthorizerType':'JWT','IdentitySource':['$request.header.Authorization'],'JwtConfiguration':{'Audience':[ref('ClientId')],'Issuer':sub('https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPoolId}')}})
 r['Integration']=resource('AWS::ApiGatewayV2::Integration',{'ApiId':ref('Api'),'IntegrationType':'AWS_PROXY','IntegrationUri':arn('Function'),'PayloadFormatVersion':'2.0','TimeoutInMillis':29000})
-for name,route in [('Route','ANY /{proxy+}'),('Health','GET /health')]:
+for name,route in [('Route','ANY /{proxy+}'),('Health','GET /health'),('Preflight','OPTIONS /{proxy+}')]:
  props={'ApiId':ref('Api'),'RouteKey':route,'Target':{'Fn::Join':['/',['integrations',ref('Integration')]]},'AuthorizationType':'JWT' if name=='Route' else 'NONE'}
  if name=='Route':props['AuthorizerId']=ref('Jwt')
  r[name]=resource('AWS::ApiGatewayV2::Route',props)
