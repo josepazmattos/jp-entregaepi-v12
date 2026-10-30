@@ -267,7 +267,7 @@ function renderSignatureChoice(preview,worker,ficha,facial){
   digital.type=face.type='button';digital.className=face.className='btn btn-primary';digital.textContent='1 · Biometria Digital';face.textContent='2 · Biometria Facial';digital.id='chooseDigital';face.id='chooseFacial';
   dialog.querySelector('.dialog-actions').prepend(digital,face);
   const ready=()=>{digital.disabled=Boolean(term&&!accept.checked);face.disabled=Boolean(!term||!facial?.enabled||!accept?.checked);};ready();if(accept)accept.onchange=ready;
-  if(!facial?.enabled){const info=dialog.ownerDocument.createElement('p');info.textContent='A opção facial está em preparação para uso nas fichas do aplicativo.';content.append(info);}
+  if(!facial?.enabled){const info=dialog.ownerDocument.createElement('p');info.textContent='A opção facial está pausada. O Master pode consultar e ajustar a liberação em Biometria → Biometria facial.';content.append(info);}
   const acceptance=()=>term?{aceiteTermo:true,termoAssinaturaId:ficha.modeloFicha.termoAssinaturaId}:{};
   digital.onclick=()=>{if(digital.disabled)return;const body=acceptance();dialog.close();const next=createSignatureDialog(preview,'Assinar por biometria digital',worker);renderBiometricDialog(next,worker,ficha,body);};
   face.onclick=()=>{if(face.disabled)return;const body=acceptance();dialog.close();renderFacialDialog(preview,worker,ficha,facial,body);};

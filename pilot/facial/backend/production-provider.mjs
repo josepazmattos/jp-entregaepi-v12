@@ -5,17 +5,22 @@ import {RekognitionClient,CreateFaceLivenessSessionCommand,GetFaceLivenessSessio
 import {STSClient,AssumeRoleCommand} from '@aws-sdk/client-sts';
 import {S3Client,PutObjectCommand,GetObjectCommand,DeleteObjectCommand} from '@aws-sdk/client-s3';
 import {KMSClient,SignCommand} from '@aws-sdk/client-kms';
+import {OrganizationsClient,DescribeEffectivePolicyCommand} from '@aws-sdk/client-organizations';
 const options={region:'sa-east-1',maxAttempts:2};
 const db=DynamoDBDocumentClient.from(new DynamoDBClient(options)),rek=new RekognitionClient(options),sts=new STSClient(options),s3=new S3Client(options),kms=new KMSClient(options);
+const organizations=new OrganizationsClient({...options,region:'us-east-1'});
 const digest=value=>createHash('sha256').update(value).digest();
 const failure=(code,message)=>Object.assign(new Error(message),{status:429,statusCode:429,code});
 export const provider={
- async reserveQuota(actor,id){
+ async privacyReady(){const r=await organizations.send(new DescribeEffectivePolicyCommand({PolicyType:'AISERVICES_OPT_OUT_POLICY',TargetId:process.env.FACIAL_ACCOUNT_ID}));const p=JSON.parse(r.EffectivePolicy?.PolicyContent||'{}');return p.services?.rekognition?.opt_out_policy==='optOut'||(!p.services?.rekognition&&p.services?.default?.opt_out_policy==='optOut');},
+ async quotaUsage(){const r=await db.send(new GetCommand({TableName:process.env.FACIAL_QUOTA_TABLE,Key:{pk:'LIMIT',sk:'TOTAL'},ConsistentRead:true}));return {total:Number(r.Item?.count||0)};},
+ async reserveQuota(actor,id,limits){
   const table=process.env.FACIAL_QUOTA_TABLE,key={pk:'INTEGRATED#'+id,sk:'RESERVATION'},day=new Date().toISOString().slice(0,10);
   const get=async()=>(await db.send(new GetCommand({TableName:table,Key:key,ConsistentRead:true}))).Item;
   if(await get())return;
   const counter=(pk,sk,limit)=>({Update:{TableName:table,Key:{pk,sk},UpdateExpression:'SET #n = if_not_exists(#n, :zero) + :one',ConditionExpression:'attribute_not_exists(#n) OR #n < :max',ExpressionAttributeNames:{'#n':'count'},ExpressionAttributeValues:{':zero':0,':one':1,':max':limit}}});
-  try{await db.send(new TransactWriteCommand({ClientRequestToken:id.slice(0,36),TransactItems:[{Put:{TableName:table,Item:{...key,actor,day},ConditionExpression:'attribute_not_exists(pk)'}},counter('LIMIT','TOTAL',50),counter('LIMIT#'+actor,day,20)]}));}
+  const currentConfiguration={ConditionCheck:{TableName:process.env.TABLE_NAME,Key:{pk:'facial_config#global',sk:'META'},ConditionExpression:'#v = :version AND enabled = :yes',ExpressionAttributeNames:{'#v':'_version'},ExpressionAttributeValues:{':version':limits.version,':yes':true}}};
+  try{await db.send(new TransactWriteCommand({ClientRequestToken:id.slice(0,36),TransactItems:[{Put:{TableName:table,Item:{...key,actor,day},ConditionExpression:'attribute_not_exists(pk)'}},counter('LIMIT','TOTAL',limits.total),counter('LIMIT#'+actor,day,limits.daily),currentConfiguration]}));}
   catch(error){if(await get())return;if(error.name==='TransactionCanceledException')throw failure('FACIAL_LIMITE','O limite de capturas desta etapa foi atingido.');throw error;}
  },
  async create({token}){const r=await rek.send(new CreateFaceLivenessSessionCommand({ClientRequestToken:token,Settings:{AuditImagesLimit:0,ChallengePreferences:[{Type:'FaceMovementAndLightChallenge'}]}}));return {sessionId:r.SessionId,requestId:r.$metadata.requestId};},

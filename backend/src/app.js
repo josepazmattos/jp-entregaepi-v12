@@ -8,6 +8,7 @@ import caepiRoutes from './routes/caepi.routes.js';
 import auditoriaRoutes from './routes/auditoria.routes.js';
 import loginRoutes from './routes/login.routes.js';
 import jpgedRoutes from './routes/jpged.routes.js';
+import facialControlRoutes from './routes/facial-control.routes.js';
 import { requireAuth } from './middleware/auth.js';
 import { probeStorage } from './db/store.js';
 import * as storage from './db/store.js';
@@ -57,6 +58,7 @@ app.use('/api/epis', episRoutes);
 app.use('/api/fichas', fichasRoutes);
 app.use('/api/auditoria', auditoriaRoutes);
 app.use('/api/jpged', jpgedRoutes);
+app.use('/api/sistema/facial',facialControlRoutes);
 
 app.use((req, res) => res.status(404).json({ ok: false, error: 'Rota não encontrada', path: req.path }));
 

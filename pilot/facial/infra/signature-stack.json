@@ -5,6 +5,10 @@
     "QuotaTable": {
       "Type": "String",
       "Default": "jp-entregaepi-facial-pilot-Data-17JO1YALF41ST"
+    },
+    "PrimaryTable": {
+      "Type": "String",
+      "Default": "jp-entregaepi-v12"
     }
   },
   "Resources": {
@@ -211,6 +215,25 @@
                     "LIMIT",
                     "LIMIT#*",
                     "INTEGRATED#*"
+                  ]
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": "organizations:DescribeEffectivePolicy",
+              "Resource": "*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": "dynamodb:ConditionCheckItem",
+              "Resource": {
+                "Fn::Sub": "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PrimaryTable}"
+              },
+              "Condition": {
+                "ForAllValues:StringEquals": {
+                  "dynamodb:LeadingKeys": [
+                    "facial_config#global"
                   ]
                 }
               }

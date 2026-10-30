@@ -11,8 +11,9 @@ const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3
 export const facialSettings=()=>({enabled:process.env.FACIAL_ENABLED==='true',privacyReady:process.env.FACIAL_PRIVACY_READY==='true',endAt:process.env.FACIAL_PILOT_END});
 export function createFacialService({store,provider,settings=facialSettings,clock=()=>Date.now()}){
   const at=()=>new Date(clock()).toISOString();
-  const status=()=>{const s=settings();return {enabled:s.enabled&&s.privacyReady&&Number.isFinite(Date.parse(s.endAt))&&clock()<Date.parse(s.endAt),endAt:s.endAt||null,noticeId:FACIAL_NOTICE_ID};};
-  const active=()=>{if(!status().enabled)fail('FACIAL_INDISPONIVEL','A assinatura facial não está liberada nesta etapa. A assinatura digital continua disponível.',403);};
+  const allowed=s=>s.enabled&&s.privacyReady&&Number.isFinite(Date.parse(s.endAt))&&clock()<Date.parse(s.endAt);
+  const status=async()=>{const s=await settings();return {enabled:allowed(s),endAt:s.endAt||null,noticeId:FACIAL_NOTICE_ID};};
+  const active=async()=>{const s=await settings();if(!allowed(s))fail('FACIAL_INDISPONIVEL','A assinatura facial não está liberada. O Master pode consultar a situação em Biometria. A assinatura digital continua disponível.',403);return s;};
   async function commit(scope,id,operations){
     for(let attempt=0;;attempt++){
       const revision=await store.readScope(scope);
@@ -29,10 +30,10 @@ export function createFacialService({store,provider,settings=facialSettings,cloc
   }
   async function info(worker){
     let record;try{record=await enrollment(worker);}catch(error){if(error.code!=='FACIAL_CADASTRO_PENDENTE')throw error;}
-    return {...status(),enrollment:record?{id:record.id,enrolledAt:record.enrolledAt,operator:record.actor}:null};
+    return {...await status(),enrollment:record?{id:record.id,enrolledAt:record.enrolledAt,operator:record.actor}:null};
   }
   async function begin({worker,ficha=null,actor,body,kind}){
-    active();
+    const configuration=await active();
     if(!uuid(body.requestId)||!['enroll','verify'].includes(kind))fail('FACIAL_SOLICITACAO_INVALIDA','Inicie uma nova captura.',400);
     if(body.noticeId!==FACIAL_NOTICE_ID||body.cienciaDados!==true)fail('FACIAL_AVISO_OBRIGATORIO','Leia o aviso de privacidade antes da captura.',400);
     if(worker.status==='Inativo'&&!(kind==='verify'&&ficha?.tipo==='Devolução'))fail('TRABALHADOR_INATIVO','O trabalhador está inativo.');
@@ -51,7 +52,7 @@ export function createFacialService({store,provider,settings=facialSettings,cloc
       await commit('facial-captures',`start:${id}`,[{type:'create',entity:'facial_desafio',id,data:{empresaId:worker.empresaId,trabalhadorId:worker.id,actor,request,requestHash,acceptance,state:'CREATING',expiresAtEpoch:Math.floor(clock()/1000)+7*86400}}]);
       challenge=await store.get('facial_desafio',id);
       try{
-        await provider.reserveQuota(actor,id);
+        await provider.reserveQuota(actor,id,{...(configuration.limits||{total:50,daily:20}),version:configuration.version});
         const session=await provider.create({token:id});
         if(!uuid(session.sessionId))throw Error('Missing provider session');
         challenge=await store.update('facial_desafio',id,{state:'READY',sessionId:session.sessionId,providerRequestId:session.requestId||null,sessionExpiresAt:clock()+175000},{expectedVersion:challenge._version});
@@ -73,6 +74,7 @@ export function createFacialService({store,provider,settings=facialSettings,cloc
       const item=await store.get(kind==='verify'?'ficha':'trabalhador',kind==='verify'?ficha.id:worker.id);
       return {approved:true,item,replayed:true};
     }
+    await active();
     if(challenge.state!=='READY'||challenge.sessionExpiresAt<=clock())fail('FACIAL_TENTATIVA_USADA','A tentativa expirou ou já foi encerrada.');
     const original=challenge.request;
     if(original.workerVersion!==worker._version||ficha&&(original.fichaVersion!==ficha._version||original.documentHash!==documentHash(ficha)||!signaturePending(ficha)))fail('REGISTRO_ALTERADO','A ficha ou o cadastro mudou durante a captura. Inicie novamente.');

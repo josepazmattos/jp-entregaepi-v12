@@ -28,7 +28,7 @@ test('não captura sem ficha gerada, cadastro, aceite exato ou ciência; privaci
  for(const body of [{aceiteTermo:false},{termoAssinaturaId:'outro'}])await assert.rejects(f.service.begin(await f.args('verify',body)),{code:'ASSINATURA_ACEITE_OBRIGATORIO'});
  await assert.rejects(f.service.begin(await f.args('verify',{cienciaDados:false})),{code:'FACIAL_AVISO_OBRIGATORIO'});
  await assert.rejects(f.service.begin({...await f.args(),ficha:null}),{code:'FICHA_NAO_PENDENTE'});
- f.config.privacyReady=false;await assert.rejects(f.service.begin(await f.args()),{code:'FACIAL_INDISPONIVEL'});f.config.privacyReady=true;f.advance(8*86400000);assert.equal(f.service.status().enabled,false);
+ f.config.privacyReady=false;await assert.rejects(f.service.begin(await f.args()),{code:'FACIAL_INDISPONIVEL'});f.config.privacyReady=true;f.advance(8*86400000);assert.equal((await f.service.status()).enabled,false);
 });
 for(const [name,changes,code] of [['prova de vida insuficiente',{live:97.9},'FACIAL_PROVA_VIDA_REPROVADA'],['rosto divergente',{similarity:99.4},'FACIAL_DIVERGENTE'],['mais de um rosto',{faces:2},'FACIAL_ROSTO_UNICO']])test(name+' não assina nem grava evidência aprovada',async()=>{
  const f=await fixture();await f.enroll();Object.assign(f.state,changes);const a=await f.args(),s=await f.service.begin(a);await assert.rejects(f.service.complete({...a,body:{attemptId:s.attemptId,matched:true,similarity:100}}),{code});assert.equal((await f.store.get('ficha',f.ficha.id)).status,'pendente');assert.equal(f.images.size,1);

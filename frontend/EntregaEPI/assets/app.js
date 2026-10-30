@@ -183,6 +183,7 @@ function activateScreen(screen,focusContent=true){
   setText("currentSectionLabel",screenLabels[screen]);setSidebarOpen(false);
   if(screen==="jpged"&&typeof loadJpged==="function")loadJpged();
   if(screen==="certificado"&&typeof loadCompanyCertificate==="function")loadCompanyCertificate();
+  if(screen==="biometria"&&isMaster()&&typeof loadFacialControl==="function")loadFacialControl();
   if(focusContent)$("mainContent")?.focus({preventScroll:true});
 }
 function setMsg(type,text){const el=$("loginMessage");el.className="message "+type;el.textContent=text}function hideMsg(){$("loginMessage").className="message hidden";$("loginMessage").textContent=""}

@@ -93,3 +93,13 @@ test('facial exige autenticação, empresa da ficha e liberação explícita; po
  assert.equal((await request('POST',`/api/fichas/${f.ficha.id}/facial/concluir`,{matched:true,similarity:100},f.company.id)).status,400);
  assert.equal((await store.get('ficha',f.ficha.id)).status,'pendente');
 });
+
+test('painel facial só permite Master; ativação pede sessão recente e não contorna configuração inicial',async()=>{
+ const f=await fixture(),client={...claims,'cognito:groups':['EMPRESA'],'custom:empresa_id':f.company.id},path='/api/sistema/facial';
+ assert.equal((await request('GET',path,null,f.company.id,null)).status,401);assert.equal((await request('GET',path,null,f.company.id,client)).status,403);
+ const status=await request('GET',path,null,f.company.id);assert.equal(status.status,200);assert.equal(status.body.infrastructureReady,false);
+ const body={enabled:true,version:0,requestId:randomUUID(),remainingLimit:50,dailyLimit:20,endAt:'2026-11-06T11:32:46Z',acknowledgeCosts:true,acknowledgeGovernance:true};
+ assert.equal((await request('PUT',path,body,f.company.id)).body.code,'FACIAL_MASTER_RECENTE');
+ assert.equal((await request('PUT',path,body,f.company.id,{...claims,auth_time:String(Math.floor(Date.now()/1000))})).body.code,'FACIAL_SETUP_PENDENTE');
+ assert.equal((await request('PUT',path,{enabled:false,version:0,requestId:randomUUID()},f.company.id)).status,200);
+});

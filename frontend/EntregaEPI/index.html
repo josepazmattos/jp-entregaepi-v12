@@ -300,6 +300,20 @@
             </div>
             <aside class="card instructions-card"><div class="section-heading"><div><h2>Prepare o leitor</h2><p>O driver e o agente local trabalham juntos.</p></div></div><ol class="setup-steps"><li><span>1</span><div><h3>Conecte e libere o leitor</h3><p>Conecte o USB e feche o utilitário de diagnóstico NITGEN, que pode estar usando o equipamento.</p></div></li><li><span>2</span><div><h3>Abra o JP Biometria</h3><p>Clique em Iniciar JP Biometria. Se o navegador perguntar, autorize abrir o aplicativo instalado.</p></div></li><li><span>3</span><div><h3>Permita a conexão local</h3><p>Clique em Verificar leitor. Se houver uma solicitação do navegador, permita o acesso à rede local para este site.</p></div></li><li><span>4</span><div><h3>Faça uma captura</h3><p>Use Testar captura ou, em Fichas de EPI, escolha Capturar digital na ficha pendente.</p></div></li></ol><p class="bio-permission-help">Se o acesso foi bloqueado, abra as permissões deste site pelo ícone ao lado do endereço e revise a permissão de rede local.</p></aside>
           </div>
+          <section id="facialControlPanel" class="card hidden" data-master-only aria-labelledby="facialControlTitle" style="margin-top:20px;padding:clamp(16px,3vw,28px)">
+            <div class="section-heading"><div><h2 id="facialControlTitle">Biometria facial · Liberação pelo Master</h2><p>Controle a liberação do aplicativo para todas as empresas, sem instalar uma nova versão.</p></div><button class="btn btn-secondary" type="button" onclick="loadFacialControl()">Atualizar situação</button></div>
+            <p><strong id="facialControlStatus">Consulte a situação</strong></p><p id="facialPrivacyStatus" role="status"></p><p id="facialCaptureUsage"></p>
+            <form id="facialControlForm" class="form-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:16px">
+              <div class="field"><label for="facialControlEnd">Liberar até</label><input id="facialControlEnd" type="datetime-local" required></div>
+              <div class="field"><label for="facialControlRemaining">Capturas restantes que deseja liberar</label><input id="facialControlRemaining" type="number" min="1" max="10000" step="1" value="50" required></div>
+              <div class="field"><label for="facialControlDaily">Máximo por operador por dia</label><input id="facialControlDaily" type="number" min="1" max="1000" step="1" value="20" required></div>
+              <p id="facialCostEstimate" style="grid-column:1/-1"></p>
+              <label class="field" style="grid-column:1/-1;display:flex;flex-direction:row;gap:12px"><input id="facialCostsAccepted" type="checkbox" required style="width:24px;height:24px;flex:none"><span>Autorizo a cobrança por uso da AWS dentro da quantidade escolhida. Cadastros e novas tentativas também consomem capturas; este limite não é um teto da fatura. <a href="https://aws.amazon.com/rekognition/pricing/" target="_blank" rel="noopener">Consultar preços</a>.</span></label>
+              <label class="field" style="grid-column:1/-1;display:flex;flex-direction:row;gap:12px"><input id="facialGovernanceAccepted" type="checkbox" required style="width:24px;height:24px;flex:none"><span>Como responsável, confirmei com as empresas o aviso aos trabalhadores, a finalidade, a base legal, o acesso e a conservação dos dados biométricos. O fornecimento de EPI não depende da escolha da captura facial.</span></label>
+              <div class="item-actions" style="grid-column:1/-1"><button id="facialControlSave" class="btn btn-primary" type="submit" disabled>Ativar / salvar liberação</button><button id="facialControlPause" class="btn btn-secondary" type="button" onclick="saveFacialControl(false)" disabled>Pausar facial</button></div>
+            </form>
+            <p id="facialControlMessage" class="message" role="status" aria-live="polite"></p>
+          </section>
           <div id="bioCapturePanel" class="card bio-capture-panel hidden" aria-labelledby="bioCaptureTitle">
             <div class="section-heading"><div><h2 id="bioCaptureTitle">Capturar digital</h2><p>Confira o destino antes de registrar a imagem.</p></div><button id="bioCancelButton" class="btn btn-secondary" type="button" onclick="closeBiometricCapture()">Fechar e descartar</button></div>
             <dl class="bio-capture-context"><div><dt>Empresa</dt><dd id="bioCaptureCompany"></dd></div><div><dt>Trabalhador</dt><dd id="bioCaptureWorker"></dd></div><div><dt>Ficha</dt><dd id="bioCaptureFicha"></dd></div></dl>
@@ -362,6 +376,7 @@
   <script defer src="/__APP_PREFIX__/assets/app.js?v=20261014-desempenho1&amp;build=__BUILD_SHA__"></script>
   <script defer src="/__APP_PREFIX__/assets/biometric-records.js?v=20261030"></script>
   <script defer src="/__APP_PREFIX__/assets/operations.js?v=20261011-login1&amp;build=__BUILD_SHA__"></script>
+  <script defer src="/__APP_PREFIX__/assets/facial-control.js?v=20261030&amp;build=__BUILD_SHA__"></script>
   <script defer src="/__APP_PREFIX__/assets/epi-catalog.js?v=20261013-busca1&amp;build=__BUILD_SHA__"></script>
   <link rel="stylesheet" href="/__APP_PREFIX__/assets/jpged-v10.css">
   <script defer src="/__APP_PREFIX__/assets/jpged.js"></script>

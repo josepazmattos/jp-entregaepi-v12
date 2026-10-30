@@ -11,6 +11,7 @@
     "@aws-amplify/ui-react": "6.15.7",
     "@aws-amplify/ui-react-liveness": "3.7.0",
     "@aws-sdk/client-dynamodb": "3.1160.0",
+    "@aws-sdk/client-organizations": "3.1160.0",
     "@aws-sdk/client-rekognition": "3.1160.0",
     "@aws-sdk/client-s3": "3.1160.0",
     "@aws-sdk/client-sts": "3.1160.0",
