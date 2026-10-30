@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import { pdflibAddPlaceholder } from '@signpdf/placeholder-pdf-lib';
 import { documentContent, documentHash } from './document-integrity.js';
 import { httpError } from '../middleware/auth.js';
+import { equipmentCaLabel, equipmentPrintName } from './equipment-classification.js';
 
 // Generated on the server from the saved record, never from a client-supplied PDF.
 export async function buildSigningPdf(ficha, certificate) {
@@ -44,7 +45,7 @@ export async function buildSigningPdf(ficha, certificate) {
     page.drawImage(image, { x: margin, y: y - 48, width: dims.width, height: dims.height });
     y -= 55;
   }
-  text('FICHA DE CONTROLE DE EQUIPAMENTOS DE PROTEÇÃO INDIVIDUAL', { size: 14, type: bold, center: true, gap: 12 });
+  text(ficha.modeloFicha?.titulo || 'FICHA DE CONTROLE DE EQUIPAMENTOS DE PROTEÇÃO INDIVIDUAL', { size: 14, type: bold, center: true, gap: 12 });
   text(`Empresa: ${company.nome || ''}    ${company.inscricaoTipo==='CAEPF'?'CAEPF':'CNPJ'}: ${company.cnpj || ''}`, { type: bold });
   text(`Trabalhador: ${worker.nomeCompleto || ficha.trabalhadorNome}    CPF: ${worker.cpf || ''}`);
   text(`Função: ${worker.funcao || ''}    Matrícula eSocial: ${worker.matriculaESocial || ''}`);
@@ -73,7 +74,7 @@ export async function buildSigningPdf(ficha, certificate) {
   }
   function tableHeader() { row(['Qtd.','Equipamento','CA','Entrega','Devolução','Confirmação'], true); }
   tableHeader();
-  for (const item of ficha.itens) row([item.quantidade, item.epiNome || item.epiDescricao, item.semCA ? 'Sem CA' : item.ca, item.datasMovimentacao?.entrega || '', item.datasMovimentacao?.devolucao || '', 'Biometria confirmada']);
+  for (const item of ficha.itens) row([item.quantidade, equipmentPrintName(item), equipmentCaLabel(item), item.datasMovimentacao?.entrega || '', item.datasMovimentacao?.devolucao || '', 'Biometria confirmada']);
   y -= 12;
   // Only the printed appearance is abbreviated. Full subject remains in the
   // PDF signature dictionary/CMS; complete evidence is still embedded below.

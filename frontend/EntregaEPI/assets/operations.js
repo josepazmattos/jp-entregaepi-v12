@@ -115,7 +115,32 @@ function workerBiometrics(id){
   const worker=cache.trabalhadores.find(x=>x.id===id);if(!worker||String(worker.empresaId)!==String(activeEmpresaId))return;
   const dialog=dialogShell(document,'Digitais do trabalhador',worker.nomeCompleto||worker.nome||'Trabalhador');
   renderBiometricDialog(dialog,worker,null);
+  const print=dialog.ownerDocument.createElement('button');print.type='button';print.className='btn btn-secondary';print.textContent='Ficha de cadastro / imprimir';print.onclick=()=>printBiometricEnrollment(id);dialog.querySelector('.dialog-actions').prepend(print);
   loadBiometricGallery(dialog,worker,operationContext());
+}
+async function openBiometricRecord(path,kind,workerId){
+  if(!requireEmpresa())return;
+  const context=operationContext(),preview=window.open('','_blank');
+  if(!preview){handleAppError(new Error('Permita a abertura da janela para visualizar o documento.'));return;}
+  operationWindows.add(preview);preview.document.body.textContent='Carregando documento…';
+  const controller=new AbortController();operationControllers.add(controller);
+  try{
+    assertOperationContext(context);
+    const result=ensureSuccess(await api(path,{signal:controller.signal}));assertOperationContext(context);
+    if(preview.closed)return;
+    if(String(result.body.empresa?.id)!==String(context.empresa)||workerId&&result.body.trabalhador?.id!==workerId)throw new Error('O documento não corresponde ao cadastro selecionado.');
+    const html=kind==='report'?window.JP_BIOMETRIC_RECORDS.buildReport(result.body):window.JP_BIOMETRIC_RECORDS.buildEnrollment(result.body);
+    preview.document.open();preview.document.write(html);preview.document.close();
+    preview.document.getElementById('printBiometricDocument').onclick=()=>{try{assertOperationContext(context);preview.print();}catch(error){preview.close();handleAppError(error);}};
+    preview.document.getElementById('closeBiometricDocument').onclick=()=>preview.close();
+    preview.addEventListener('pagehide',()=>operationWindows.delete(preview),{once:true});
+  }catch(error){preview.close();operationWindows.delete(preview);if(error.name!=='AbortError')handleAppError(error);}
+  finally{operationControllers.delete(controller);}
+}
+function printBiometricReport(){return openBiometricRecord('/api/trabalhadores/relatorio-biometrico','report');}
+function printBiometricEnrollment(id){
+  const worker=cache.trabalhadores.find(x=>x.id===id);if(!worker||String(worker.empresaId)!==String(activeEmpresaId))return;
+  return openBiometricRecord('/api/trabalhadores/'+encodeURIComponent(id)+'/cadastro-biometrico','enrollment',id);
 }
 function renderBiometricDialog(dialog,worker,ficha){
   const context=operationContext(),content=dialog.querySelector('.dialog-content'),entries=Object.keys(worker.biometrias||{}),kind=ficha?'verify':'enroll';

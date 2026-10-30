@@ -7,7 +7,7 @@ function clearExistingEquipment(){
 function useCatalogEquipment(item){
   if(item.ambiguous||!requireEmpresa())return false;
   cache.epis=cache.epis.filter(e=>e.id!==item.id);cache.epis.push(item);
-  renderEntregaOptions(true);$('entregaEpi').value=item.id;goScreen('entrega');$('entregaQuantidade').focus();return true;
+  renderEntregaOptions(true);$('entregaEpi').value=item.id;updateDeliveryClassification();goScreen('entrega');$('entregaQuantidade').focus();return true;
 }
 async function checkExistingEquipment(){
   if($('epiSemCa').checked)return false;

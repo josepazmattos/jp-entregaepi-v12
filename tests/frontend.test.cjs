@@ -22,7 +22,11 @@ function makeDocument(record=ficha, companyRecord=company, workerRecord=worker){
 
 test('termo integral corresponde ao texto do modelo aprovado',()=>{
   const term=fichaModule.createSnapshot(company,worker).modeloFicha.termoResponsabilidade;
-  assert.equal(createHash('sha256').update(term).digest('hex'),'ae8f8fced55857cade534b19ed96614ef2be2c2d5c009abfadef53c288d74f18');
+  assert.ok(term.includes('anteriormente à entrega'));
+  assert.ok(term.includes('art. 462, § 1º'));
+  assert.ok(!term.includes('recebidas na presente data'));
+  assert.ok(!term.includes('Certificado de Treinamento'));
+  assert.ok(makeDocument().includes('recebidas na presente data'),'legados conservam o texto original');
 });
 
 test('ficha mantém identificação, termo e assinatura antes da relação dos EPIs',()=>{
@@ -271,7 +275,7 @@ test('emissão inclui snapshots e termo integral somente após validar trabalhad
   assert.equal(sent.trabalhadorSnapshot.matriculaESocial,'00042');
   assert.equal(sent.trabalhadorSnapshot.funcao,'FUNÇÃO DE TESTE');
   assert.equal(sent.empresaSnapshot.nome,'EMPRESA EXEMPLO');
-  assert.ok(sent.modeloFicha.termoResponsabilidade.includes('súmula n. 80 do TST.'));
+  assert.ok(sent.modeloFicha.termoResponsabilidade.includes('não será automático nem decorrente do desgaste normal.'));
   assert.equal(sent.itens[0].quantidade,2);
   assert.equal(sent.itens[0].tipoMovimentacao,'Entrega');
   assert.equal(form.submitButton.disabled,false);

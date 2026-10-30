@@ -2,6 +2,7 @@ import { equipmentName } from './equipment-name.js';
 import { createHash } from 'node:crypto';
 import { httpError } from '../middleware/auth.js';
 import { textField } from '../routes/_helpers.js';
+import { classifyEquipment } from './equipment-classification.js';
 import { normalizarCA } from './caepi.service.js';
 
 const compare = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
@@ -19,6 +20,7 @@ export function normalizeEquipment(body = {}) {
   return {
     tipo,
     semCA: tipo === 'sem_ca',
+    ...classifyEquipment({tipo, enquadramento:body.enquadramento}),
     catalogoCompartilhado: true,
     ca: tipo === 'sem_ca' ? '' : ca,
     descricao,
@@ -51,6 +53,7 @@ export function publicEquipment(item) {
     id: item.id,
     tipo,
     semCA: tipo === 'sem_ca',
+    ...(item.enquadramento ? {enquadramento:item.enquadramento} : {}),
     catalogoCompartilhado: true,
     ca: tipo === 'sem_ca' ? '' : ca,
     descricao,

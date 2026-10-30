@@ -2,7 +2,8 @@ import { equipmentName } from './equipment-name.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { httpError } from '../middleware/auth.js';
 import { textField } from '../routes/_helpers.js';
-import { MODELO_FICHA_APROVADO, TERMO_APROVADO } from './ficha-modelo.js';
+import { MODELO_FICHA_ID, modeloFichaParaItens } from './ficha-modelo.js';
+import { classifyEquipment } from './equipment-classification.js';
 import { validateCaptureImage } from './capture-image.js';
 
 export function fichaSnapshots(empresa, trabalhador) {
@@ -56,7 +57,10 @@ export function buildFicha({ empresaId, empresa, trabalhador, items, body, actor
       epiDescricao: equipmentName(epi),
       ca: textField(epi.ca),
       semCA: epi.semCA === true || epi.tipo === 'sem_ca',
+      ...classifyEquipment(epi, requested.enquadramento),
       fabricante: textField(epi.fabricante || epi.manufacturer),
+      modelo: textField(epi.modelo),
+      tamanho: textField(epi.tamanho),
       validade: textField(epi.validade || epi.validity),
       quantidade,
       tipoMovimentacao,
@@ -66,11 +70,15 @@ export function buildFicha({ empresaId, empresa, trabalhador, items, body, actor
   if (trabalhador.status === 'Inativo' && normalizedItems.some(item => item.tipoMovimentacao !== 'Devolução')) throw httpError(409, 'O trabalhador está inativo. Apenas devoluções são permitidas.', 'TRABALHADOR_INATIVO');
   const tipos = [...new Set(normalizedItems.map(item => item.tipoMovimentacao))];
   const tipo = tipos.length === 1 ? tipos[0] : ['Entrega', 'Troca', 'Devolução'].filter(value => tipos.includes(value)).join(' e ');
+  const modeloFicha = modeloFichaParaItens(normalizedItems);
   if (body.modeloFicha != null) {
-    if (typeof body.modeloFicha !== 'object' || Array.isArray(body.modeloFicha) || body.modeloFicha.id !== 'JP-DOCX-11.10.6') {
-      throw httpError(400, 'Modelo de ficha não reconhecido.', 'MODELO_FICHA_INVALIDO');
+    const model = body.modeloFicha;
+    if (typeof model !== 'object' || Array.isArray(model) || model.id !== MODELO_FICHA_ID) {
+      throw httpError(400, 'Modelo de ficha não reconhecido. Atualize o aplicativo.', 'MODELO_FICHA_INVALIDO');
     }
-    if (body.modeloFicha.termoResponsabilidade !== TERMO_APROVADO) throw httpError(400, 'O Termo de Responsabilidade diverge do modelo aprovado. Atualize o aplicativo para emitir a ficha.', 'TERMO_FICHA_DIVERGENTE');
+    if (model.termoResponsabilidade !== modeloFicha.termoResponsabilidade || model.titulo !== modeloFicha.titulo) {
+      throw httpError(400, 'O Termo de Responsabilidade diverge do modelo atual. Atualize o aplicativo para emitir a ficha.', 'TERMO_FICHA_DIVERGENTE');
+    }
   }
   return {
     numero: `EPI-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 8).toUpperCase()}`,
@@ -78,7 +86,7 @@ export function buildFicha({ empresaId, empresa, trabalhador, items, body, actor
     trabalhadorId: trabalhador.id,
     trabalhadorNome: trabalhador.nomeCompleto || trabalhador.nome || trabalhador.name || '',
     ...fichaSnapshots(empresa, trabalhador),
-    modeloFicha: { ...MODELO_FICHA_APROVADO },
+    modeloFicha,
     itens: normalizedItems,
     status: 'pendente',
     tipo,

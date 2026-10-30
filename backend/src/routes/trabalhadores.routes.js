@@ -6,6 +6,7 @@ import { httpError, requireMaster } from '../middleware/auth.js';
 import { createBiometricsService } from '../services/biometria.service.js';
 import { sortWorkers } from '../services/trabalhadores.service.js';
 import { createWorkerImportService } from '../services/trabalhadores-import.service.js';
+import { companyForReport, workerForReport, workerEnrollmentSummary } from '../services/biometric-records.js';
 
 const router = Router();
 const importer = createWorkerImportService({ list, get, create, update, listWithRevision, transact });
@@ -20,6 +21,15 @@ async function selectedCompany(req, res) {
 router.get('/', async (req, res) => {
   const empresaId = await selectedCompany(req, res);
   if (empresaId) ok(res, { items: sortWorkers(await listForDisplay('trabalhador', empresaId, recentListIds(req))) });
+});
+
+router.get('/relatorio-biometrico', async (req,res) => {
+  const empresaId=await selectedCompany(req,res); if(!empresaId)return;
+  const company=await get('empresa',empresaId);
+  const workers=sortWorkers(await listForDisplay('trabalhador',empresaId,recentListIds(req)))
+    .filter(worker=>worker.empresaId===empresaId).map(workerEnrollmentSummary);
+  res.set('Cache-Control','private, no-store');
+  ok(res,{empresa:companyForReport(company),trabalhadores:workers,emitidoEm:new Date().toISOString()});
 });
 
 router.post('/', async (req, res) => {
@@ -65,6 +75,12 @@ async function selectedWorker(req) {
   assertRecordAccess(req, worker); return worker;
 }
 router.get('/:id/biometrias', async (req,res) => { const worker=await selectedWorker(req); ok(res,{items:await biometrics.gallery(worker)}); });
+router.get('/:id/cadastro-biometrico', async (req,res) => {
+  const worker=await selectedWorker(req),company=await get('empresa',worker.empresaId);
+  if(!company)throw httpError(404,'Empresa não encontrada.');
+  res.set('Cache-Control','private, no-store');
+  ok(res,{empresa:companyForReport(company),trabalhador:workerForReport(worker),digitais:await biometrics.records(worker),emitidoEm:new Date().toISOString()});
+});
 router.patch('/:id', async (req,res) => {
   const worker=await selectedWorker(req);
   ok(res, await importer.editWorker({body:objectBody(req),worker,actor:req.auth.sub}));

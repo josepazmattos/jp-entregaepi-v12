@@ -378,7 +378,14 @@ function renderTrabalhadores(){
 }
 async function refreshTrabalhadores(update=true){if(!activeEmpresaId){$("trabalhadoresList").textContent="Selecione uma empresa.";return;}const r=await api("/api/trabalhadores");ensureSuccess(r,"Não foi possível carregar os trabalhadores.");cache.trabalhadores=alphabetical(asArray(r),t=>t.nomeCompleto||t.nome||t.name);renderTrabalhadores();renderEntregaOptions();if(update)renderOverview();return r;}
 function isWithoutCA(item){return item.tipo==="sem_ca"||item.semCA===true;}
-function equipmentLabel(item){return isWithoutCA(item)?"Sem CA":"CA "+(item.ca||"não informado");}
+const nonEpiKinds=Object.freeze({instrumento:'Instrumento',uniforme:'Uniforme',acessorio:'Acessório',outro_nao_epi:'Outro equipamento (não EPI)'});
+function equipmentLabel(item){return isWithoutCA(item)?(nonEpiKinds[item.enquadramento]?'CA não aplicável':'Sem CA'):'CA '+(item.ca||'não informado');}
+function updateDeliveryClassification(){
+  const item=cache.epis.find(e=>e.id===$('entregaEpi')?.value),field=$('entregaEnquadramento');
+  if(!field)return;
+  const without=Boolean(item&&isWithoutCA(item));$('entregaEnquadramentoField')?.classList.toggle('hidden',!without);field.disabled=!without;
+  if(field.dataset.epiId!==item?.id){field.value=nonEpiKinds[item?.enquadramento]?item.enquadramento:'';field.dataset.epiId=item?.id||'';}
+}
 function equipmentDescription(item){return [item.nomeCurto||window.JP_FICHA.equipmentName(item)||"Equipamento",item.modelo?"Modelo: "+item.modelo:"",item.tamanho?"Tamanho: "+item.tamanho:""].filter(Boolean).join(" · ");}
 let equipmentCatalogSummary=null;
 function renderEpis(){
@@ -399,8 +406,8 @@ function renderEntregaOptions(preserveWorker=false){
   if(companySelect){companySelect.innerHTML='<option value="">Selecione uma empresa</option>'+cache.empresas.map(item=>`<option value="${escapeHtml(item.id)}">${escapeHtml(item.nome||"Empresa")}</option>`).join("");companySelect.value=activeEmpresaId;companySelect.disabled=!isMaster();}
   const tsel=$("entregaTrabalhador"),esel=$("entregaEpi"),devolucao=$("entregaTipo")?.value==='Devolução';
   if(tsel){const selected=tsel.value,workers=cache.trabalhadores.filter(t=>(!t.empresaId||String(t.empresaId)===String(activeEmpresaId))&&(devolucao||t.status!=='Inativo'||((preserveWorker||entregaItems.length)&&t.id===selected)));tsel.innerHTML=workers.map(t=>`<option value="${escapeHtml(t.id)}">${escapeHtml(t.nomeCompleto||t.nome||"Trabalhador")}${t.status==='Inativo'?' · Inativo':''}</option>`).join("");if(workers.some(t=>t.id===selected))tsel.value=selected;tsel.disabled=!activeEmpresaId||!workers.length||entregaItems.length>0||entregaSaving;}
-  if(esel){const selected=esel.value;esel.innerHTML='<option value="">Selecione um EPI</option>'+cache.epis.map(e=>`<option value="${escapeHtml(e.id)}">${escapeHtml(equipmentDescription(e)+" - "+equipmentLabel(e))}</option>`).join("");esel.value=cache.epis.some(e=>e.id===selected)?selected:"";}
-  renderEntregaDraft();
+  if(esel){const selected=esel.value;esel.innerHTML='<option value="">Selecione um equipamento</option>'+cache.epis.map(e=>`<option value="${escapeHtml(e.id)}">${escapeHtml(equipmentDescription(e)+" - "+equipmentLabel(e))}</option>`).join("");esel.value=cache.epis.some(e=>e.id===selected)?selected:"";}
+  renderEntregaDraft();updateDeliveryClassification();
 }
 function clearEntregaDraft(){
   entregaItems=[];entregaDraftWorker="";entregaDraftCompany="";entregaSaving=false;
@@ -410,7 +417,7 @@ function renderEntregaDraft(){
   $("entregaItemsSection")?.classList.toggle("hidden",!entregaItems.length);
   const worker=cache.trabalhadores.find(item=>item.id===entregaDraftWorker);
   setText("entregaItemsCount",`${entregaItems.length} ${entregaItems.length===1?'item adicionado':'itens adicionados'}${worker?' · '+(worker.nomeCompleto||worker.nome||''):''}`);
-  if($("entregaItemsList"))$("entregaItemsList").innerHTML=entregaItems.map((item,index)=>`<li class="delivery-item-row"><div class="delivery-item-details"><strong>${escapeHtml(item.nome)}</strong><small>${escapeHtml(item.caLabel)} · Quantidade: ${item.quantidade}</small><span class="delivery-item-type ${item.tipoMovimentacao==='Devolução'?'return':''}">${escapeHtml(item.tipoMovimentacao)} de EPI</span></div><button class="text-button" type="button" data-remove-delivery="${index}" aria-label="Remover item ${index+1}" ${entregaSaving?'disabled':''}>Remover</button></li>`).join("");
+  if($("entregaItemsList"))$("entregaItemsList").innerHTML=entregaItems.map((item,index)=>`<li class="delivery-item-row"><div class="delivery-item-details"><strong>${escapeHtml(item.nome)}</strong><small>${escapeHtml(item.caLabel)} · Quantidade: ${item.quantidade}</small><span class="delivery-item-type ${item.tipoMovimentacao==='Devolução'?'return':''}">${escapeHtml(item.tipoMovimentacao)}</span></div><button class="text-button" type="button" data-remove-delivery="${index}" aria-label="Remover item ${index+1}" ${entregaSaving?'disabled':''}>Remover</button></li>`).join("");
   ["entregaEpi","entregaQuantidade","entregaTipo","entregaAddItem","entregaClearItems"].forEach(id=>{if($(id))$(id).disabled=entregaSaving;});
   if($("entregaEpi"))$("entregaEpi").required=!entregaItems.length;
   if($("entregaQuantidade"))$("entregaQuantidade").required=!entregaItems.length;
@@ -429,7 +436,9 @@ function entregaInputItem(body,worker){
   if(!Number.isSafeInteger(quantidade)||quantidade<1||quantidade>100000)throw new Error("Informe uma quantidade inteira maior que zero, até 100.000.");
   if(!['Entrega','Devolução'].includes(tipoMovimentacao))throw new Error("Selecione o tipo de movimentação.");
   if(worker.status==='Inativo'&&tipoMovimentacao!=='Devolução')throw new Error("O trabalhador está inativo. Apenas devoluções são permitidas.");
-  return {epiId:epi.id,quantidade,tipoMovimentacao,nome:equipmentDescription(epi),caLabel:equipmentLabel(epi)};
+  const enquadramento=isWithoutCA(epi)?(body.enquadramento||epi.enquadramento||'nao_classificado'):'epi';
+  if(isWithoutCA(epi)&&!nonEpiKinds[enquadramento])throw new Error('Classifique o item sem CA. Um EPI sujeito a CA deve ser cadastrado com o seu certificado.');
+  return {epiId:epi.id,quantidade,tipoMovimentacao,semCA:isWithoutCA(epi),enquadramento,nome:equipmentDescription(epi),caLabel:equipmentLabel({...epi,enquadramento})};
 }
 function addEntregaItem(){
   if(entregaSaving||!requireEmpresa())return;
@@ -438,7 +447,7 @@ function addEntregaItem(){
     const body=formDataObj($("entregaForm")),worker=entregaWorker(entregaDraftWorker||body.trabalhadorId);
     if(entregaItems.length>=100)throw new Error("Uma ficha admite até 100 itens.");
     entregaItems.push(entregaInputItem(body,worker));entregaDraftWorker=worker.id;entregaDraftCompany=activeEmpresaId;
-    $("entregaEpi").value="";$("entregaQuantidade").value="1";renderEntregaDraft();$("entregaEpi").focus();
+    $("entregaEpi").value="";$("entregaQuantidade").value="1";renderEntregaDraft();updateDeliveryClassification();$("entregaEpi").focus();
   }catch(error){handleAppError(error);}
 }
 function updateEquipmentKind(){
@@ -446,6 +455,8 @@ function updateEquipmentKind(){
   const without=$("epiSemCa")?.checked===true;
   $("epiCaFields")?.classList.toggle("hidden",without);$("epiCaDetails")?.classList.toggle("hidden",without);$("epiSemCaHelp")?.classList.toggle("hidden",!without);
   ["caInput","epiValidade","epiSituacao"].forEach(id=>{const input=$(id);if(input){input.disabled=without;if(without)input.value="";}});
+  $('epiEnquadramentoField')?.classList.toggle('hidden',!without);
+  if($('epiEnquadramento')){$('epiEnquadramento').disabled=!without;$('epiEnquadramento').required=without;}
   if($("caInput"))$("caInput").required=!without;
   if($("consultarCaButton"))$("consultarCaButton").disabled=without;
   $("caMessage").className="message hidden";$("caMessage").textContent="";
@@ -1092,6 +1103,7 @@ $("workerStatusFilter").addEventListener("change",()=>{workerListPage=1;renderTr
 $("workerPagePrevious").addEventListener("click",()=>{workerListPage--;renderTrabalhadores();});
 $("workerPageNext").addEventListener("click",()=>{workerListPage++;renderTrabalhadores();});
 $("entregaTipo").addEventListener("change",()=>{renderEntregaOptions(true);setText("movementHelp",$("entregaTipo").value==='Devolução'?"Preenche somente a data de devolução deste item.":"Preenche a data de entrega deste item.");});
+$("entregaEpi").addEventListener("change",updateDeliveryClassification);
 $("entregaAddItem").addEventListener("click",addEntregaItem);
 $("entregaClearItems").addEventListener("click",()=>{if(!entregaSaving){clearEntregaDraft();renderEntregaOptions();}});
 $("entregaTrabalhador").addEventListener("change",()=>{if(!entregaSaving)clearEntregaDraft();});
@@ -1117,8 +1129,8 @@ $("entregaForm").addEventListener("submit",async event=>{
       empresaId:activeEmpresaId,trabalhadorId:trabalhador.id,
       trabalhadorNome:trabalhador.nomeCompleto||trabalhador.nome||trabalhador.name,
       data:new Date().toLocaleDateString("pt-BR"),
-      ...window.JP_FICHA.createSnapshot(empresa,trabalhador),
-      itens:itens.map(({epiId,quantidade,tipoMovimentacao})=>({epiId,quantidade,tipoMovimentacao}))
+      ...window.JP_FICHA.createSnapshot(empresa,trabalhador,itens),
+      itens:itens.map(({epiId,quantidade,tipoMovimentacao,enquadramento})=>({epiId,quantidade,tipoMovimentacao,enquadramento}))
     };
     ensureSuccess(await api("/api/fichas",{method:"POST",body:JSON.stringify(payload)}),"Não foi possível gerar a ficha de EPI.");
     clearEntregaDraft();entregaSaving=true;renderEntregaDraft();$("entregaEpi").value="";$("entregaQuantidade").value="1";

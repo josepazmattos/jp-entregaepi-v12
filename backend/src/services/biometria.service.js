@@ -102,13 +102,16 @@ export function createBiometricsService(store) {
     }
     return {item:await store.get(kind==='enroll'?'trabalhador':'ficha',kind==='enroll'?worker.id:ficha.id),replayed:false,...(savedBiometric?{biometria:savedBiometric}:{})};
   }
-  async function gallery(worker) {
+  async function records(worker) {
     const items = await Promise.all(Object.entries(worker.biometrias || {}).filter(([finger]) => fingerValid(finger)).map(async ([fingerCode, meta]) => {
       const item = await store.get('biometria', enrollmentId(worker, fingerCode));
       if (!item || item.id !== meta.id || item.empresaId !== worker.empresaId || item.trabalhadorId !== worker.id || item.fingerCode !== fingerCode) return null;
-      return {fingerCode, enrolledAt:item.enrolledAt, imageDataUrl:item.imageDataUrl || ''};
+      return {id:item.id, fingerCode, enrolledAt:item.enrolledAt, cadastradoPor:item.cadastradoPor || '', ultimaVerificacao:item.ultimaVerificacao || '', imageDataUrl:item.imageDataUrl || ''};
     }));
     return items.filter(Boolean);
   }
-  return {challenge,complete,gallery};
+  async function gallery(worker) {
+    return (await records(worker)).map(({fingerCode,enrolledAt,imageDataUrl}) => ({fingerCode,enrolledAt,imageDataUrl}));
+  }
+  return {challenge,complete,gallery,records};
 }

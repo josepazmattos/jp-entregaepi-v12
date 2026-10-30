@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TERMO_APROVADO } from '../src/services/ficha-modelo.js';
+import { TERMO_APROVADO, TERMO_LEGADO, MODELO_FICHA_ID, MODELO_FICHA_APROVADO } from '../src/services/ficha-modelo.js';
 
 // These tests use only an isolated in-process store and synthetic records.
 delete process.env.TABLE_NAME;
@@ -67,6 +67,22 @@ test('API Lambda: autorização, empresa, emissão e captura em isolamento local
     assert.equal((await request('GET', '/api/trabalhadores', { claims, company: companyB })).status, 403);
     assert.equal((await request('POST', '/api/empresas', { claims, body: { nome: 'NÃO CRIAR' } })).status, 403);
     assert.equal((await request('GET', '/api/auditoria', { claims })).status, 403);
+  });
+  await t.test('relatório e ficha biométrica são somente leitura, filtrados por empresa e sem segredos',async()=>{
+    const claims={...basicClaims,sub:'synthetic-company-user','cognito:groups':'[EMPRESA]','custom:empresa_id':companyA};
+    const before=await storage.get('trabalhador',workerA.id);
+    const summary=await request('GET','/api/trabalhadores/relatorio-biometrico',{claims});
+    assert.equal(summary.status,200);assert.deepEqual(summary.body.trabalhadores.map(w=>w.id),[workerA.id]);
+    assert.equal(summary.body.empresa.id,companyA);assert.ok(summary.body.emitidoEm);
+    const path=`/api/trabalhadores/${workerA.id}/cadastro-biometrico`;
+    const record=await request('GET',path,{claims});assert.equal(record.status,200);assert.deepEqual(record.body.digitais,[]);
+    assert.deepEqual(await storage.get('trabalhador',workerA.id),before);
+    for(const forbidden of ['template','publicKey','proof','senha','imageDataUrl'])assert.ok(!Object.hasOwn(summary.body.trabalhadores[0],forbidden));
+    assert.equal((await request('GET',path,{claims:null})).status,401);
+    assert.equal((await request('GET',path,{claims:{...claims,'custom:empresa_id':companyB}})).status,403);
+    assert.equal((await request('GET',`/api/trabalhadores/${workerB.id}/cadastro-biometrico`,{claims})).status,403);
+    assert.equal((await request('GET','/api/trabalhadores/relatorio-biometrico',{claims,company:companyB})).status,403);
+    assert.equal((await request('GET','/api/trabalhadores/relatorio-biometrico',{claims:null})).status,401);
   });
   await t.test('upload XLSX exige autorização, faz prévia por empresa e confirma sem duplicar trabalhadores', async () => {
     const { default: ExcelJS } = await import('exceljs');
@@ -138,6 +154,7 @@ test('API Lambda: autorização, empresa, emissão e captura em isolamento local
     assert.equal((await request('POST', '/api/fichas', { company: companyA, body: { ...base, itens: [{ epiId: epiA.id, quantidade: -1 }] } })).status, 400);
     assert.equal((await request('POST', '/api/fichas', { company: companyA, body: { ...base, data: '31/02/2026' } })).status, 400);
     assert.equal((await request('POST', '/api/fichas', { company: companyA, body: { ...base, modeloFicha: { id: 'JP-DOCX-11.10.6', termoResponsabilidade: 'TEXTO ADULTERADO' } } })).status, 400);
+    assert.equal((await request('POST', '/api/fichas', { company: companyA, body: { ...base, modeloFicha: { id: 'JP-DOCX-11.10.6', termoResponsabilidade: TERMO_LEGADO } } })).status,400,'navegadores antigos precisam atualizar antes de emitir novas fichas');
   });
   await t.test('Master e Cliente emitem itens mistos sem permitir entrega disfarçada para inativo', async () => {
     const items=[{epiId:epiA.id,quantidade:5,tipoMovimentacao:'Devolução'},{epiId:epiA.id,quantidade:2,tipoMovimentacao:'Entrega'},{epiId:epiA.id,quantidade:9,tipoMovimentacao:'Entrega'}];
@@ -161,7 +178,7 @@ test('API Lambda: autorização, empresa, emissão e captura em isolamento local
     const response = await request('POST', '/api/fichas', { company: companyA, body: {
       trabalhadorId: workerA.id, tipo: 'Troca', data: '06/10/2026', itens: [{ epiId: epiA.id, quantidade: 2, epiDescricao: 'DESCRIÇÃO ADULTERADA' }],
       status: 'assinada', assinaturaBiometrica: { verificada: true }, trabalhadorSnapshot: { nomeCompleto: 'NOME ADULTERADO' },
-      modeloFicha: { id: 'JP-DOCX-11.10.6', termoResponsabilidade: TERMO_APROVADO }
+      modeloFicha: MODELO_FICHA_APROVADO
     } });
     assert.equal(response.status, 200);
     ficha = response.body.item;
@@ -172,7 +189,7 @@ test('API Lambda: autorização, empresa, emissão e captura em isolamento local
     assert.equal(ficha.trabalhadorSnapshot.matriculaESocial, workerA.matriculaESocial);
     assert.equal(ficha.itens[0].epiDescricao, epiA.descricao);
     assert.equal(ficha.tipo, 'Troca');
-    assert.equal(ficha.modeloFicha.id, 'JP-DOCX-11.10.6');
+    assert.equal(ficha.modeloFicha.id, MODELO_FICHA_ID);
     assert.equal(ficha.modeloFicha.termoResponsabilidade, TERMO_APROVADO);
   });
   await t.test('assinatura e exclusão conferem empresa; imagem alegada não prova biometria', async () => {
