@@ -1,0 +1,22 @@
+let buckets = Resources.*[ Type == 'AWS::S3::Bucket' ]
+rule private_encrypted_evidence {
+  %buckets.Properties.PublicAccessBlockConfiguration.BlockPublicAcls == true
+  %buckets.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy == true
+  %buckets.Properties.PublicAccessBlockConfiguration.IgnorePublicAcls == true
+  %buckets.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets == true
+  %buckets.Properties.BucketEncryption.ServerSideEncryptionConfiguration[*].ServerSideEncryptionByDefault.SSEAlgorithm == 'AES256'
+  %buckets.Properties.VersioningConfiguration.Status == 'Enabled'
+  %buckets.Properties.OwnershipControls.Rules[*].ObjectOwnership == 'BucketOwnerEnforced'
+  %buckets.DeletionPolicy == 'Retain'
+  %buckets.UpdateReplacePolicy == 'Retain'
+}
+rule retained_signing_key {
+  Resources.AttestationKey.Properties.KeySpec == 'ECC_NIST_P256'
+  Resources.AttestationKey.Properties.KeyUsage == 'SIGN_VERIFY'
+  Resources.AttestationKey.DeletionPolicy == 'Retain'
+  Resources.AttestationKey.UpdateReplacePolicy == 'Retain'
+}
+rule transport_and_stream {
+  Resources.ImagesPolicy.Properties.PolicyDocument.Statement[*].Effect == 'Deny'
+  Resources.StreamRole.Properties.Policies[*].PolicyDocument.Statement[*].Action == 'rekognition:StartFaceLivenessSession'
+}

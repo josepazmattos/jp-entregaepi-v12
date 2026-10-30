@@ -32,25 +32,29 @@ O servidor consulta a política efetiva `AISERVICES_OPT_OUT_POLICY` da própria 
 
 A contagem é cumulativa e não é apagada ao renovar. O valor informado pelo Master é a quantidade **restante** desejada: por exemplo, 7 usadas + 25 liberadas = teto acumulado 32. A reserva verifica atomicamente a versão ativa da configuração, o teto global e o teto diário. Cadastrar rosto e tentar de novo também consomem cota. A primeira configuração não ativa nada automaticamente. O piloto isolado anterior mantém seu prazo e limite; a liberação no aplicativo precisa de ação explícita do Master.
 
-## Estado da publicação e configuração inicial
+## Publicação e configuração concluídas
 
-**Código pronto; atualização pública ainda não publicada.** A revisão automática rejeitou o envio dos arquivos da interface ao bucket público porque a autorização anterior mencionava somente o bucket privado. Nenhum arquivo foi gravado sob a nova release pública. API e signer chegaram a receber o primeiro pacote; foram restaurados imediatamente aos ZIPs originais após a recusa da interface. `GetFunctionConfiguration` confirmou `Successful` e hashes originais:
+Publicação autorizada expressamente e concluída em **30/10/2026**, versão `12.10.6-assinatura`, código `6970314779f61e43ede369acd4345ebed98d388f`. Os três endereços de entrada (`/EntregaEPI`, `/EntregaEPI/` e `/EntregaEPI/index.html`) recebem o mesmo HTML, com os scripts novos em release imutável. Os URLs dos demais componentes foram preservados.
 
-- API: `l5uMFirTmdamKcT+uPFh2/lnqeGDBfHJ1DE845YHOUg=`.
-- Signer: `juL7Sqgr4chBMI7aKUWkf7Dag07mIe9cX6jIFf9Smj0=`.
+- API `jp-entregaepi-v12-api`: `DhvXXQu+p+RzAgvyzoCWJw5t4DnwtnUK9Qi9CPsjB4c=`.
+- Signer `jp-entregaepi-signer`: `DUivfcAnzz569lzioTpZ9L4bvwYQP0gi7jkITQT2XeY=`.
+- Stack `jp-entregaepi-facial-signature`: `CREATE_COMPLETE`, região `sa-east-1`.
+- Bucket privado: `jp-entregaepi-facial-signature-images-4szcxs3x02ft`, AES256, versionado, bloqueio público e política TLS conferidos.
+- Chave facial: `arn:aws:kms:sa-east-1:003020057405:key/e8dc6378-91df-4afa-9c31-108454ee3cca`. Chave pública fixada na API e no signer.
+- Organizations `o-ib8ctml5ly`, política `p-90r8yfl5gk` anexada à própria conta. `DescribeEffectivePolicy` confirmou `services.rekognition.opt_out_policy=optOut`. Nenhuma outra conta foi adicionada.
 
-Os pacotes iniciais e backups foram enviados ao bucket privado autorizado sob `signature-flow/21504c1d4975b3925818597d78f7b67933df22d7/`. O piloto facial isolado continua separado e o usuário informou que o teste real funcionou. Isso não equivale à validação de uma ficha facial certificada no aplicativo principal nem à avaliação de acurácia.
+A restrição existente `EntregaEPIDenyDirectCertificateAccess` precisou de uma exceção **somente para `kms:Sign` na chave facial**. `api-certificate-guard.json` registra a política exata aplicada nesta conta. `NotResource` mantém a negação explícita de assinatura em todas as outras chaves; administração de chaves permanece negada inclusive para a chave facial. Não reaplicar a antiga negação global de `kms:Sign` sem essa exceção, pois ela impediria o selo facial. A política de isolamento é externa à stack facial e sua cópia anterior está no backup privado.
 
-Em 30/10/2026, `DescribeOrganization` confirmou `AWSOrganizationsNotInUseException`. A política proposta em `pilot/facial/infra/rekognition-opt-out.json` impede uso dos conteúdos do Rekognition para melhoria da IA. A configuração inicial de Organizations e a publicação no site precisam ser autorizadas uma única vez. O controle posterior de disponibilidade ficará no painel, sem solicitar liberações nesta conversa.
+Os pacotes publicados e manifesto ficam em `s3://jp-sst-deploy-003020057405-sa-east-1/signature-flow/6970314779f61e43ede369acd4345ebed98d388f/`. Os ZIPs originais e `index.html` estão em `signature-flow/21504c1d4975b3925818597d78f7b67933df22d7/rollback/`; os outros dois HTMLs e a política IAM anterior ficam no diretório `rollback/` da release publicada. Hashes dos ZIPs originais: API `l5uMFirTmdamKcT+uPFh2/lnqeGDBfHJ1DE845YHOUg=`; signer `juL7Sqgr4chBMI7aKUWkf7Dag07mIe9cX6jIFf9Smj0=`.
 
-## Publicação inicial após autorização
+## Ativação e manutenção pelo Master
 
-1. Criar AWS Organizations com todos os recursos, se a conta continuar fora de organização. Não convidar contas nem configurar restrições SCP. Habilitar o tipo `AISERVICES_OPT_OUT_POLICY`, criar a política fornecida e anexá-la à conta 003020057405. Conferir `DescribeEffectivePolicy` com `services.rekognition.opt_out_policy=optOut`.
-2. Criar o change set da stack `jp-entregaepi-facial-signature` em sa-east-1, com `signature-stack.json`; examinar mudanças e eventos de validação antes de executar. Recursos: S3 privado/versionado/cifrado, chave KMS P-256 para evidências, papel de transmissão e política mínima para API. Sem substituir dependências, cofre A1 ou NITGEN. A API só recebe leitura da política Organizations; não pode criar organizações ou mudar políticas.
-3. Obter `GetPublicKey` e, preservando todas as variáveis existentes, configurar na API `FACIAL_BUCKET`, `FACIAL_STREAM_ROLE_ARN`, `FACIAL_ATTESTATION_KEY_ARN`, `FACIAL_QUOTA_TABLE`, `FACIAL_ACCOUNT_ID=003020057405` e `FACIAL_TRUSTED_KEYS` (ARN→SPKI DER base64). Configurar também `FACIAL_TRUSTED_KEYS` no signer isolado, sem permissão de assinatura com a chave facial. A disponibilidade vem do banco e da política efetiva, não de um flag manual de privacidade ou prazo fixado no código.
-4. Publicar os pacotes API/signer a partir dos ZIPs atuais conferidos. Publicar os scripts de interface, widget e página de entrada em release imutável no site público; dados biométricos e documentos privados não são publicados. Validar carregamento e rotas sem autenticação. Manter rollback.
-5. O Master abre o painel, confere a proteção, define validade/limites e confirma a liberação. A empresa controladora precisa definir aviso, base legal, acesso, responsabilidades e conservação. O aceite da ficha não é consentimento genérico de tratamento. Os recursos de evidência têm `Retain`; não aplicar a expiração curta do piloto a recibos reais.
-6. Testar com participação autorizada em celular real: conferir identidade, cadastrar rosto, gerar ficha, assinar facial, certificar A1, baixar original e verificar evidência. Esse teste real do fluxo integrado ainda não foi executado.
+1. Entrar no aplicativo como Master, abrir **Biometria → Biometria facial**, conferir “Privacidade AWS verificada”, escolher validade e limites, confirmar custos/responsabilidades e salvar a liberação. Se a autenticação tiver mais de 15 minutos, entrar novamente com o MFA habitual.
+2. Renovações, pausas e ajustes posteriores são feitos nesse painel, sem atualização de código ou solicitação nesta conversa. A primeira ativação e seus limites não foram escolhidos automaticamente durante a publicação.
+3. A empresa controladora precisa definir aviso, base legal, acesso, responsabilidades e conservação. O aceite da ficha não é consentimento genérico de tratamento. Os recursos de evidência têm `Retain`; não aplicar a expiração curta do piloto a recibos reais.
+4. Testar com participação autorizada em celular real: conferir identidade, cadastrar rosto, gerar ficha, assinar facial, certificar A1, baixar original e verificar evidência. O teste real do piloto anterior foi informado como bem-sucedido pelo usuário; o teste real deste fluxo integrado ainda precisa ser executado.
+
+Na recuperação da infraestrutura, preservar as variáveis existentes e restaurar `FACIAL_BUCKET`, `FACIAL_STREAM_ROLE_ARN`, `FACIAL_ATTESTATION_KEY_ARN`, `FACIAL_QUOTA_TABLE`, `FACIAL_ACCOUNT_ID` e `FACIAL_TRUSTED_KEYS` na API, além de `FACIAL_TRUSTED_KEYS` no signer. A disponibilidade depende do banco e da política efetiva. Nunca contornar a consulta de privacidade com um flag manual.
 
 ## Validação desta implementação
 
@@ -60,8 +64,11 @@ Em 30/10/2026, `DescribeOrganization` confirmou `AWSOrganizationsNotInUseExcepti
 - 6 verificações do painel Master com serviço de configuração real em memória, sem AWS.
 - 9 verificações da nova escolha e captura facial no navegador com provedor sintético, inclusive seis tamanhos, cancelamento e resposta tardia.
 - PDFs digital, facial do servidor e impressão do navegador renderizados e conferidos; amostras de dois itens continuam em uma página.
-- Template da infraestrutura validado com cfn-lint, sem apontamentos.
+- Template validado com cfn-lint e regras específicas cfn-guard, sem apontamentos. Change set e `DescribeEvents` conferidos antes da execução.
 - Bundle real da câmera carregado sem captura automática; bundle do provedor gerado sem substituir dependências do backend existente.
+- Site publicado conferido com navegador real em 390, 768 e 1440 px: sem erro JavaScript, falha de recurso ou rolagem horizontal na entrada; painel Master e bundle real facial presentes.
+- API pública de saúde retornou 200 com a release nova; rotas de fichas e controle facial recusaram acesso sem autenticação com 401.
+- Verificação temporária usando o bundle publicado e o mesmo papel IAM da API confirmou, na AWS real: política de privacidade, leitura da cota, selo KMS conferido com a chave fixada e obtenção das credenciais temporárias do papel de transmissão. Nenhuma captura ou dado de trabalhador foi usado. A função temporária foi excluída após o teste.
 
 Testes automatizados não medem precisão facial, resistência a fraude, leitor físico nem aparelhos físicos. Os limiares 98/99,5 são experimentais, não critérios legais.
 
