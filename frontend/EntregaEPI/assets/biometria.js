@@ -18,6 +18,7 @@
     SDK_ARCH_MISMATCH:Object.freeze({title:'Bibliotecas NITGEN incompatíveis entre si',message:'Os componentes NITGEN instalados não combinam. Use Reparar biometria para procurar outra instalação compatível com o Hamster DX.'})
   });
   const MESSAGES={
+    BIO_PLATFORM:'A captura e a assinatura com o leitor NITGEN exigem um computador Windows com JP Biometria instalado. Neste dispositivo, você pode gerenciar cadastros, consultar fichas e abrir ou imprimir os documentos. A digital do celular não substitui o leitor cadastrado.',
     BIO_BUSY:'Já existe uma operação com o leitor em andamento. Aguarde sua conclusão.',
     BIO_CANCELLED:'A operação com o leitor foi cancelada.',
     BIO_TIMEOUT:'O agente local não respondeu no prazo. A captura não foi repetida automaticamente. Confira o agente e tente novamente.',
@@ -38,6 +39,17 @@
     BIO_FINGER:'Selecione o dedo utilizado na captura.'
   };
   function failure(code,details={}){return Object.assign(new Error(MESSAGES[code]||MESSAGES.BIO_CAPTURE_FAILED),{code,...details});}
+  function platformSupport(nav=root.navigator||{}){
+    const ua=nav.userAgent||'',platform=nav.userAgentData?.platform||nav.platform||'';
+    if(/Android|iPhone|iPad|iPod/i.test(ua)||(/Mac/i.test(platform)&&nav.maxTouchPoints>1))return false;
+    if(/Windows|Win32|Win64/i.test(platform+' '+ua))return true;
+    if(/Mac|Linux|CrOS/i.test(platform+' '+ua))return false;
+    return null; // Unknown platforms can still request an explicit connection.
+  }
+  function loopbackRequestOptions(RequestClass=root.Request){
+    try{new RequestClass('http://127.0.0.1:8789/status',{targetAddressSpace:'loopback'});return {targetAddressSpace:'loopback'};}
+    catch{return {};}
+  }
   function safeCode(value){return typeof value==='string'&&/^[A-Z0-9_:-]{1,60}$/.test(value)?value:undefined;}
   function versionAtLeast(value,minimum){const left=value.split(/[.+-]/).slice(0,3).map(Number),right=minimum.split('.').map(Number);for(let i=0;i<3;i++){if((left[i]||0)>right[i])return true;if((left[i]||0)<right[i])return false;}return true;}
   function unavailableError(status){
@@ -82,6 +94,7 @@
     try{return JSON.parse(text);}catch(error){throw failure('BIO_PROTOCOL');}
   }
   function createClient(options={}){
+    const addressOptions=loopbackRequestOptions();
     const fetcher=options.fetch||((...args)=>root.fetch(...args));
     const queryPermission=options.queryPermission||(()=>root.navigator?.permissions?.query({name:'loopback-network'}));
     const statusTimeout=options.statusTimeout||800,primaryStatusTimeout=options.primaryStatusTimeout||8000,captureTimeout=options.captureTimeout||35000;
@@ -110,7 +123,7 @@
       const abort=()=>controller.abort();signal.addEventListener('abort',abort,{once:true});if(signal.aborted)controller.abort();
       const timer=setTimeout(()=>{timedOut=true;controller.abort();},timeout);
       try{
-        const response=await fetcher(`http://127.0.0.1:${port}${path}`,{method:'GET',...requestOptions,mode:'cors',credentials:'omit',cache:'no-store',redirect:'error',targetAddressSpace:'loopback',signal:controller.signal});
+        const response=await fetcher(`http://127.0.0.1:${port}${path}`,{method:'GET',...requestOptions,mode:'cors',credentials:'omit',cache:'no-store',redirect:'error',...addressOptions,signal:controller.signal});
         if(signal.aborted)throw failure('BIO_CANCELLED');
         if(!response.ok){
           const body=await readJson(response,16000,controller.signal).catch(()=>null);
@@ -272,7 +285,7 @@
     }catch(error){if(signal?.aborted)throw failure('BIO_CANCELLED');if(error.code&&MESSAGES[error.code])throw error;throw failure('BIO_IMAGE_INVALID');}
     finally{clearTimeout(timer);signal?.removeEventListener('abort',abort);image.src='';}
   }
-  const exported=Object.freeze({PORTS,FINGERS,MAX_IMAGE_BYTES,createClient,normalizeStatus,extractImage,prepareCaptureImage,failure,unavailableError});
+  const exported=Object.freeze({PORTS,FINGERS,MAX_IMAGE_BYTES,createClient,normalizeStatus,extractImage,prepareCaptureImage,failure,unavailableError,platformSupport,loopbackRequestOptions});
   root.JP_BIOMETRIA=exported;
   if(typeof module==='object'&&module.exports)module.exports=exported;
 })(typeof window!=='undefined'?window:globalThis);

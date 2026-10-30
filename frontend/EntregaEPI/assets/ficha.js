@@ -46,7 +46,10 @@ const TERMO_APROVADO = MODELO_FICHA_APROVADO.termoResponsabilidade;
     .docx-sign-space{height:16mm}
     .docx-term .docx-sign-note{font:7pt Arial,sans-serif;margin:-2mm 0 3mm;color:#444;text-align:center}
     .docx-cancelled{border:1px solid #111;padding:2mm;margin-bottom:3mm;font-weight:bold;text-align:center}
-    @media screen{body{padding:7.5mm 0 5mm}.sheet.docx-template-a4{min-height:0}}
+    @media screen{body{padding:20px 0}.sheet.docx-template-a4{min-height:0;width:calc(100% - 32px);max-width:194.5mm}.docx-sign-line{max-width:100%}.docx-worker-name,.docx-validation-footer{overflow-wrap:anywhere}.docx-table-scroll{overflow-x:auto;max-width:100%;overscroll-behavior-x:contain}.docx-epi-table{min-width:700px}.docx-table-scroll:focus-visible{outline:2px solid #078448;outline-offset:2px}.docx-scroll-hint{font:14px Arial,sans-serif;color:#465c50;margin:8px 0}.docx-term p{font-size:16px;line-height:1.5}}
+    @media screen and (max-width:520px){.docx-top{grid-template-columns:72px minmax(0,1fr);gap:12px}.docx-logo{height:66px}.docx-title{font-size:17px;margin-top:0;overflow-wrap:anywhere}.docx-meta,.docx-meta tbody,.docx-meta tr,.docx-meta td{display:block}.docx-meta td:nth-child(n){width:100%;font-size:16px;line-height:1.4}.docx-meta td{border-bottom:0}.docx-meta tr:last-child td:last-child{border-bottom:1px solid #4d5964}.docx-term-title{font-size:20px}.docx-term p{text-align:left}.docx-date-spacer{display:block;height:8px}.docx-validation-footer{font-size:11px}}
+    @media screen and (min-width:760px){.docx-scroll-hint{display:none}}
+    @media print{.docx-scroll-hint{display:none}.docx-table-scroll{display:contents}}
   `;
   const NON_EPI = Object.freeze({instrumento:"Instrumento",uniforme:"Uniforme",acessorio:"Acessório",outro_nao_epi:"Outro equipamento (não EPI)"});
   const fingerNames = {
@@ -192,7 +195,7 @@ function equipmentName(item = {}) {
         <p class="docx-local"><strong>Localidade da Empresa:</strong> ${esc(localityWithUf)} <span class="docx-date-spacer"></span> <strong>${mixedMovement?'Data das Movimentações:':returnOnly?'Data da Devolução:':'Data da Entrega:'}</strong> ${esc(returnOnly?formatDate(ficha.datasMovimentacao.devolucao):date)}.</p>
         <div class="docx-sign-area">${fingerprint}${signatureNote}<div class="docx-sign-line"></div><div class="docx-worker-name">${esc(workerName)}</div></div>
       </section>
-      <table class="docx-epi-table${itemMovements?' docx-item-movements':''}" aria-label="Relação dos EPIs"><colgroup>${columnWidths.map(width=>`<col style="width:${width}%">`).join('')}</colgroup><thead><tr><th>QTD</th><th>${ficha.modeloFicha?.id === MODELO_FICHA_ID ? "EQUIPAMENTO" : "EPI"}</th><th>CA</th><th>STATUS</th><th>${itemMovements?'DATA ENTREGA':'DATA'}</th><th>ASSINATURA</th><th>DATA DEVOLUÇÃO</th></tr></thead><tbody>${rows}</tbody></table>${footer}
+      <p class="docx-scroll-hint">Deslize a tabela para consultar todas as colunas.</p><div class="docx-table-scroll" role="region" tabindex="0" aria-label="Equipamentos da ficha — tabela com rolagem horizontal"><table class="docx-epi-table${itemMovements?' docx-item-movements':''}" aria-label="Relação dos EPIs"><colgroup>${columnWidths.map(width=>`<col style="width:${width}%">`).join('')}</colgroup><thead><tr><th>QTD</th><th>${ficha.modeloFicha?.id === MODELO_FICHA_ID ? "EQUIPAMENTO" : "EPI"}</th><th>CA</th><th>STATUS</th><th>${itemMovements?'DATA ENTREGA':'DATA'}</th><th>ASSINATURA</th><th>DATA DEVOLUÇÃO</th></tr></thead><tbody>${rows}</tbody></table></div>${footer}
     </main>`;
     return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${CSS_APROVADO}${CSS_IMPRESSAO}${itemMovements?'.docx-item-movements td:nth-child(1),.docx-item-movements td:nth-child(4){white-space:nowrap}':''}</style></head><body>${content}</body></html>`;
   }

@@ -1,5 +1,5 @@
 window.JP_CONFIG = {
-  version: "12.10.5-ficha",
+  version: "12.10.6-responsivo",
   masterMfaRequired: true,
   appBasePath: "/EntregaEPI/",
   apiBaseUrl: "https://g4pdu3t1va.execute-api.sa-east-1.amazonaws.com",

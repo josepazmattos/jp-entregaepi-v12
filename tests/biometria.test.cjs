@@ -199,3 +199,16 @@ test('SDK: erro 15 aparece com código próprio e nunca como leitor pronto',()=>
   assert.doesNotMatch(bio.unavailableError(status).message,/posição do dedo/);
   assert.equal(bio.normalizeStatus({...ready,errorCode:'NITGEN_15'},8789).ready,false);
 });
+
+test('captura NITGEN distingue Windows de Android, iOS, iPadOS e desktops sem o componente',()=>{
+  assert.equal(bio.platformSupport({userAgent:'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',maxTouchPoints:10}),true);
+  for(const nav of [{userAgent:'Android'},{userAgent:'iPhone'},{platform:'MacIntel',maxTouchPoints:5},{platform:'MacIntel'},{platform:'Linux x86_64'}])assert.equal(bio.platformSupport(nav),false);
+  assert.equal(bio.platformSupport({}),null);
+});
+test('opção de rede local é omitida apenas quando a API Request rejeita o parâmetro',()=>{
+  class Supported{constructor(url,init){assert.equal(init.targetAddressSpace,'loopback');}}
+  class Unsupported{constructor(){throw new TypeError('Unsupported targetAddressSpace');}}
+  assert.deepEqual(bio.loopbackRequestOptions(Supported),{targetAddressSpace:'loopback'});
+  assert.deepEqual(bio.loopbackRequestOptions(Unsupported),{});
+  assert.deepEqual(bio.loopbackRequestOptions(null),{});
+});

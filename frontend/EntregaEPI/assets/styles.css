@@ -637,3 +637,38 @@ h3 { font-size: 18px; line-height: 1.4; letter-spacing: -.01em; }
   .btn { max-width: 100%; white-space: normal; }
   .topbar > .btn { min-height: 44px; font-size: 14px; }
 }
+
+/* Responsive controls, short landscape screens and on-screen keyboards. */
+.app-shell, .main, .screen, .card, .field, .inline > *, .item > *, .header-controls { min-width: 0; }
+input, select, textarea { max-width: 100%; }
+.company-box select, .jp-dialog input, .jp-dialog select, .jp-dialog textarea { font-size: 16px; min-height: 44px; }
+.jp-dialog { max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain; overflow-wrap: anywhere; }
+.jp-dialog::backdrop { touch-action: none; }
+.sidebar { max-height: 100vh; max-height: 100dvh; padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+.item-actions > *, .ficha-state, .section-heading > *, .setup-steps li > div { min-width: 0; overflow-wrap: anywhere; }
+.ficha-state { white-space: normal; }
+.table-scroll { overscroll-behavior-x: contain; }
+#jpDownloadProblem, #jpDownloadsTest { max-width: 100%; min-width: 0; white-space: normal; }
+@media (max-width: 600px) {
+  .jp-dialog { width: calc(100% - 24px); padding: 18px; }
+  .company-box select { font-size: 16px; }
+  .equipment-kind > div { grid-template-columns: minmax(0, 1fr); }
+  .equipment-kind input { flex: 0 0 17px; }
+  .ficha-row { align-items: stretch; flex-direction: column; gap: 12px; }
+  .ficha-row .item-actions { justify-content: flex-start; }
+  .app-header { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+  .main { padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+}
+@media (pointer: coarse) {
+  .btn, .item .btn, .service-card .btn, .text-button, .header-logout, .icon-button, .sidebar-close { min-height: 44px; }
+  .icon-button, .sidebar-close { min-width: 44px; }
+}
+@media (max-height: 500px) and (max-width: 1024px) {
+  .app-header { position: static; }
+  .sidebar { overflow-y: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
+.jp-downloads, .jp-downloads > *, .jp-download-help, .jp-download-final, .jp-download-final > * { min-width: 0; max-width: 100%; }
+.jp-downloads .jp-download-help select { font-size: 16px; }

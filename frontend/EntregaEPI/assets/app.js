@@ -24,7 +24,7 @@ function renderStartupProgress(){
   for(const [badge,id] of [['apiStatusBadge','healthSystem'],['caStatusBadge','healthCA'],['bioStatusBadge','healthBio']]){
     const chip=$(id),source=$(badge);if(!chip||!source)continue;
     const state=source.dataset.state||'idle';chip.dataset.state=state;
-    chip.querySelector('span').textContent=state==='success'?'OK':state==='error'?'Indisponível':state==='warning'?'Atenção':state==='loading'?'Verificando':'Não verificado';
+    chip.querySelector('span').textContent=badge==='bioStatusBadge'&&source.textContent==='Captura no Windows'?'No Windows':state==='success'?'OK':state==='error'?'Indisponível':state==='warning'?'Atenção':state==='loading'?'Verificando':'Não verificado';
     chip.title=source.textContent+' — Abrir configurações';
   }
   const states=['apiStatusBadge','caStatusBadge','bioStatusBadge'].map(id=>$(id)?.dataset.state);
@@ -790,12 +790,13 @@ async function consultarCA(){
 }
 function getBiometricClient(){
   if(!window.JP_BIOMETRIA)throw new Error('Atualize a página para carregar a integração do leitor.');
+  if(window.JP_BIOMETRIA.platformSupport()===false)throw window.JP_BIOMETRIA.failure('BIO_PLATFORM');
   if(!biometricClient)biometricClient=window.JP_BIOMETRIA.createClient();
   return biometricClient;
 }
 function setBiometricControls(busy){
   biometricBusy=busy;
-  ['bioTestButton','bioOpenTestButton','bioStartButton','startupBioButton','startupBioStartButton'].forEach(id=>{if($(id))$(id).disabled=busy;});
+  ['bioTestButton','bioOpenTestButton','bioStartButton','startupBioButton','startupBioStartButton'].forEach(id=>{if($(id))$(id).disabled=busy||window.JP_BIOMETRIA?.platformSupport()===false;});
   if($('bioCaptureButton'))$('bioCaptureButton').disabled=busy||biometricCapture?.confirmationStarted===true;
   if($('bioRegisterButton'))$('bioRegisterButton').disabled=busy||!biometricCapture?.image||!biometricCapture?.fichaId;
   if($('bioFingerSelect'))$('bioFingerSelect').disabled=busy||biometricCapture?.confirmationStarted===true;
@@ -845,7 +846,16 @@ function showBiometricFailure(error,step='conexao'){
   setText('bioOutput',JSON.stringify({etapa:step,codigo:code,...(Number.isInteger(error.httpStatus)?{http:error.httpStatus}:{}),tentativas:biometricClient?.getDiagnostics()||[]},null,2));
   return message;
 }
+function showBiometricPlatform(){
+  setStatusBadge('bioStatusBadge','Captura no Windows','warning');
+  setText('bioStatusTitle','Use um computador Windows para capturar digitais');
+  setText('bioStatusText',window.JP_BIOMETRIA.failure('BIO_PLATFORM').message);
+  setText('bioCheckedAt','Consultas e documentos disponíveis neste dispositivo.');
+  setText('bioOutput','A captura local não foi iniciada: este dispositivo não executa o componente Windows.');
+  ['bioTestButton','bioOpenTestButton','bioStartButton','startupBioButton','startupBioStartButton','bioCaptureButton'].forEach(id=>{if($(id))$(id).disabled=true;});
+}
 function requestBiometricStart(){
+  if(window.JP_BIOMETRIA?.platformSupport()===false){showBiometricPlatform();return false;}
   if(Date.now()-biometricStartAt<3000)return false;
   biometricStartAt=Date.now();
   const frame=document.createElement('iframe');frame.hidden=true;frame.setAttribute('title','Abrir JP Biometria');frame.src='jpbiometria://start';document.body.appendChild(frame);
@@ -864,6 +874,7 @@ function startBiometriaLocal(){
   return testBiometriaLocal({started:true});
 }
 async function testBiometriaLocal({automatic=false,started=false,afterInstall=false}={}){
+  if(window.JP_BIOMETRIA?.platformSupport()===false){showBiometricPlatform();return;}
   if(biometricBusy)return;
   const generation=biometricGeneration,session=sessionGeneration,controller=new AbortController();biometricAbort=controller;
   setBiometricControls(true);setStatusBadge('bioStatusBadge','Verificando','loading');
@@ -903,6 +914,7 @@ async function testBiometriaLocal({automatic=false,started=false,afterInstall=fa
 }
 function openBiometricCapture(fichaId=''){
   if(fichaId){imprimirFicha(fichaId);return;}
+  if(window.JP_BIOMETRIA?.platformSupport()===false){activateScreen('biometria');showBiometricPlatform();return;}
   if(biometricBusy)return;
   let ficha=null;
   if(fichaId){
