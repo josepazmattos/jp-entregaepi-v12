@@ -1,0 +1,21 @@
+let buckets = Resources.*[ Type == 'AWS::S3::Bucket' ]
+let tables = Resources.*[ Type == 'AWS::DynamoDB::Table' ]
+rule private_encrypted_images {
+  %buckets.Properties.PublicAccessBlockConfiguration.BlockPublicAcls == true
+  %buckets.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy == true
+  %buckets.Properties.PublicAccessBlockConfiguration.IgnorePublicAcls == true
+  %buckets.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets == true
+  %buckets.Properties.BucketEncryption exists
+  %buckets.Properties.VersioningConfiguration.Status == 'Enabled'
+  %buckets.Properties.LifecycleConfiguration exists
+  %buckets.DeletionPolicy == 'Retain'
+}
+rule temporary_encrypted_records {
+  %tables.Properties.SSESpecification.SSEEnabled == true
+  %tables.Properties.TimeToLiveSpecification.Enabled == true
+  %tables.DeletionPolicy == 'Retain'
+}
+rule authenticated_route {
+  Resources.Route.Properties.AuthorizationType == 'JWT'
+  Resources.Function.Properties.ReservedConcurrentExecutions == 2
+}

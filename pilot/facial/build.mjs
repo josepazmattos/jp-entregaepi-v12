@@ -1,0 +1,13 @@
+import {build} from 'esbuild';
+import {mkdir,copyFile,writeFile,readFile} from 'node:fs/promises';
+await mkdir('dist/web',{recursive:true});await mkdir('dist/lambda',{recursive:true});
+await build({entryPoints:['web/app.jsx'],bundle:true,minify:true,outfile:'dist/web/app.js',platform:'browser',target:['safari15','chrome100'],define:{'process.env.NODE_ENV':'"production"'},legalComments:'linked'});
+await build({entryPoints:['backend/handler.mjs'],bundle:true,minify:true,outfile:'dist/lambda/index.mjs',platform:'node',target:'node22',format:'esm',packages:'bundle',banner:{js:'import { createRequire } from "node:module"; const require = createRequire(import.meta.url);'}});
+await copyFile('web/index.html','dist/web/index.html');
+await copyFile('../../backend/src/data/fonts/DejaVuSerif.ttf','dist/lambda/font.ttf');
+await copyFile('../../backend/src/data/fonts/DejaVuSerif-Bold.ttf','dist/lambda/font-bold.ttf');
+const apiUrl=process.env.PILOT_API_URL||'https://not-configured.invalid';
+await writeFile('dist/web/config.js','window.JP_FACIAL_CONFIG = '+JSON.stringify({apiUrl,version:'0.1.0'})+';\n');
+const pkg=JSON.parse(await readFile('package.json','utf8'));
+await writeFile('dist/manifest.json',JSON.stringify({version:pkg.version,dependencies:pkg.dependencies},null,2));
+console.log('Built isolated web and Lambda packages.');

@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+process.env.USER_POOL_ID='sa-east-1_3FNCoTvr0';process.env.CLIENT_ID='2q2inha617oeer4vb0m0hjoja0';
+const {createHandler}=await import('../backend/handler.mjs');
+const event=(method='GET',path='/records')=>({rawPath:path,requestContext:{http:{method}},headers:{authorization:'Bearer '+'a'.repeat(60)}});
+const base={verify:async()=>({sub:'master-a','cognito:groups':['MASTER']}),hasMfa:async()=>true,api:{list:async()=>[],begin:async()=>({})}};
+test('missing token returns 401',async()=>{const e=event();e.headers={};assert.equal((await createHandler(base)(e)).statusCode,401);});
+test('invalid signature returns 401',async()=>{assert.equal((await createHandler({...base,verify:async()=>{throw Error('bad jwt');}})(event())).statusCode,401);});
+test('non-master is denied',async()=>{assert.equal((await createHandler({...base,verify:async()=>({sub:'company','cognito:groups':['EMPRESA']})})(event())).statusCode,403);});
+test('master without established MFA session is denied',async()=>{assert.equal((await createHandler({...base,hasMfa:async()=>false})(event())).statusCode,403);});
+test('authorized master can list only its records',async()=>{let owner;const r=await createHandler({...base,api:{list:async value=>{owner=value;return [];}}})(event());assert.equal(r.statusCode,200);assert.equal(owner,'master-a');});
+test('rejects image upload and oversized body',async()=>{const e=event('POST','/sessions');e.body='x'.repeat(17000);assert.equal((await createHandler(base)(e)).statusCode,413);});
+test('health does not expose personal data or credentials',async()=>{const e=event('GET','/health');e.headers={};const r=await createHandler(base)(e);assert.equal(r.statusCode,200);assert.equal(JSON.parse(r.body).testOnly,true);assert(!/token|secret|bucket|table/i.test(r.body));});
