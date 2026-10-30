@@ -1,0 +1,23 @@
+{
+  "reviewDate":"2026-10-30",
+  "sources":[
+    {"id":"NR6","title":"MTE - NR-6 atualizada em 2025, itens 6.5.1(d), 6.5.1.1 e 6.7","url":"https://www.gov.br/trabalho-e-emprego/pt-br/acesso-a-informacao/participacao-social/conselhos-e-orgaos-colegiados/comissao-tripartite-partitaria-permanente/normas-regulamentadora/normas-regulamentadoras-vigentes/nr-06-atualizada-2025-ii.pdf"},
+    {"id":"NR1","title":"MTE - NR-1, texto vigente desde 26/05/2026, itens 1.6.2 a 1.6.5","url":"https://www.gov.br/trabalho-e-emprego/pt-br/acesso-a-informacao/participacao-social/conselhos-e-orgaos-colegiados/comissao-tripartite-partitaria-permanente/normas-regulamentadora/normas-regulamentadoras-vigentes/nr-01-atualizada-2025-i-3.pdf"},
+    {"id":"MP","title":"Câmara - MP 2.200-2/2001, art. 10, texto atualizado","url":"https://www2.camara.leg.br/legin/fed/medpro/2001/medidaprovisoria-2200-2-24-agosto-2001-391394-normaatualizada-pe.pdf"},
+    {"id":"CPC","title":"Câmara - CPC, arts. 369, 411 e 429","url":"https://www2.camara.leg.br/legin/fed/lei/2015/lei-13105-16-marco-2015-780273-normaatualizada-pl.html"},
+    {"id":"LGPD","title":"Câmara - Lei 13.709/2018, arts. 5, 6, 11, 16, 18, 33, 38 e 46","url":"https://www2.camara.leg.br/legin/fed/lei/2018/lei-13709-14-agosto-2018-787077-normaatualizada-pl.html"},
+    {"id":"ASSINATURAS","title":"Câmara - Lei 14.063/2020, arts. 2 a 4","url":"https://www2.camara.leg.br/legin/fed/lei/2020/lei-14063-23-setembro-2020-790659-normaatualizada-pl.html"},
+    {"id":"ANPD","title":"ANPD - Agenda Regulatória; tema de biometria em andamento","url":"https://www.gov.br/anpd/pt-br/assuntos/regulacao/agenda-regulatoria-1"},
+    {"id":"TRANSFERENCIA","title":"ANPD - Resolução 19/2024, transferência internacional","url":"https://www.gov.br/anpd/pt-br/acesso-a-informacao/institucional/atos-normativos/regulamentacoes_anpd/resolucao-cd-anpd-no-19-de-23-de-agosto-de-2024"},
+    {"id":"LIVENESS","title":"AWS - Face Liveness e funcionamento","url":"https://docs.aws.amazon.com/rekognition/latest/dg/face-liveness.html"},
+    {"id":"REQUISITOS","title":"AWS - Requisitos de câmera, dispositivos e navegadores","url":"https://docs.aws.amazon.com/rekognition/latest/dg/face-liveness-requirements.html"},
+    {"id":"FAQ","title":"AWS - Regiões, imagens e opção de não usar conteúdo para melhoria de IA","url":"https://docs.aws.amazon.com/rekognition/latest/dg/face-liveness-faq.html"},
+    {"id":"SESSAO","title":"AWS - CreateFaceLivenessSession: uso único e expiração","url":"https://docs.aws.amazon.com/rekognition/latest/APIReference/API_CreateFaceLivenessSession.html"},
+    {"id":"COMPARACAO","title":"AWS - CompareFaces: limitações e revisão humana","url":"https://docs.aws.amazon.com/rekognition/latest/APIReference/API_CompareFaces.html"},
+    {"id":"SDK","title":"AWS Amplify - Componente e erros, inclusive paisagem em celular","url":"https://ui.docs.amplify.aws/react/connected-components/liveness"},
+    {"id":"WEBAUTHN","title":"W3C - WebAuthn, privacidade da biometria local","url":"https://www.w3.org/TR/2026/CR-webauthn-3-20260113/"},
+    {"id":"CAMERA","title":"W3C - Media Capture and Streams","url":"https://w3c.github.io/mediacapture-main/"},
+    {"id":"PRECO","title":"AWS - Cobrança por verificações; valores variam por região e volume","url":"https://aws.amazon.com/rekognition/pricing/"},
+    {"id":"LEGITIMO","title":"ANPD - Legítimo interesse não é base para dados sensíveis","url":"https://www.gov.br/anpd/pt-br/assuntos/noticias/anpd-lanca-guia-orientativo-sobre-legitimo-interesse"}
+  ]
+}

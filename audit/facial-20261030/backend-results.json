@@ -1,0 +1,10 @@
+{
+  "date": "2026-10-30",
+  "existingApplicationUnchanged": true,
+  "tests": 32,
+  "passed": 32,
+  "failed": 0,
+  "command": "node --test backend/test/biometria-login.test.js backend/test/ficha-capture-api.test.js backend/test/jpged-service.test.js",
+  "syntheticData": true,
+  "physicalReaderTested": false
+}

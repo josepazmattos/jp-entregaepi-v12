@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-30",
+  "scope": "Protótipo isolado, câmera sintética, nenhuma pessoa real, nenhum provedor facial ou produção",
+  "checks": [
+    {
+      "name": "Não abre a câmera sem ação do usuário",
+      "passed": true
+    },
+    {
+      "name": "Captura de vídeo sintético sem solicitar microfone",
+      "passed": true
+    },
+    {
+      "name": "Capturar imagem não marca identidade, prova de vida ou assinatura como verificadas",
+      "passed": true
+    },
+    {
+      "name": "Prévia e controles cabem em seis tamanhos de tela",
+      "passed": true
+    },
+    {
+      "name": "Trocar de facial para digital encerra a câmera e seleciona somente um método",
+      "passed": true
+    },
+    {
+      "name": "Sem internet mantém pendência e não declara assinatura",
+      "passed": true
+    },
+    {
+      "name": "Perda de conexão encerra câmera e invalida a tentativa",
+      "passed": true
+    },
+    {
+      "name": "Recusa de permissão simulada apresenta orientação e mantém pendência",
+      "passed": true
+    },
+    {
+      "name": "HTTP fora de localhost não permite iniciar a câmera",
+      "passed": true
+    },
+    {
+      "name": "Nenhum envio externo de vídeo, imagem ou dados biométricos",
+      "passed": true
+    }
+  ],
+  "physicalDevices": false,
+  "faceMatchingTested": false,
+  "livenessTested": false,
+  "passed": true,
+  "browser": "134.0.6998.35"
+}
