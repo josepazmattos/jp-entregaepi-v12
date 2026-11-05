@@ -277,7 +277,7 @@ export function createStore({ tableName = '', client = null, allowMemory = false
     const cnpj = normalizedCnpj(data.cnpj);
     const login = String(data.login || '').trim().toLowerCase();
     if (!cnpj || !login) throw storageError('Informe CNPJ e login para criar o acesso.', 'CADASTRO_INVALIDO', 400);
-    const fields = ['nome', 'cnpj', 'login', 'localidade', 'uf', 'responsavel', 'email', 'telefone', 'logoDataUrl'];
+    const fields = ['nome', 'cnpj', 'login', 'endereco', 'localidade', 'uf', 'responsavel', 'email', 'telefone', 'logoDataUrl'];
     if(data.inscricaoTipo==='CAEPF')fields.push('inscricaoTipo');
     const immutableRequest = Object.fromEntries(fields.map(key => [key, key === 'cnpj' ? cnpj : key === 'login' ? login : data[key] || '']));
     const requestHash = digest(JSON.stringify(canonical({ empresaId, data: immutableRequest })));

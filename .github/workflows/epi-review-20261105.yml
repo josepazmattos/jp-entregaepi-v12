@@ -20,6 +20,9 @@ jobs:
       - run: npm test --prefix backend
       - run: npm run test:unit --prefix tests
       - run: node tests/epi-tools-browser.cjs
+      - run: npm ci --prefix pilot/facial --no-audit --no-fund
+      - run: node build-production.mjs
+        working-directory: pilot/facial
       - run: node tests/signature-flow-browser.cjs
       - run: node tests/facial-control-browser.cjs
       - uses: actions/upload-artifact@v4

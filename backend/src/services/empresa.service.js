@@ -2,7 +2,7 @@ import { httpError } from '../middleware/auth.js';
 import { textField } from '../routes/_helpers.js';
 import { companyEditableFields, normalizeEmployerRegistration, normalizeCompanyLogin, suggestCompanyLogin } from './empresa-validation.js';
 
-const publicFields = ['id', 'nome', 'cnpj', 'inscricaoTipo', 'login', 'localidade', 'uf', 'responsavel', 'email', 'telefone', 'logoDataUrl', 'logoUrl', 'logo', 'status', 'acessoStatus', 'createdAt', 'updatedAt', '_version'];
+const publicFields = ['id', 'nome', 'cnpj', 'inscricaoTipo', 'login', 'endereco', 'localidade', 'uf', 'responsavel', 'email', 'telefone', 'logoDataUrl', 'logoUrl', 'logo', 'status', 'acessoStatus', 'createdAt', 'updatedAt', '_version'];
 export function publicCompany(item) {
   if (!item) return null;
   return Object.fromEntries(publicFields.filter(key => item[key] != null).map(key => [key, item[key]]));

@@ -1,0 +1,21 @@
+{
+  "bucket": "jp-entregaepi-relatorios-003020057405",
+  "region": "sa-east-1",
+  "prefix": "exports/",
+  "publicAccessBlock": true,
+  "objectOwnership": "BucketOwnerEnforced",
+  "encryption": "AES256",
+  "requireTLS": true,
+  "lifecycleExpirationDays": 1,
+  "downloadAvailabilitySeconds": 3600,
+  "presignedUrlSeconds": 60,
+  "metadataTable": "jp-entregaepi-v12",
+  "metadataEntity": "relatorio_export",
+  "auditEntity": "relatorio_audit",
+  "iamRole": "jp-entregaepi-v12-lambda-role",
+  "iamPolicyName": "EntregaEPIReportsOnly",
+  "iamPolicy": {
+    "Version": "2012-10-17",
+    "Statement": [{"Effect": "Allow", "Action": ["s3:PutObject", "s3:GetObject"], "Resource": "arn:aws:s3:::jp-entregaepi-relatorios-003020057405/exports/*"}]
+  }
+}
