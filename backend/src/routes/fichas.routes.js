@@ -17,6 +17,20 @@ router.post('/', async (req, res) => {
   const body = objectBody(req);
   const empresaId = empresaIdFrom(req);
   if (!empresaId) return fail(res, 400, 'empresaId é obrigatório');
+  // Replay is checked before current catalog/worker/template validation: a retry
+  // must return the original delivery even if those records changed meanwhile.
+  const requestId=body.requestId?textField(body.requestId,{field:'Solicitação',max:100,required:true}):null;
+  const scope=`delivery:${empresaId}:${req.auth.sub}`;
+  const requestHash=createHash('sha256').update(JSON.stringify({trabalhadorId:body.trabalhadorId,items:body.itens,epiId:body.epiId,quantidade:body.quantidade,tipo:body.tipo,data:body.data,kitId:body.kitId,kitVersion:body.kitVersion,orientacao:body.orientacao,modeloFicha:body.modeloFicha,itensConferidos:body.itensConferidos})).digest('hex');
+  const replay=async()=>{
+    if(!requestId)return null;
+    const receipt=await storage.getReceipt(scope,requestId);if(!receipt)return null;
+    if(receipt.result.hash!==requestHash)throw httpError(409,'Solicitação já utilizada com outros itens.');
+    const saved=await get('ficha',receipt.result.id);
+    if(!saved)throw httpError(409,'A entrega desta solicitação não está disponível. Confira o histórico.');
+    assertRecordAccess(req,saved);return saved;
+  };
+  const previous=await replay();if(previous)return ok(res,{item:previous});
   const trabalhadorId = textField(body.trabalhadorId, { required: true, field: 'Trabalhador', max: 128 });
   const [empresa, trabalhador] = await Promise.all([get('empresa', empresaId), get('trabalhador', trabalhadorId)]);
   if (!empresa) return fail(res, 404, 'Empresa não encontrada');
@@ -44,13 +58,9 @@ router.post('/', async (req, res) => {
     built.kitSnapshot={id:kit.id,nome:kit.nome,funcao:kit.funcao,version:kit._version};
   }
   let item;
-  if(body.requestId){
-    const requestId=textField(body.requestId,{field:'Solicitação',max:100,required:true});
-    const scope=`delivery:${empresaId}:${req.auth.sub}`;
-    const hash=createHash('sha256').update(JSON.stringify({trabalhadorId,items:itens,data:body.data,kitId:body.kitId,kitVersion:body.kitVersion,orientacao:body.orientacao})).digest('hex');
-    const replay=async()=>{const receipt=await storage.getReceipt(scope,requestId);if(!receipt)return null;if(receipt.result.hash!==hash)throw httpError(409,'Solicitação já utilizada com outros itens.');return get('ficha',receipt.result.id);};
+  if(requestId){
     item=await replay();
-    if(!item){const id=randomUUID();try{await storage.transact({scope,expectedRevision:await storage.readScope(scope),mutationId:requestId,operations:[{type:'create',entity:'ficha',id,data:built}],result:{id,hash}});item=await get('ficha',id);}catch(error){item=await replay();if(!item)throw error;}}
+    if(!item){const id=randomUUID();try{await storage.transact({scope,expectedRevision:await storage.readScope(scope),mutationId:requestId,operations:[{type:'create',entity:'ficha',id,data:built}],result:{id,hash:requestHash}});item=await get('ficha',id);}catch(error){item=await replay();if(!item)throw error;}}
   } else item=await create('ficha',built);
   ok(res, { item });
 });
