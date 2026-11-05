@@ -4,6 +4,7 @@ const facialAssetsBase=new URL('.',document.currentScript?.src||location.href).h
 const operationWindows=new Set(),operationDialogs=new Set(),operationControllers=new Set();
 function closeOperations(){
   if(typeof resetJpged==='function')resetJpged();
+  if(typeof resetEpiTools==='function')resetEpiTools();
   const editing=Boolean(workerEdit);workerEdit=null;
   const form=$('trabalhadorForm');if(form&&editing){form.reset();setText('workerFormTitle','Novo trabalhador');$('workerEditCancel')?.classList.add('hidden');}
   for(const controller of operationControllers)controller.abort();operationControllers.clear();
@@ -60,7 +61,7 @@ function editCompany(id){
   if(!isMaster())return;
   const item=cache.empresas.find(x=>x.id===id);if(!item)return;
   const context=operationContext(),dialog=dialogShell(document,'Editar empresa',item.nome||'Empresa selecionada');
-  const fields=[['nome','Nome da empresa'],['localidade','Localidade'],['uf','UF'],['responsavel','Responsável'],['email','E-mail'],['telefone','Telefone']];
+  const fields=[['nome','Nome da empresa'],['endereco','Endereço'],['localidade','Localidade'],['uf','UF'],['responsavel','Responsável'],['email','E-mail'],['telefone','Telefone']];
   if(isMaster()&&item.acessoStatus==='ativo')fields.splice(1,0,['login','Login da empresa']);
   dialog.querySelector('.dialog-content').innerHTML='<form id="companyEditForm">'+fields.map(([key,label])=>`<label for="company-edit-${key}">${label}</label><input id="company-edit-${key}" name="${key}" value="${escapeHtml(item[key]||'')}" ${key==='nome'?'required':''} ${key==='uf'?'maxlength="2"':''}>`).join('')+`<p class="field-help">${item.inscricaoTipo==='CAEPF'?'CAEPF':'CNPJ'}: ${escapeHtml(item.cnpj)} · Login: ${escapeHtml(item.login||'—')}</p><button type="submit" class="btn btn-primary" style="margin-top:16px">Salvar alterações</button></form>`;
   const form=dialog.querySelector('form');form.onsubmit=async event=>{
@@ -261,7 +262,7 @@ function createSignatureDialog(preview,title,worker){
 function renderSignatureChoice(preview,worker,ficha,facial){
   const dialog=createSignatureDialog(preview,'Conferir ficha e escolher assinatura',worker),content=dialog.querySelector('.dialog-content');
   const term=ficha.modeloFicha?.termoAssinatura;
-  content.innerHTML=`<p>Ficha <strong>${escapeHtml(ficha.numero||ficha.id)}</strong> gerada. Confira os itens, as quantidades e as datas na ficha antes de continuar.</p>${term?`<p class="signature-term">${escapeHtml(term)}</p><label style="display:flex;gap:12px;align-items:flex-start"><input id="signatureAcceptance" type="checkbox" style="width:24px;height:24px;flex:none"><span>Conferi a ficha e confirmo o termo acima.</span></label>`:'<p>Esta ficha usa um modelo anterior. A assinatura digital permanece disponível.</p>'}<p>Escolha uma forma de assinatura para esta ficha.</p>`;
+  content.innerHTML=`<p>Ficha <strong>${escapeHtml(ficha.numero||ficha.id)}</strong> gerada. Confira os itens, as quantidades e as datas na ficha antes de continuar.</p>${ficha.modeloFicha?.termoResponsabilidade?`<h3>Termo de Responsabilidade</h3><div style="white-space:pre-line">${escapeHtml(ficha.modeloFicha.termoResponsabilidade)}</div>`:''}${term?`<p class="signature-term">${escapeHtml(term)}</p><label style="display:flex;gap:12px;align-items:flex-start"><input id="signatureAcceptance" type="checkbox" style="width:24px;height:24px;flex:none"><span>Conferi a ficha e confirmo o termo acima.</span></label>`:'<p>Esta ficha usa um modelo anterior. A assinatura digital permanece disponível.</p>'}<p>Escolha uma forma de assinatura para esta ficha.</p>`;
   const accept=content.querySelector('#signatureAcceptance');
   const digital=dialog.ownerDocument.createElement('button'),face=dialog.ownerDocument.createElement('button');
   digital.type=face.type='button';digital.className=face.className='btn btn-primary';digital.textContent='1 · Biometria Digital';face.textContent='2 · Biometria Facial';digital.id='chooseDigital';face.id='chooseFacial';

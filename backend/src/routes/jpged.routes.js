@@ -65,7 +65,7 @@ export function createGedRouter({service=createGedService({ged:gedStorage,store}
   router.get('/v10/destino',requireMaster,async(req,res)=>ok(res,await v10.status(req.gedCompany)));
   router.get('/v10/destinos',requireMaster,async(req,res)=>ok(res,await v10.search(req.gedCompany,req.query.q||'')));
   router.post('/v10/destino',requireMaster,async(req,res)=>ok(res,await v10.save(req.gedCompany,req.auth.sub,objectBody(req))));
-  router.get('/documentos',async(req,res)=>ok(res,await service.documents(company(req),req.query.cursor||'')));
+  router.get('/documentos',async(req,res)=>ok(res,await service.documents(company(req),req.query.cursor||'',req.query.q||'')));
   router.get('/documentos/:id/download',async(req,res)=>{if(req.query.versao&&req.query.versao!=='original')throw httpError(400,'Versão de impressão inválida.','JPGED_VERSAO');ok(res,await service.download(company(req),req.auth.sub,req.params.id,{original:req.query.versao==='original'}));});
   router.post('/documentos/:id/atualizar-layout',async(req,res)=>ok(res,await service.reissueLayout(company(req),req.auth.sub,req.params.id)));
   router.post('/fichas/:id/preparar',async(req,res)=>{const ficha=await database.get('ficha',req.params.id);if(!ficha)throw httpError(404,'Ficha não encontrada.');assertRecordAccess(req,ficha);ok(res,await service.prepare(ficha,req.auth.sub));});

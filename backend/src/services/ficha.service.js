@@ -12,6 +12,7 @@ export function fichaSnapshots(empresa, trabalhador) {
       nome: textField(empresa.nome || empresa.name),
       cnpj: textField(empresa.cnpj),
       ...(empresa.inscricaoTipo==='CAEPF'?{inscricaoTipo:'CAEPF'}:{}),
+      endereco: textField(empresa.endereco),
       localidade: textField(empresa.localidade || empresa.city),
       uf: textField(empresa.uf || empresa.UF),
       logoDataUrl: typeof empresa.logoDataUrl === 'string' ? empresa.logoDataUrl : '',
@@ -21,6 +22,7 @@ export function fichaSnapshots(empresa, trabalhador) {
     trabalhadorSnapshot: {
       nomeCompleto: textField(trabalhador.nomeCompleto || trabalhador.nome || trabalhador.name),
       cpf: textField(trabalhador.cpf),
+      setor: textField(trabalhador.setor), dataAdmissao: textField(trabalhador.dataAdmissao), status: textField(trabalhador.status),
       funcao: textField(trabalhador.funcao || trabalhador.job || trabalhador.cargo),
       matriculaESocial: textField(trabalhador.matriculaESocial || trabalhador.matriculaEsocial || trabalhador.esocial, { field: 'Matrícula eSocial', max: Infinity }),
       localidade: textField(trabalhador.localidade || trabalhador.city)
@@ -60,7 +62,7 @@ export function buildFicha({ empresaId, empresa, trabalhador, items, body, actor
       ...classifyEquipment(epi, requested.enquadramento),
       fabricante: textField(epi.fabricante || epi.manufacturer),
       modelo: textField(epi.modelo),
-      tamanho: textField(epi.tamanho),
+      tamanho: textField(requested.tamanho ?? epi.tamanho,{field:"Tamanho",max:80}),
       validade: textField(epi.validade || epi.validity),
       quantidade,
       tipoMovimentacao,
@@ -80,7 +82,19 @@ export function buildFicha({ empresaId, empresa, trabalhador, items, body, actor
       throw httpError(400, 'O Termo de Responsabilidade diverge do modelo atual. Atualize o aplicativo para emitir a ficha.', 'TERMO_FICHA_DIVERGENTE');
     }
   }
+  const orientacao = {confirmada:false};
+  if(body.orientacao != null) {
+    if(typeof body.orientacao !== 'object' || Array.isArray(body.orientacao) || typeof body.orientacao.confirmada !== 'boolean') throw httpError(400,'Orientação inválida.');
+    if(body.orientacao.confirmada) {
+      orientacao.confirmada=true;
+      if(!body.orientacao.data) throw httpError(400,'Informe a data da orientação.');
+      orientacao.data=fichaDate(body.orientacao.data);
+      orientacao.responsavel=textField(body.orientacao.responsavel,{required:true,field:'Responsável pela orientação',max:200});
+      orientacao.referencia=textField(body.orientacao.referencia,{field:'Referência da orientação',max:400});
+    }
+  }
   return {
+    orientacao,
     numero: `EPI-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 8).toUpperCase()}`,
     empresaId,
     trabalhadorId: trabalhador.id,

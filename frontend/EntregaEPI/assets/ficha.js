@@ -4,12 +4,12 @@
 // Cada ficha conserva o texto e a versão confirmados pelo trabalhador.
 const MODELO_LEGADO_ID = "JP-DOCX-11.10.6";
 const TERMO_LEGADO = "Declaro sob minha inteira responsabilidade a guarda e conservação dos equipamentos de proteção individual constantes nesta ficha-controle. Assumo também a responsabilidade de os devolver integralmente ou parcialmente, quando solicitado, ou por ocasião de eventual rescisão de contrato, na data do respectivo aviso de qualquer das partes.\n\nTambém estou ciente que, na eventualidade de danificar ou extraviar o equipamento por ato doloso ou culposo, estarei sujeito ao desconto do valor em meu salário, conforme parágrafo único do art. 158 da CLT. Também me comprometo a utilizá-los de forma correta e de acordo com as instruções de treinamento referentes ao uso correto, guarda conservação e higienização dos EPI, recebidas na presente data, fornecidas por profissional Técnico de Segurança do Trabalho. Também estou ciente que a não utilização dos mesmos em minhas atividades profissionais, é ato faltoso e passível de punições legais e disciplinares de acordo com a Consolidação das leis do Trabalho (CLT) – Capítulo V – Seção I – Art. 158o. c/c Norma Regulamentadora (NR) - NR-1 e NR-6, alínea 6.7, disciplinadas pela Portaria MTb. nº 3.214/78 e artigo 191, itens I e II da CLT e súmula n. 80 do TST.";
-const MODELO_FICHA_ID = "JP-FICHA-20261030-ASSINATURA";
+const MODELO_FICHA_ID = "JP-EPI-2026.11";
 const TERMO_ASSINATURA_ID = "JP-ASSINATURA-BIOMETRICA-20261030-v1";
 const TERMO_ASSINATURA = "Após conferir os itens, quantidades, datas e declarações desta ficha, confirmo seu conteúdo e reconheço a captura biométrica realizada por mim, digital ou facial conforme o método registrado, como minha assinatura eletrônica deste documento. Esta confirmação é vinculada exclusivamente a esta ficha e às evidências de autoria e integridade registradas pelo sistema.";
-const RESPONSABILIDADE = "Comprometo-me a utilizar os EPIs para a finalidade prevista, cumprir as orientações recebidas e comunicar dúvidas, danos, extravio ou condições que os tornem impróprios para uso. Responsabilizo-me pela limpeza, guarda e conservação que me competem, sem afastar as obrigações da empresa previstas na NR-6. A recusa injustificada ao uso dos EPIs poderá caracterizar ato faltoso, conforme o art. 158 da CLT. Eventual desconto por dano dependerá de apuração e do atendimento ao art. 462, § 1º, da CLT; não será automático nem decorrente do desgaste normal.";
+const RESPONSABILIDADE = "a) Utilizarei os EPIs somente para sua finalidade, conforme as orientações da empresa e do fabricante, observando riscos, limitações de proteção e ajustes necessários.\n\nb) Responsabilizo-me pela limpeza, guarda e conservação e comunicarei imediatamente danos, extravio ou condições impróprias para uso. Higienização especializada, manutenção aplicável e substituição imediata do EPI danificado ou extraviado cabem à empresa.\n\nc) Devolverei os itens quando solicitado, para substituição ou ao término do vínculo, mediante registro, ressalvados os consumíveis e descartáveis utilizados regularmente. A reposição necessária não depende da apuração de responsabilidade.\n\nd) A recusa injustificada ao uso do EPI ou às instruções de segurança constitui ato faltoso, conforme o art. 158, parágrafo único, da CLT. Medidas disciplinares dependem da apuração do caso e da legislação, sem justa causa automática.\n\ne) O fornecimento é gratuito. Esta ficha não autoriza descontos genéricos. Eventual desconto por dano depende de apuração e dos requisitos do art. 462, § 1º, da CLT: culpa comprovada com ajuste prévio, ou dolo comprovado. Desgaste normal e riscos da atividade não são cobrados.\n\nf) As informações de uso, ajuste, riscos protegidos, limitações, manutenção, substituição, limpeza, higienização, guarda e conservação seguem o item 6.7.2 da NR-6. A orientação efetivamente realizada é registrada em campo próprio; esta ficha não substitui os registros de treinamento exigíveis.";
 const TREINAMENTO_ANTERIOR = "Declaro que fui treinado e orientado anteriormente à entrega dos EPIs recebidos, quanto ao uso, ajuste, limitações de proteção, limpeza, guarda, conservação e necessidade de substituição.";
-const RECEBIMENTO = "Declaro ter recebido gratuitamente os itens relacionados nesta ficha, nas quantidades e datas de entrega discriminadas.";
+const RECEBIMENTO = "Declaro ter recebido gratuitamente os itens desta ficha, nas quantidades e datas discriminadas, observados os arts. 166 e 167 da CLT e a NR-6 quanto aos EPIs.";
 const DEVOLUCAO = "Confirmo a devolução dos itens relacionados nesta ficha, nas quantidades e datas de devolução discriminadas.";
 const MOVIMENTACAO_MISTA = "Confirmo as movimentações discriminadas nesta ficha: recebi gratuitamente os itens indicados como entrega ou troca e devolvi os indicados como devolução, nas respectivas quantidades e datas.";
 function modeloFichaParaItens(itens = []) {
@@ -18,7 +18,7 @@ function modeloFichaParaItens(itens = []) {
   const mista = tipos.includes('Devolução') && !somenteDevolucao;
   const entregaEpi = !itens.length || itens.some(item => item.tipoMovimentacao !== 'Devolução' && !['instrumento','uniforme','acessorio','outro_nao_epi'].includes(item.enquadramento));
   const termoResponsabilidade = somenteDevolucao ? DEVOLUCAO
-    : (mista ? MOVIMENTACAO_MISTA : RECEBIMENTO) + (entregaEpi ? ' ' + TREINAMENTO_ANTERIOR + '\n\n' + RESPONSABILIDADE : '');
+    : (mista ? MOVIMENTACAO_MISTA : RECEBIMENTO) + '\n\n' + (entregaEpi ? RESPONSABILIDADE : "Responsabilizo-me pela guarda, conservação e limpeza dos equipamentos sob minha posse, por utilizá-los para sua finalidade e comunicar danos, extravio ou condições impróprias. Devolverei os itens quando solicitado ou ao término do vínculo, mediante registro, ressalvados os consumíveis ou descartáveis utilizados regularmente. Eventual desconto por dano depende de apuração e dos requisitos do art. 462, § 1º, da CLT: culpa comprovada com ajuste prévio, ou dolo comprovado. Desgaste normal e riscos da atividade não são cobrados.");
   const outros = itens.some(item => item.semCA === true || item.tipo === 'sem_ca');
   return { id: MODELO_FICHA_ID, formato: 'A4-retrato',
     titulo: outros ? 'FICHA DE CONTROLE DE EPIs E OUTROS EQUIPAMENTOS' : 'FICHA DE CONTROLE DE EQUIPAMENTOS DE PROTEÇÃO INDIVIDUAL',
@@ -26,6 +26,7 @@ function modeloFichaParaItens(itens = []) {
 }
 const MODELO_FICHA_APROVADO = Object.freeze(modeloFichaParaItens());
 const TERMO_APROVADO = MODELO_FICHA_APROVADO.termoResponsabilidade;
+const TERMO_ATUAL = TERMO_APROVADO;
 
   const CSS_APROVADO = "body{font-family:\"Times New Roman\",Times,serif;margin:0;color:#111;background:#fff}.sheet.docx-template-a4{border:0;width:195mm;max-width:195mm;min-height:281.5mm;padding:0;margin:0 auto;font-family:\"Times New Roman\",Times,serif;color:#111}.docx-top{display:grid;grid-template-columns:29mm 1fr;gap:4mm;align-items:start;margin-bottom:3.5mm}.docx-logo{height:24mm;border:1px solid #d0d8df;display:flex;align-items:center;justify-content:center;overflow:hidden}.docx-logo img{max-width:100%;max-height:23mm;object-fit:contain}.docx-title{text-align:center;font-weight:900;text-decoration:underline;font-size:15pt;line-height:1.08;margin-top:4mm;text-transform:uppercase}.docx-meta{width:100%;border-collapse:collapse;margin:0 0 3.4mm 0}.docx-meta td{border:1px solid #4d5964;padding:2mm 2.3mm;font-size:11.3pt;line-height:1.05}.docx-meta td:nth-child(1){width:62%}.docx-meta td:nth-child(2){width:38%}.docx-term-title{text-align:center;text-decoration:underline;font-size:15.5pt;font-weight:900;margin:3mm 0 3mm}.docx-term p{font-size:11.7pt;line-height:1.48;text-align:justify;margin:0 0 2.9mm}.docx-local{font-size:11.7pt!important;font-weight:900!important;text-align:left!important;margin:6mm 0!important}.docx-date-spacer{display:inline-block;width:14mm}.docx-sign-area{text-align:center;margin:0 0 8mm}.docx-fingerprint{width:22mm;height:27mm;border:1px solid #b7c1c9;background:#fff;margin:0 auto 4mm;display:flex;align-items:center;justify-content:center;overflow:hidden}.docx-fingerprint img{max-width:100%;max-height:100%;object-fit:contain;filter:grayscale(1)}.docx-fingerprint.missing{font-family:Arial,Helvetica,sans-serif;font-size:6.5pt;color:#555;text-align:center;padding:3mm 1mm}.docx-sign-line{width:104mm;border-top:1px solid #222;margin:0 auto 1.2mm}.docx-worker-name{font-size:12pt;font-weight:900;text-align:center}.docx-epi-table{width:100%;border-collapse:collapse;margin-top:0}.docx-epi-table th,.docx-epi-table td{border:1px solid #4d5964;padding:1.9mm 1.8mm;font-size:10.8pt;line-height:1.05;color:#111}.docx-epi-table th{background:#fff;text-align:center;font-weight:900;text-transform:uppercase}.docx-epi-table td:nth-child(1),.docx-epi-table td:nth-child(3),.docx-epi-table td:nth-child(4),.docx-epi-table td:nth-child(5),.docx-epi-table td:nth-child(6),.docx-epi-table td:nth-child(7){text-align:center}.docx-epi-table td:nth-child(2){text-align:left}.docx-sign-cell{font-weight:900;text-align:center}.docx-validation-footer{font-family:Arial,Helvetica,sans-serif;font-size:6.5pt;color:#555;margin-top:3mm;border-top:1px solid #cfd7de;padding-top:1.5mm;text-align:left}@page{size:A4 portrait;margin:7.5mm 7.5mm 5mm 7.5mm}";
   const CSS_IMPRESSAO = `
@@ -86,12 +87,12 @@ const TERMO_APROVADO = MODELO_FICHA_APROVADO.termoResponsabilidade;
     return {
       empresaSnapshot: {
         nome: first(empresa.nome, empresa.name), cnpj: first(empresa.cnpj), ...(empresa.inscricaoTipo==='CAEPF'?{inscricaoTipo:'CAEPF'}:{}),
-        localidade: first(empresa.localidade, empresa.city), uf: first(empresa.uf, empresa.UF),
+        endereco: first(empresa.endereco), localidade: first(empresa.localidade, empresa.city), uf: first(empresa.uf, empresa.UF),
         logoDataUrl: imageSource(first(empresa.logoDataUrl, empresa.logoUrl, empresa.logo), true)
       },
       trabalhadorSnapshot: {
         nomeCompleto: first(trabalhador.nomeCompleto, trabalhador.nome, trabalhador.name),
-        cpf: first(trabalhador.cpf), funcao: first(trabalhador.funcao, trabalhador.job, trabalhador.cargo),
+        setor:first(trabalhador.setor), dataAdmissao:first(trabalhador.dataAdmissao), status:first(trabalhador.status), cpf: first(trabalhador.cpf), funcao: first(trabalhador.funcao, trabalhador.job, trabalhador.cargo),
         matriculaESocial: first(trabalhador.matriculaESocial, trabalhador.matriculaEsocial, trabalhador.esocial),
         localidade: first(trabalhador.localidade, trabalhador.city)
       },
@@ -167,6 +168,7 @@ function equipmentName(item = {}) {
     const term = first(ficha.modeloFicha && ficha.modeloFicha.termoResponsabilidade, TERMO_LEGADO);
     const items = Array.isArray(ficha.itens) ? ficha.itens : Array.isArray(ficha.epis) ? ficha.epis : [];
     if (!items.length) throw new Error("Esta ficha não possui EPIs para impressão.");
+    const modern = ficha.modeloFicha?.id === "JP-EPI-2026.11";
     const itemMovements = items.some(item => item.tipoMovimentacao && item.datasMovimentacao);
     const columnWidths = itemMovements ? [8,22.5,9,12,13.5,20,15] : [6,26,9,10.5,13.5,20,15];
     const rows = items.map(item => {
@@ -180,7 +182,7 @@ function equipmentName(item = {}) {
       const signText = item.signed === false && signature.verified ? "Pendente" : signature.rowText;
       const caLabel = item.semCA === true ? (NON_EPI[item.enquadramento] ? "CA não aplicável" : "Sem CA") : first(item.ca, epi.ca);
       const name = equipmentName({...epi,...item});
-      const detail = item.enquadramento ? [NON_EPI[item.enquadramento] || (item.enquadramento === "epi" ? "EPI" : "Enquadramento não informado"), item.fabricante, item.modelo, item.tamanho].filter(Boolean).join(" · ") : "";
+      const detail = (item.enquadramento || modern) ? [NON_EPI[item.enquadramento] || (item.enquadramento === "epi" ? "EPI" : "Enquadramento não informado"), item.fabricante, item.modelo, item.tamanho].filter(Boolean).join(" · ") : "";
       return `<tr><td>${esc(first(item.quantidade, item.qty, 1))}</td><td>${esc(name)}${detail ? `<br><small>${esc(detail)}</small>` : ""}</td><td>${esc(caLabel)}</td><td>${esc(itemType)}</td><td>${esc(deliveryDate)}</td><td class="docx-sign-cell">${esc(signText)}</td><td>${esc(returnDate)}</td></tr>`;
     }).join("");
     const fingerprint = signature.verified && signature.facial ? `<div class="docx-fingerprint missing"><strong>ASSINATURA<br>BIOMÉTRICA FACIAL<br>VERIFICADA</strong></div>` : signature.image ? `<div class="docx-fingerprint"><img src="${esc(signature.image)}" alt="Imagem da captura biométrica registrada"></div>` : '<div class="docx-sign-space"></div>';
@@ -192,17 +194,19 @@ function equipmentName(item = {}) {
         <tr><td><b>Empresa:</b> ${esc(first(company.nome, company.name))}</td><td><b>${company.inscricaoTipo==='CAEPF'?'CAEPF':'CNPJ'}:</b> ${esc(company.cnpj)}</td></tr>
         <tr><td><b>Nome do Trabalhador:</b> ${esc(workerName)}</td><td><b>CPF:</b> ${esc(worker.cpf)}</td></tr>
         <tr><td><b>Função:</b> ${esc(first(worker.funcao, worker.job))}</td><td><b>Matrícula eSocial:</b> ${esc(first(worker.matriculaESocial, worker.matriculaEsocial, worker.esocial))}</td></tr>
+        ${modern?`<tr><td colspan="2"><b>Endereço:</b> ${esc(company.endereco||'Não informado')} · ${esc(localityWithUf)}</td></tr><tr><td><b>Setor:</b> ${esc(worker.setor||'Não informado')}</td><td><b>Admissão:</b> ${esc(formatDate(worker.dataAdmissao)||'Não informada')}</td></tr>`:''}
         <tr><td><b>Tipo da movimentação:</b> ${esc(type)}</td><td><b>Ficha:</b> ${esc(number)}</td></tr>
       </tbody></table>
       ${cancelled ? `<div class="docx-cancelled">FICHA CANCELADA${ficha.motivoCancelamento ? ` - ${esc(ficha.motivoCancelamento)}` : ""}</div>` : ""}
       <section class="docx-term"><h1 class="docx-term-title">TERMO DE RESPONSABILIDADE</h1>${text(term).split(/\n\s*\n/).map(paragraph => `<p>${esc(paragraph)}</p>`).join("")}
+        ${modern?`<p><b>Orientação sobre os equipamentos:</b> ${ficha.orientacao?.confirmada?esc(`Registrada em ${formatDate(ficha.orientacao.data)} por ${ficha.orientacao.responsavel}${ficha.orientacao.referencia?' · Referência: '+ficha.orientacao.referencia:''}`):'Não informada nesta ficha.'}</p>`:''}
         ${ficha.modeloFicha?.termoAssinatura ? `<p class="docx-signature-term"><strong>Confirmação da assinatura eletrônica:</strong> ${esc(ficha.modeloFicha.termoAssinatura)}</p>` : ""}
         <p class="docx-local"><strong>Localidade da Empresa:</strong> ${esc(localityWithUf)} <span class="docx-date-spacer"></span> <strong>${mixedMovement?'Data das Movimentações:':returnOnly?'Data da Devolução:':'Data da Entrega:'}</strong> ${esc(returnOnly?formatDate(ficha.datasMovimentacao.devolucao):date)}.</p>
         <div class="docx-sign-area">${fingerprint}${signatureNote}<div class="docx-sign-line"></div><div class="docx-worker-name">${esc(workerName)}</div></div>
       </section>
       <p class="docx-scroll-hint">Deslize a tabela para consultar todas as colunas.</p><div class="docx-table-scroll" role="region" tabindex="0" aria-label="Equipamentos da ficha — tabela com rolagem horizontal"><table class="docx-epi-table${itemMovements?' docx-item-movements':''}" aria-label="Relação dos EPIs"><colgroup>${columnWidths.map(width=>`<col style="width:${width}%">`).join('')}</colgroup><thead><tr><th>QTD</th><th>${(ficha.modeloFicha?.id || "").startsWith("JP-FICHA-20261030") ? "EQUIPAMENTO" : "EPI"}</th><th>CA</th><th>STATUS</th><th>${itemMovements?'DATA ENTREGA':'DATA'}</th><th>ASSINATURA</th><th>DATA DEVOLUÇÃO</th></tr></thead><tbody>${rows}</tbody></table></div>${footer}
     </main>`;
-    return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${CSS_APROVADO}${CSS_IMPRESSAO}${itemMovements?'.docx-item-movements td:nth-child(1),.docx-item-movements td:nth-child(4){white-space:nowrap}':''}</style></head><body>${content}</body></html>`;
+    return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${CSS_APROVADO}${CSS_IMPRESSAO}${modern?'.docx-term p{font-size:10.5pt;line-height:1.24;margin-bottom:2mm}.docx-term-title{font-size:13pt}.docx-meta td{font-size:10pt}.docx-title{font-size:13pt}':''}${itemMovements?'.docx-item-movements td:nth-child(1),.docx-item-movements td:nth-child(4){white-space:nowrap}':''}</style></head><body>${content}</body></html>`;
   }
 
   root.JP_FICHA = Object.freeze({createSnapshot, buildDocument, formatDate,equipmentName});

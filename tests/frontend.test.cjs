@@ -20,9 +20,10 @@ const ficha = {id:'FICHA-TESTE',numero:'EPI-TESTE-0001',empresaId:company.id,tra
 const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 function makeDocument(record=ficha, companyRecord=company, workerRecord=worker){return fichaModule.buildDocument(record,companyRecord,workerRecord,[epi],{defaultLogo:pixel});}
 
-test('termo integral corresponde ao texto do modelo aprovado',()=>{
+test('novas fichas utilizam o termo revisado autorizado em novembro de 2026',()=>{
   const term=fichaModule.createSnapshot(company,worker).modeloFicha.termoResponsabilidade;
-  assert.ok(term.includes('anteriormente à entrega'));
+  assert.ok(!term.includes('anteriormente à entrega'));
+  assert.ok(term.includes('orientação efetivamente realizada'));
   assert.ok(term.includes('art. 462, § 1º'));
   assert.ok(!term.includes('recebidas na presente data'));
   assert.ok(!term.includes('Certificado de Treinamento'));
@@ -275,7 +276,7 @@ test('emissão inclui snapshots e termo integral somente após validar trabalhad
   assert.equal(sent.trabalhadorSnapshot.matriculaESocial,'00042');
   assert.equal(sent.trabalhadorSnapshot.funcao,'FUNÇÃO DE TESTE');
   assert.equal(sent.empresaSnapshot.nome,'EMPRESA EXEMPLO');
-  assert.ok(sent.modeloFicha.termoResponsabilidade.includes('não será automático nem decorrente do desgaste normal.'));
+  assert.ok(sent.modeloFicha.termoResponsabilidade.includes('Esta ficha não autoriza descontos genéricos.'));
   assert.equal(sent.itens[0].quantidade,2);
   assert.equal(sent.itens[0].tipoMovimentacao,'Entrega');
   assert.equal(form.submitButton.disabled,false);

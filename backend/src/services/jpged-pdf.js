@@ -7,7 +7,7 @@ import { httpError } from '../middleware/auth.js';
 import { equipmentCaLabel, equipmentPrintName } from './equipment-classification.js';
 
 // Generated on the server from the saved record, never from a client-supplied PDF.
-export async function buildSigningPdf(ficha, certificate) {
+export async function buildSigningPdf(ficha, certificate = null) {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
   const font = await doc.embedFont(readFileSync(new URL('../data/fonts/DejaVuSerif.ttf',import.meta.url)),{subset:true}), bold = await doc.embedFont(readFileSync(new URL('../data/fonts/DejaVuSerif-Bold.ttf',import.meta.url)),{subset:true});
@@ -50,9 +50,16 @@ export async function buildSigningPdf(ficha, certificate) {
   text(`Trabalhador: ${worker.nomeCompleto || ficha.trabalhadorNome}    CPF: ${worker.cpf || ''}`);
   text(`Função: ${worker.funcao || ''}    Matrícula eSocial: ${worker.matriculaESocial || ''}`);
   text(`Movimentação: ${ficha.tipo}    Data: ${ficha.data}    Ficha: ${ficha.numero || ficha.id}`, { size: 10, gap: 12 });
+  if(ficha.status==='cancelada')text('FICHA CANCELADA - '+(ficha.motivoCancelamento||''),{type:bold});
+  if(!certificate)text('CÓPIA PARA CONSULTA - SEM CERTIFICAÇÃO DIGITAL NESTE ARQUIVO',{type:bold,size:9});
+  if(ficha.modeloFicha?.id==='JP-EPI-2026.11'){
+    text(`Endereço: ${company.endereco||'Não informado'} · ${company.localidade||''}/${company.uf||''}`,{size:10});
+    text(`Setor: ${worker.setor||'Não informado'} · Admissão: ${worker.dataAdmissao||'Não informada'}`,{size:10});
+  }
   text('TERMO DE RESPONSABILIDADE', { type: bold, size: 13, center: true, gap: 8 });
-  text(ficha.modeloFicha?.termoResponsabilidade || '', { size: 11 });
+  text(ficha.modeloFicha?.termoResponsabilidade || '', { size: ficha.modeloFicha?.id==='JP-FICHA-20261031-RESPONSABILIDADE'?9:ficha.modeloFicha?.id==='JP-EPI-2026.11'?9.5:11 });
   if(ficha.modeloFicha?.termoAssinatura)text('Confirmação da assinatura eletrônica: '+ficha.modeloFicha.termoAssinatura,{size:9.5,gap:8});
+  if(ficha.modeloFicha?.id==='JP-EPI-2026.11')text(ficha.orientacao?.confirmada?`Orientação registrada em ${ficha.orientacao.data} por ${ficha.orientacao.responsavel}. Referência: ${ficha.orientacao.referencia||'Não informada'}`:'Orientação sobre os equipamentos: não informada nesta ficha.',{size:10});
   text(`${company.localidade || worker.localidade || ''}${company.uf ? '/' + company.uf : ''} — ${ficha.data}`, { type: bold, gap: 10 });
   const imageUrl = bio.realFingerImage;
   const facial=bio.metodo==='AWS_REKOGNITION_FACE_LIVENESS';
@@ -64,7 +71,8 @@ export async function buildSigningPdf(ficha, certificate) {
     page.drawImage(img, { x: (width - dims.width) / 2, y: y - dims.height, width: dims.width, height: dims.height }); y -= dims.height + 5;
   }
   text(worker.nomeCompleto || ficha.trabalhadorNome, { center: true, type: bold });
-  text(`Biometria confirmada em ${bio.signedAt} · ${facial?'Facial':bio.dedo}`, { center: true, size: 8, gap: 12 });
+  const confirmation=ficha.status==='pendente'?'Não assinada':bio.verificada===true?(facial?'Biometria facial':'Biometria confirmada'):'Registro sem conferência biométrica';
+  text(`${confirmation}${bio.signedAt?' em '+bio.signedAt:''}${bio.dedo?' · '+bio.dedo:''}`, { center: true, size: 8, gap: 12 });
   const cols = [30, 179, 67, 64, 64, available - 404];
   function row(values, heading = false) {
     const all = values.map((value, i) => lines(value, cols[i] - 8, 9, heading ? bold : font));
@@ -77,10 +85,11 @@ export async function buildSigningPdf(ficha, certificate) {
   }
   function tableHeader() { row(['Qtd.','Equipamento','CA','Entrega','Devolução','Confirmação'], true); }
   tableHeader();
-  for (const item of ficha.itens) row([item.quantidade, equipmentPrintName(item), equipmentCaLabel(item), item.datasMovimentacao?.entrega || '', item.datasMovimentacao?.devolucao || '', facial?'Biometria facial':'Biometria confirmada']);
+  for (const item of ficha.itens) row([item.quantidade, equipmentPrintName(item), equipmentCaLabel(item), item.datasMovimentacao?.entrega || '', item.datasMovimentacao?.devolucao || '', confirmation]);
   y -= 12;
   // Only the printed appearance is abbreviated. Full subject remains in the
   // PDF signature dictionary/CMS; complete evidence is still embedded below.
+  if(certificate){
   const subject=String(certificate.subject||''),commonName=subject.match(/(?:^|\n)CN=([^\n]+)/)?.[1];
   const signer=(commonName||(!subject.includes('=')?subject:'Titular identificado no certificado')).replace(/:\d{11,14}$/,'');
   const authentication=[
@@ -99,7 +108,9 @@ export async function buildSigningPdf(ficha, certificate) {
   const evidence = { schema: 'JPGED-1', document: documentContent(ficha), documentHash: documentHash(ficha), biometric: { id: bio.id, signedAt: bio.signedAt, finger: bio.dedo, proof: bio.proof, proofSignature: bio.proofSignature, publicKey: bio.publicKey } };
   if(facial)Object.assign(evidence.biometric,{method:bio.metodo,keyArn:bio.keyArn,acceptance:bio.aceiteTermo});
   await doc.attach(Buffer.from(JSON.stringify(evidence)), 'evidencias-jpged.json', { mimeType: 'application/json', description: 'Conteúdo confirmado e prova biométrica. Sem template biométrico.' });
+  }
   doc.getPages().forEach((p, i, pages) => p.drawText(`JPGED · ${ficha.numero || ficha.id} · Página ${i+1}/${pages.length}`, { x: margin, y: 20, size: 8, font }));
+  if(!certificate)return {pdf:Buffer.from(await doc.save())};
   pdflibAddPlaceholder({ pdfDoc: doc, reason: 'Registro das movimentações de EPI confirmadas biometricamente', contactInfo: '', name: clean(certificate.subject), location: clean(company.localidade || ''), signatureLength: 65536, subFilter: 'ETSI.CAdES.detached', appName: 'JPGED' });
   const pdf = Buffer.from(await doc.save({ useObjectStreams: false }));
   const source = pdf.toString('latin1'), range = /\/ByteRange\s*\[\s*0\s+\/\*{10}\s+\/\*{10}\s+\/\*{10}\s*\]/.exec(source);

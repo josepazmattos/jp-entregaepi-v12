@@ -1,10 +1,12 @@
+let jpgedSearchTimer;
+function scheduleJpgedSearch(){clearTimeout(jpgedSearchTimer);jpgedGeneration++;jpgedSearchTimer=setTimeout(()=>loadJpged(),300);}
 let jpgedItems=[],jpgedCursor='',jpgedGeneration=0,certificateGeneration=0,jpgedSyncTimer=null,jpgedRequestCursor='';
 function certificateIndicator(label,state,detail=''){
   const chip=$('healthCertificate');if(!chip)return;
   chip.dataset.state=state;chip.querySelector('span').textContent=label;
   chip.title=(detail||label)+(isMaster()?' — Abrir administração do certificado':' — Consultar situação do certificado');
 }
-function resetJpged(){resetV10Destination();clearTimeout(jpgedSyncTimer);jpgedRequestCursor='';if(typeof certificateCleanup==='function')certificateCleanup();jpgedItems=[];jpgedCursor='';jpgedGeneration++;certificateGeneration++;certificateIndicator('Não verificado','idle');setText('jpgedList','Selecione uma empresa.');setText('certificateDetail','Consulte o certificado da empresa em uso.');setText('certificateState','Não consultado');$('certificateDisconnect')?.classList.add('hidden');}
+function resetJpged(){clearTimeout(jpgedSearchTimer);if($('jpgedSearch'))$('jpgedSearch').value='';resetV10Destination();clearTimeout(jpgedSyncTimer);jpgedRequestCursor='';if(typeof certificateCleanup==='function')certificateCleanup();jpgedItems=[];jpgedCursor='';jpgedGeneration++;certificateGeneration++;certificateIndicator('Não verificado','idle');setText('jpgedList','Selecione uma empresa.');setText('certificateDetail','Consulte o certificado da empresa em uso.');setText('certificateState','Não consultado');$('certificateDisconnect')?.classList.add('hidden');}
 function jpgedCompanyName(){return cache.empresas.find(x=>x.id===activeEmpresaId)?.nome||'Selecione uma empresa';}
 function openCertificateStatus(){
   if(isMaster()){goScreen('certificado');return;}
@@ -79,7 +81,7 @@ async function loadJpged(next=false,refresh=false){
   if(!activeEmpresaId){setText('jpgedList','Selecione uma empresa no topo da página.');return;}
   const requestCursor=refresh?jpgedRequestCursor:next?jpgedCursor:'';jpgedRequestCursor=requestCursor;
   if(!next&&!refresh){jpgedItems=[];jpgedCursor='';}if(!refresh)setText('jpgedList','Consultando documentos...');
-  try{const r=ensureSuccess(await api('/api/jpged/documentos'+(requestCursor?'?cursor='+encodeURIComponent(requestCursor):'')));assertOperationContext(context);if(generation!==jpgedGeneration)return;jpgedItems=r.body.items||[];jpgedCursor=r.body.cursor||'';renderJpged();
+  try{const r=ensureSuccess(await api('/api/jpged/documentos?'+new URLSearchParams({q:$('jpgedSearch')?.value||'',...(requestCursor?{cursor:requestCursor}:{})})));assertOperationContext(context);if(generation!==jpgedGeneration)return;jpgedItems=r.body.items||[];jpgedCursor=r.body.cursor||'';renderJpged();
     if(jpgedItems.some(item=>item.v10Sync?.status==='pending'))jpgedSyncTimer=setTimeout(()=>{if(generation===jpgedGeneration&&document.visibilityState==='visible'&&$('screen-jpged')?.classList.contains('active'))loadJpged(false,true);},30000);}
   catch(error){try{assertOperationContext(context);if(generation===jpgedGeneration&&!refresh)setText('jpgedList',error.message);}catch{}}
 }

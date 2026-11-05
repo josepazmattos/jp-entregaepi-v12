@@ -107,8 +107,11 @@ export function createGedService({ged,store,validate=verifyCompanyCms,buildPdf=b
     return finish(company,actor,id,{cms:cms.toString('base64')},true);
   }
   async function publicCertificate(company){const cert=await certificate(company);if(!cert)return null;const {keyArn,chain,pk,sk,target,authorizationPath,configuredBy,...publicData}=cert;return {...publicData,...(cert.mode==='vault'?{vaultState:await vault.status(cert.keyArn)}:{})};}
-  async function documents(company,cursor) {
-    const result=await ged.list(company,'DOC',cursor);
+  async function documents(company,cursor,search='') {
+    if(typeof search!=='string'||search.length>300)error(400,'Pesquisa inválida.','JPGED_SEARCH');
+    const fold=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    const query=fold(search).trim();let result;
+    do{result=await ged.list(company,'DOC',cursor);cursor=result.cursor;result.items=result.items.filter(item=>!query||fold(`${item.trabalhadorNome} ${item.numero}`).includes(query));}while(query&&!result.items.length&&cursor);
     return {...result,items:await Promise.all(result.items.map(async({path,evidencePath,pk,sk,...item})=>{
       const compactRevision=layouts.summary(await layouts.revision(company,item));
       if(process.env.V10_SYNC_ENABLED!=='true')return {...item,compactRevision};

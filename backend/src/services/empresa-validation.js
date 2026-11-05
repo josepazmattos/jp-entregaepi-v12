@@ -135,7 +135,7 @@ export function companyEditableFields(body, { requireName = false } = {}) {
   const fields = {};
   for (const [key, label, max] of [
     ['nome', 'Nome da empresa', 300], ['localidade', 'Localidade', 300],
-    ['responsavel', 'Responsável', 200], ['email', 'E-mail', 254], ['telefone', 'Telefone', 50]
+    ['endereco', 'Endereço', 500], ['responsavel', 'Responsável', 200], ['email', 'E-mail', 254], ['telefone', 'Telefone', 50]
   ]) {
     if (key in body || key === 'nome' && requireName) fields[key] = textField(body[key], { field: label, max, required: key === 'nome' });
   }

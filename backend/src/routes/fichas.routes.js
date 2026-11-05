@@ -1,3 +1,4 @@
+import { randomUUID, createHash } from 'node:crypto';
 import { Router } from 'express';
 import { create, listForDisplay, get, remove, update } from '../db/store.js';
 import { ok, fail, empresaIdFrom, objectBody, assertRecordAccess, textField, recentListIds } from './_helpers.js';
@@ -34,7 +35,23 @@ router.post('/', async (req, res) => {
     if (!equipmentReads.has(epiId)) equipmentReads.set(epiId, get('epi', epiId).then(item=>item||reportCatalog.get(epiId)));
     return { requested, epi: await equipmentReads.get(epiId) };
   }));
-  const item = await create('ficha', buildFicha({ empresaId, empresa, trabalhador, items, body, actor: req.auth.sub }));
+  const built=buildFicha({empresaId,empresa,trabalhador,items,body,actor:req.auth.sub});
+  if(body.kitId){
+    const kit=await get('kit',textField(body.kitId,{required:true,field:'Relação',max:128}));
+    if(!kit)throw httpError(404,'Relação não encontrada.');assertRecordAccess(req,kit);
+    if(kit.status!=='Ativo'||kit._version!==body.kitVersion)throw httpError(409,'A relação foi alterada ou inativada. Carregue-a novamente.');
+    if(body.itensConferidos!==true)throw httpError(400,'Confira os itens antes de gerar a ficha.');
+    built.kitSnapshot={id:kit.id,nome:kit.nome,funcao:kit.funcao,version:kit._version};
+  }
+  let item;
+  if(body.requestId){
+    const requestId=textField(body.requestId,{field:'Solicitação',max:100,required:true});
+    const scope=`delivery:${empresaId}:${req.auth.sub}`;
+    const hash=createHash('sha256').update(JSON.stringify({trabalhadorId,items:itens,data:body.data,kitId:body.kitId,kitVersion:body.kitVersion,orientacao:body.orientacao})).digest('hex');
+    const replay=async()=>{const receipt=await storage.getReceipt(scope,requestId);if(!receipt)return null;if(receipt.result.hash!==hash)throw httpError(409,'Solicitação já utilizada com outros itens.');return get('ficha',receipt.result.id);};
+    item=await replay();
+    if(!item){const id=randomUUID();try{await storage.transact({scope,expectedRevision:await storage.readScope(scope),mutationId:requestId,operations:[{type:'create',entity:'ficha',id,data:built}],result:{id,hash}});item=await get('ficha',id);}catch(error){item=await replay();if(!item)throw error;}}
+  } else item=await create('ficha',built);
   ok(res, { item });
 });
 

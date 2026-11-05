@@ -20,8 +20,8 @@ test('prévia e servidor concordam sobre entrega, devolução, instrumentos e mo
     assert.ok(!backend.termoResponsabilidade.includes('recebidas na presente data'));
     assert.ok(!/certificado|anexo/i.test(backend.termoResponsabilidade));
   }
-  assert.match(modeloFichaParaItens([epi]).termoResponsabilidade,/recebido gratuitamente.*anteriormente à entrega/s);
-  assert.doesNotMatch(modeloFichaParaItens([instrument]).termoResponsabilidade,/treinado|NR-6/);
+  assert.match(modeloFichaParaItens([epi]).termoResponsabilidade,/recebido gratuitamente.*orientação efetivamente realizada/is);
+  assert.doesNotMatch(modeloFichaParaItens([instrument]).termoResponsabilidade,/treinado|item 6.7.2/);
   assert.doesNotMatch(modeloFichaParaItens([{...epi,tipoMovimentacao:'Devolução'}]).termoResponsabilidade,/recebido|treinado/);
   assert.match(modeloFichaParaItens([epi,{...instrument,tipoMovimentacao:'Devolução'}]).termoResponsabilidade,/movimentações/);
 });

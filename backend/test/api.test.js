@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TERMO_APROVADO, TERMO_LEGADO, MODELO_FICHA_ID, MODELO_FICHA_APROVADO } from '../src/services/ficha-modelo.js';
+
 
 // These tests use only an isolated in-process store and synthetic records.
 delete process.env.TABLE_NAME;
@@ -12,6 +12,7 @@ process.env.BUILD_SHA = 'synthetic-test-build';
 process.env.COGNITO_ISSUER = 'https://cognito-idp.sa-east-1.amazonaws.com/test-pool';
 process.env.COGNITO_CLIENT_ID = 'synthetic-client';
 process.env.AUTH_COMPANY_CLAIM = 'custom:empresa_id';
+const { TERMO_APROVADO, TERMO_LEGADO, MODELO_FICHA_ID, MODELO_FICHA_APROVADO } = await import('../src/services/ficha-modelo.js');
 const { handler } = await import('../src/lambda.js');
 const storage = await import('../src/db/store.js');
 

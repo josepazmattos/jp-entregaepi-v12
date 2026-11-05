@@ -16,7 +16,7 @@ const installationWatchKey='jp-biometria-install-until';
 let installationWatchTimer=null,installationWatchRunning=false,installationWatchEpoch=0;
 const diagnosticRequests=new Set();
 const startupMirrors={apiStatusBadge:'startupApiBadge',caStatusBadge:'startupCaBadge',bioStatusBadge:'startupBioBadge',apiStatusText:'startupApiText',caStatusText:'startupCaText',bioStatusText:'startupBioText'};
-const screenLabels={dashboard:"Dashboard",empresas:"Empresas","empresas-cadastradas":"Empresas Cadastradas",trabalhadores:"Trabalhadores",epis:"EPIs e CA",entrega:"Entrega de EPI",fichas:"Fichas de EPI",jpged:"JPGED",certificado:"Certificado Digital",biometria:"Biometria",config:"Configurações"};
+const screenLabels={dashboard:"Dashboard",empresas:"Empresas","empresas-cadastradas":"Empresas Cadastradas",trabalhadores:"Trabalhadores",epis:"EPIs e CA",entrega:"Entrega de EPI",rapida:"Entrega rápida",relatorios:"Relatórios e auditoria",fichas:"Fichas de EPI",jpged:"JPGED",certificado:"Certificado Digital",biometria:"Biometria",config:"Configurações"};
 const navigationMedia=typeof window.matchMedia==="function"?window.matchMedia("(max-width: 1024px)"):null;
 function setText(id,value){const node=$(id);if(node)node.textContent=value;const mirror=$(startupMirrors[id]);if(mirror)mirror.textContent=value;}
 function setStatusBadge(id,label,state){const node=$(id);if(node){node.textContent=label;node.dataset.state=state;}const mirror=$(startupMirrors[id]);if(mirror){mirror.textContent=label;mirror.dataset.state=state;renderStartupProgress();}}
@@ -181,6 +181,8 @@ function activateScreen(screen,focusContent=true){
   });
   document.querySelectorAll(".screen").forEach(section=>section.classList.toggle("active",section.id==="screen-"+screen));
   setText("currentSectionLabel",screenLabels[screen]);setSidebarOpen(false);
+  if(screen==="rapida"&&typeof loadQuickDelivery==="function")loadQuickDelivery();
+  if(screen==="relatorios"&&typeof openReports==="function")openReports();
   if(screen==="jpged"&&typeof loadJpged==="function")loadJpged();
   if(screen==="certificado"&&typeof loadCompanyCertificate==="function")loadCompanyCertificate();
   if(screen==="biometria"&&isMaster()&&typeof loadFacialControl==="function")loadFacialControl();
@@ -240,7 +242,7 @@ function listReadContext(path,opts={}){
   const ids=recentListWrites.get(key)?.ids||[];
   return {key,path:(!opts.method||opts.method==='GET')&&ids.length?path+(path.includes('?')?'&':'?')+'recentIds='+encodeURIComponent(ids.join(',')):path};
 }
-async function api(path,opts={}){const requestSession=sessionGeneration,requestCompany=companyGeneration;const scoped=/^\/api\/(trabalhadores|fichas|jpged|biometria)(\/|$)|^\/api\/empresas\//.test(path);const cfg=window.JP_CONFIG;const auth=getAuth();const headers=Object.assign({},opts.headers||{});if(auth&&auth.idToken)headers.Authorization="Bearer "+auth.idToken;if(activeEmpresaId)headers["x-empresa-id"]=activeEmpresaId;if(opts.body&&!headers["content-type"])headers["content-type"]="application/json";const listContext=listReadContext(path,opts);let res;try{res=await fetch(cfg.apiBaseUrl+listContext.path,Object.assign({},opts,{headers}));}catch(error){if(requestSession!==sessionGeneration||(scoped&&requestCompany!==companyGeneration))error.code="SESSION_CHANGED";throw error;}const text=await res.text();let body=text;try{body=JSON.parse(text)}catch(e){}if(requestSession!==sessionGeneration||(scoped&&requestCompany!==companyGeneration)){const error=new Error("A sessão ou a empresa mudou durante a consulta.");error.code="SESSION_CHANGED";throw error;}if(listContext.key&&opts.method==='POST'&&res.status>=200&&res.status<300&&body?.ok!==false&&body?.item?.id){const ids=[body.item.id,...(recentListWrites.get(listContext.key)?.ids||[])];recentListWrites.set(listContext.key,{ids:[...new Set(ids)].slice(0,50),at:Date.now()});}return {status:res.status,body}}
+async function api(path,opts={}){const requestSession=sessionGeneration,requestCompany=companyGeneration;const scoped=/^\/api\/(trabalhadores|fichas|jpged|biometria|kits|relatorios)(\/|$)|^\/api\/empresas\//.test(path);const cfg=window.JP_CONFIG;const auth=getAuth();const headers=Object.assign({},opts.headers||{});if(auth&&auth.idToken)headers.Authorization="Bearer "+auth.idToken;if(activeEmpresaId)headers["x-empresa-id"]=activeEmpresaId;if(opts.body&&!headers["content-type"])headers["content-type"]="application/json";const listContext=listReadContext(path,opts);let res;try{res=await fetch(cfg.apiBaseUrl+listContext.path,Object.assign({},opts,{headers}));}catch(error){if(requestSession!==sessionGeneration||(scoped&&requestCompany!==companyGeneration))error.code="SESSION_CHANGED";throw error;}const text=await res.text();let body=text;try{body=JSON.parse(text)}catch(e){}if(requestSession!==sessionGeneration||(scoped&&requestCompany!==companyGeneration)){const error=new Error("A sessão ou a empresa mudou durante a consulta.");error.code="SESSION_CHANGED";throw error;}if(listContext.key&&opts.method==='POST'&&res.status>=200&&res.status<300&&body?.ok!==false&&body?.item?.id){const ids=[body.item.id,...(recentListWrites.get(listContext.key)?.ids||[])];recentListWrites.set(listContext.key,{ids:[...new Set(ids)].slice(0,50),at:Date.now()});}return {status:res.status,body}}
 function write(data){$("apiOutput").textContent=typeof data==="string"?data:JSON.stringify(data,null,2)}function asArray(resp){return resp&&resp.body&&Array.isArray(resp.body.items)?resp.body.items:[]}function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
 function ensureSuccess(result, fallback="Não foi possível concluir a operação.") {
   if (result.status < 200 || result.status >= 300 || result.body?.ok === false) {
@@ -1019,6 +1021,8 @@ async function changeActiveCompany(id){
   saveActiveCompany(id);cache.trabalhadores=[];cache.fichas=[];$("trabalhadoresList").textContent="Carregando...";$("fichasList").textContent="Carregando...";$("dashboardFichas").textContent="";renderEntregaOptions();
   renderEmpresas();
   try{await refreshCompanyData();}catch(error){handleAppError(error);}
+  if(document.querySelector("#screen-rapida.active"))loadQuickDelivery();
+  if(document.querySelector("#screen-relatorios.active"))openReports();
   if(document.querySelector("#screen-jpged.active"))loadJpged();
 }
 $("empresaAtivaSelect").addEventListener("change",event=>changeActiveCompany(event.target.value));
@@ -1141,7 +1145,8 @@ $("entregaForm").addEventListener("submit",async event=>{
     const payload={
       empresaId:activeEmpresaId,trabalhadorId:trabalhador.id,
       trabalhadorNome:trabalhador.nomeCompleto||trabalhador.nome||trabalhador.name,
-      data:new Date().toLocaleDateString("pt-BR"),
+      data:new Date().toLocaleDateString("pt-BR",{timeZone:"America/Campo_Grande"}),
+      orientacao:typeof readEpiOrientation==="function"?readEpiOrientation("delivery"):{confirmada:false},
       ...window.JP_FICHA.createSnapshot(empresa,trabalhador,itens),
       itens:itens.map(({epiId,quantidade,tipoMovimentacao,enquadramento})=>({epiId,quantidade,tipoMovimentacao,enquadramento}))
     };

@@ -7,6 +7,8 @@ import fichasRoutes from './routes/fichas.routes.js';
 import caepiRoutes from './routes/caepi.routes.js';
 import auditoriaRoutes from './routes/auditoria.routes.js';
 import loginRoutes from './routes/login.routes.js';
+import kitsRoutes from './routes/kits.routes.js';
+import reportsRoutes from './routes/relatorios.routes.js';
 import jpgedRoutes from './routes/jpged.routes.js';
 import facialControlRoutes from './routes/facial-control.routes.js';
 import { requireAuth } from './middleware/auth.js';
@@ -31,7 +33,7 @@ app.get('/health', async (req, res) => {
   res.status(storage.ready ? 200 : 503).json({
     ok: storage.ready,
     service: 'JP EntregaEPI V12 API',
-    version: process.env.APP_VERSION || '12.10.1',
+    version: process.env.APP_VERSION || '12.11.0',
     buildSha: process.env.BUILD_SHA || null,
     mode: storage.mode,
     durable: storage.durable,
@@ -59,6 +61,8 @@ app.use('/api/fichas', fichasRoutes);
 app.use('/api/auditoria', auditoriaRoutes);
 app.use('/api/jpged', jpgedRoutes);
 app.use('/api/sistema/facial',facialControlRoutes);
+app.use('/api/kits',kitsRoutes);
+app.use('/api/relatorios',reportsRoutes);
 
 app.use((req, res) => res.status(404).json({ ok: false, error: 'Rota não encontrada', path: req.path }));
 

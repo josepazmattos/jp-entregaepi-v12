@@ -44,7 +44,7 @@ async function fixture(){
   ficha=await store.get('ficha',ficha.id);signCalls=0;
   return {store,ged,service,company,cert,document,ficha,get signCalls(){return signCalls;},setOnSign:fn=>onSign=fn};
 }
-test('reemissão preserva original, dados, prova e data biométrica; novo PDF tem CMS verificável e uma página',async()=>{
+test('reemissão preserva original, dados, prova e data biométrica; novo PDF tem CMS verificável e paginação legível',async()=>{
   const f=await fixture(),original=await f.ged.readBlob(f.document.path);
   const result=await f.service.reissueLayout(f.company.id,'actor',f.document.id);
   assert.ok(result.completed);assert.equal(f.signCalls,1);
@@ -53,7 +53,7 @@ test('reemissão preserva original, dados, prova e data biométrica; novo PDF te
   assert.deepEqual(await f.store.get('ficha',f.ficha.id),f.ficha);
   const revision=await f.ged.get(f.company.id,'LAYOUT',f.document.id),pdf=await f.ged.readBlob(revision.path);
   assert.notEqual(revision.path,f.document.path);assert.equal(revision.sourcePdfHash,sha256(original));
-  assert.equal((await PDFDocument.load(pdf)).getPageCount(),1);
+  assert.equal((await PDFDocument.load(pdf)).getPageCount(),2);
   const range=/\/ByteRange \[0 (\d+) (\d+) (\d+)\]/.exec(pdf.toString('latin1'));
   const start=Number(range[1]),end=Number(range[2]),padded=Buffer.from(pdf.subarray(start+1,end-1).toString(),'hex');
   const parsed=asn1.fromBER(padded),cms=padded.subarray(0,parsed.offset);

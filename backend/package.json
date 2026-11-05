@@ -1,6 +1,6 @@
 {
   "name": "jp-entregaepi-v12-api",
-  "version": "12.10.2",
+  "version": "12.11.0",
   "type": "module",
   "main": "src/lambda.js",
   "engines": {
@@ -27,6 +27,7 @@
     "exceljs": "4.4.0",
     "express": "5.2.1",
     "ipaddr.js": "2.2.0",
+    "jszip": "3.10.1",
     "pdf-lib": "1.17.1",
     "pkijs": "3.4.1",
     "serverless-http": "4.0.0"

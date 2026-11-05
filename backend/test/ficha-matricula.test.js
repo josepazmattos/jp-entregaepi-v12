@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildFicha } from '../src/services/ficha.service.js';
-import { TERMO_APROVADO } from '../src/services/ficha-modelo.js';
+import { TERMO_ATUAL } from '../src/services/ficha-modelo.js';
 
 test('emissão preserva matrícula eSocial alfanumérica acima do antigo limite de snapshot', () => {
   const matriculaESocial = '00Ab9Z'.repeat(600) + 'FINAL0';
@@ -12,5 +12,5 @@ test('emissão preserva matrícula eSocial alfanumérica acima do antigo limite 
   assert.equal(ficha.trabalhadorSnapshot.nomeCompleto, trabalhador.nomeCompleto);
   assert.equal(ficha.trabalhadorSnapshot.funcao, trabalhador.funcao);
   assert.equal(ficha.tipo, 'Entrega');
-  assert.equal(ficha.modeloFicha.termoResponsabilidade, TERMO_APROVADO);
+  assert.equal(ficha.modeloFicha.termoResponsabilidade, TERMO_ATUAL);
 });
