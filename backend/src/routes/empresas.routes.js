@@ -6,9 +6,11 @@ import { createCompanyService, publicCompany } from '../services/empresa.service
 import { companyAccounts } from '../services/company-accounts.js';
 import { bearer } from '../security/session.js';
 import { invokeSecurity } from '../security/remote.js';
+import {createUnitsService} from '../services/unidades.service.js';
 
-export function createEmpresasRouter({ storage = defaultStorage, accounts = companyAccounts } = {}) {
+export function createEmpresasRouter({ storage = defaultStorage, accounts = companyAccounts, unitLookup } = {}) {
   const router = Router();
+  const units=createUnitsService({storage,lookup:unitLookup});
   const service = createCompanyService({ storage, accounts });
   const requestService = req => !process.env.VAULT_ADMIN_FUNCTION ? service : createCompanyService({storage,accounts:{...accounts,
     ensureCompanyAccess: ({companyId})=>invokeSecurity(process.env.VAULT_ADMIN_FUNCTION,{action:'account-ensure',company:companyId,token:bearer(req.headers)}),
@@ -21,6 +23,9 @@ export function createEmpresasRouter({ storage = defaultStorage, accounts = comp
       : (await Promise.all(req.auth.empresaIds.map(id => storage.get('empresa', id)))).filter(Boolean);
     ok(res, { items: items.filter(item => !item.excluidaEm).map(publicCompany) });
   });
+
+  router.get('/:id/unidades',async(req,res)=>{assertCompanyAccess(req,req.params.id);ok(res,await units.read(req.params.id));});
+  router.post('/:id/unidades/atualizar',async(req,res)=>{assertCompanyAccess(req,req.params.id);ok(res,await units.read(req.params.id,{refresh:true}));});
 
   router.get('/:id', async (req, res) => {
     assertCompanyAccess(req, req.params.id);

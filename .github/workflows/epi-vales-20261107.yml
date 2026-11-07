@@ -19,6 +19,7 @@ jobs:
       - run: npx --prefix tests playwright install --with-deps chromium
       - run: npm test --prefix backend
       - run: npm run test:unit --prefix tests
+      - run: node tests/unidades-browser.cjs
       - run: node tests/ocorrencias-browser.cjs
       - run: node tests/epi-tools-browser.cjs
       - uses: actions/upload-artifact@v4

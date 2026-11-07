@@ -4,6 +4,7 @@ const facialAssetsBase=new URL('.',document.currentScript?.src||location.href).h
 const operationWindows=new Set(),operationDialogs=new Set(),operationControllers=new Set();
 function closeOperations(){
   window.JP_OCORRENCIAS?.reset();
+  window.JP_UNIDADES?.reset();
   if(typeof resetJpged==='function')resetJpged();
   if(typeof resetEpiTools==='function')resetEpiTools();
   const editing=Boolean(workerEdit);workerEdit=null;

@@ -181,6 +181,7 @@ function activateScreen(screen,focusContent=true){
   });
   document.querySelectorAll(".screen").forEach(section=>section.classList.toggle("active",section.id==="screen-"+screen));
   setText("currentSectionLabel",screenLabels[screen]);setSidebarOpen(false);
+  if(screen==="entrega"||screen==="rapida")window.JP_UNIDADES?.load();
   if(screen==="rapida"&&typeof loadQuickDelivery==="function")loadQuickDelivery();
   if(screen==="relatorios"&&typeof openReports==="function")openReports();
   if(screen==="jpged"&&typeof loadJpged==="function")loadJpged();
@@ -410,7 +411,7 @@ function renderEntregaOptions(preserveWorker=false){
   const tsel=$("entregaTrabalhador"),esel=$("entregaEpi"),devolucao=$("entregaTipo")?.value==='Devolução';
   if(tsel){const selected=tsel.value,workers=cache.trabalhadores.filter(t=>(!t.empresaId||String(t.empresaId)===String(activeEmpresaId))&&(devolucao||t.status!=='Inativo'||((preserveWorker||entregaItems.length)&&t.id===selected)));tsel.innerHTML=workers.map(t=>`<option value="${escapeHtml(t.id)}">${escapeHtml(t.nomeCompleto||t.nome||"Trabalhador")}${t.status==='Inativo'?' · Inativo':''}</option>`).join("");if(workers.some(t=>t.id===selected))tsel.value=selected;tsel.disabled=!activeEmpresaId||!workers.length||entregaItems.length>0||entregaSaving;}
   if(esel){const selected=esel.value;esel.innerHTML='<option value="">Selecione um equipamento</option>'+cache.epis.map(e=>`<option value="${escapeHtml(e.id)}">${escapeHtml(equipmentDescription(e)+" - "+equipmentLabel(e))}</option>`).join("");esel.value=cache.epis.some(e=>e.id===selected)?selected:"";}
-  renderEntregaDraft();updateDeliveryClassification();
+  renderEntregaDraft();updateDeliveryClassification();window.JP_UNIDADES?.workerChanged("delivery");
 }
 function clearEntregaDraft(){
   entregaItems=[];entregaDraftWorker="";entregaDraftCompany="";entregaSaving=false;
@@ -1021,6 +1022,7 @@ async function changeActiveCompany(id){
   saveActiveCompany(id);cache.trabalhadores=[];cache.fichas=[];$("trabalhadoresList").textContent="Carregando...";$("fichasList").textContent="Carregando...";$("dashboardFichas").textContent="";renderEntregaOptions();
   renderEmpresas();
   try{await refreshCompanyData();}catch(error){handleAppError(error);}
+  if(document.querySelector("#screen-entrega.active,#screen-rapida.active"))window.JP_UNIDADES?.load();
   if(document.querySelector("#screen-rapida.active"))loadQuickDelivery();
   if(document.querySelector("#screen-relatorios.active"))openReports();
   if(document.querySelector("#screen-jpged.active"))loadJpged();
@@ -1144,6 +1146,7 @@ $("entregaForm").addEventListener("submit",async event=>{
     entregaSaving=true;renderEntregaDraft();
     const payload={
       empresaId:activeEmpresaId,trabalhadorId:trabalhador.id,
+      ...window.JP_UNIDADES?.read("delivery"),
       trabalhadorNome:trabalhador.nomeCompleto||trabalhador.nome||trabalhador.name,
       data:new Date().toLocaleDateString("pt-BR",{timeZone:"America/Campo_Grande"}),
       orientacao:typeof readEpiOrientation==="function"?readEpiOrientation("delivery"):{confirmada:false},

@@ -16,6 +16,7 @@ await db.create('trabalhador',{empresaId:a.id,nomeCompleto:'TRABALHADOR SEM MOVI
 const e=await db.create('epi',{nomeCurto:'Óculos de segurança',descricao:'Óculos de segurança',ca:'123',fabricante:'FABRICANTE EXEMPLO',modelo:'Transparente',tamanho:'Único'});
 const other=await db.create('epi',{nomeCurto:'Luva de segurança',descricao:'Luva de segurança',ca:'456',fabricante:'FABRICANTE EXEMPLO',modelo:'Vaqueta',tamanho:'M'});
 for(let i=0;i<54;i++)await db.create('ficha',buildFicha({empresaId:a.id,empresa:a,trabalhador:w,items:[{requested:{quantidade:1},epi:i===53?other:e}],body:{data:'01/10/2026'},actor:'synthetic'}));
+const {createEmpresasRouter}=await import('../backend/src/routes/empresas.routes.js');
 const app=express();app.use(express.json());let company=a.id;
 app.get('/EntregaEPI/config.js',(req,res)=>res.type('js').send(`window.JP_CONFIG=${JSON.stringify({apiBaseUrl:origin,appBasePath:'/EntregaEPI/',cognitoRegion:'sa-east-1',userPoolId:'synthetic',clientId:'synthetic',version:'12.11.0'})}`));
 app.get('/EntregaEPI/',(req,res)=>res.type('html').send(fs.readFileSync(path.join(__dirname,'../frontend/EntregaEPI/index.html'),'utf8').replaceAll('__APP_PREFIX__','EntregaEPI')));
@@ -25,7 +26,7 @@ app.get('/health',(req,res)=>res.json({ok:true,storageReady:true,durable:true}))
 app.use('/api',(req,res,next)=>{req.auth={sub:'synthetic',master:true,empresaIds:[]};next();});
 app.get('/api/empresas',(req,res)=>res.json({ok:true,items:[a,b]}));app.get('/api/trabalhadores',async(req,res)=>res.json({ok:true,items:await db.list('trabalhador',req.headers['x-empresa-id'])}));app.get('/api/sistema/facial',(req,res)=>res.json({ok:true,status:{enabled:false}}));
 app.get('/api/epis',async(req,res)=>res.json({ok:true,items:await db.list('epi')}));
-app.use('/api/kits',createKitsRouter(db));app.use('/api/fichas',fichasRoutes);app.use('/api/relatorios',createReportsRouter(db,ged));app.use((e,req,res,next)=>res.status(e.status||500).json({ok:false,error:e.message}));
+app.use('/api/empresas',createEmpresasRouter({storage:db,accounts:{}}));app.use('/api/kits',createKitsRouter(db));app.use('/api/fichas',fichasRoutes);app.use('/api/relatorios',createReportsRouter(db,ged));app.use((e,req,res,next)=>res.status(e.status||500).json({ok:false,error:e.message}));
 server=await new Promise(resolve=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s));});const origin=`http://127.0.0.1:${server.address().port}`;
 ged.download=async(path,filename)=>'https://jp-entregaepi-relatorios-003020057405.s3.sa-east-1.amazonaws.com/'+path;
 browser=await chromium.launch({headless:true,...(process.env.JP_TEST_CHROMIUM?{executablePath:process.env.JP_TEST_CHROMIUM}:{}),args:['--no-sandbox']});const context=await browser.newContext({viewport:{width:1440,height:1000},acceptDownloads:true,locale:'pt-BR',timezoneId:'America/Campo_Grande',reducedMotion:'reduce'});const errors=[];context.on('page',p=>p.on('pageerror',e=>errors.push(e.message)));

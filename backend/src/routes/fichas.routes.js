@@ -21,7 +21,7 @@ router.post('/', async (req, res) => {
   // must return the original delivery even if those records changed meanwhile.
   const requestId=body.requestId?textField(body.requestId,{field:'Solicitação',max:100,required:true}):null;
   const scope=`delivery:${empresaId}:${req.auth.sub}`;
-  const requestHash=createHash('sha256').update(JSON.stringify({trabalhadorId:body.trabalhadorId,items:body.itens,epiId:body.epiId,quantidade:body.quantidade,tipo:body.tipo,data:body.data,kitId:body.kitId,kitVersion:body.kitVersion,orientacao:body.orientacao,modeloFicha:body.modeloFicha,itensConferidos:body.itensConferidos})).digest('hex');
+  const requestHash=createHash('sha256').update(JSON.stringify({trabalhadorId:body.trabalhadorId,items:body.itens,epiId:body.epiId,quantidade:body.quantidade,tipo:body.tipo,data:body.data,kitId:body.kitId,kitVersion:body.kitVersion,orientacao:body.orientacao,modeloFicha:body.modeloFicha,itensConferidos:body.itensConferidos,unidadeId:body.unidadeId,unidadeVersao:body.unidadeVersao})).digest('hex');
   const replay=async()=>{
     if(!requestId)return null;
     const receipt=await storage.getReceipt(scope,requestId);if(!receipt)return null;

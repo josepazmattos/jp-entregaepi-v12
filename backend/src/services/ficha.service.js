@@ -5,16 +5,18 @@ import { textField } from '../routes/_helpers.js';
 import { MODELO_FICHA_ID, modeloFichaParaItens } from './ficha-modelo.js';
 import { classifyEquipment } from './equipment-classification.js';
 import { validateCaptureImage } from './capture-image.js';
+import {selectCompanyUnit} from './unidades.service.js';
 
-export function fichaSnapshots(empresa, trabalhador) {
+export function fichaSnapshots(empresa, trabalhador, unidade=null) {
   return {
     empresaSnapshot: {
       nome: textField(empresa.nome || empresa.name),
       cnpj: textField(empresa.cnpj),
       ...(empresa.inscricaoTipo==='CAEPF'?{inscricaoTipo:'CAEPF'}:{}),
-      endereco: textField(empresa.endereco),
-      localidade: textField(empresa.localidade || empresa.city),
-      uf: textField(empresa.uf || empresa.UF),
+      endereco: textField(unidade?.endereco ?? empresa.endereco),
+      localidade: textField(unidade?.cidade ?? (empresa.localidade || empresa.city)),
+      uf: textField(unidade?.uf ?? (empresa.uf || empresa.UF)),
+      ...(unidade?{cep:unidade.cep,unidade:{origem:unidade.origem,empresaId:unidade.empresaId,localidadeId:unidade.id,version:unidade.version,consultadoEm:unidade.consultadoEm}}:{}),
       logoDataUrl: typeof empresa.logoDataUrl === 'string' ? empresa.logoDataUrl : '',
       logoUrl: typeof empresa.logoUrl === 'string' ? empresa.logoUrl : '',
       logo: typeof empresa.logo === 'string' ? empresa.logo : ''
@@ -99,7 +101,7 @@ export function buildFicha({ empresaId, empresa, trabalhador, items, body, actor
     empresaId,
     trabalhadorId: trabalhador.id,
     trabalhadorNome: trabalhador.nomeCompleto || trabalhador.nome || trabalhador.name || '',
-    ...fichaSnapshots(empresa, trabalhador),
+    ...fichaSnapshots(empresa, trabalhador, selectCompanyUnit(empresa,body)),
     modeloFicha,
     itens: normalizedItems,
     status: 'pendente',
