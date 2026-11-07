@@ -62,7 +62,8 @@ test('reemissão preserva original, dados, prova e data biométrica; novo PDF te
   assert.equal(evidence.biometricAt,f.document.biometricAt);assert.equal(evidence.sourcePdfHash,f.document.pdfHash);
   assert.equal(evidence.documentHash,documentHash(f.ficha));assert.ok(evidence.validation.crls.length);
   assert.equal((await f.service.download(f.company.id,'actor',f.document.id)).sha256,revision.pdfHash);
-  assert.equal((await f.service.download(f.company.id,'actor',f.document.id,{original:true})).sha256,f.document.pdfHash);
+  assert.equal((await f.service.download(f.company.id,'actor',f.document.id,{original:true})).sha256,revision.pdfHash);
+  assert.deepEqual(await f.ged.readBlob(f.document.path),original);
   const listed=(await f.service.documents(f.company.id)).items[0];assert.equal(listed.compactRevision.pdfHash,revision.pdfHash);
   assert.equal(listed.compactRevision.path,undefined);assert.equal(listed.compactRevision.certificate,undefined);
   assert.equal((await f.service.reissueLayout(f.company.id,'other-session',f.document.id)).alreadyCurrent,true);assert.equal(f.signCalls,1);

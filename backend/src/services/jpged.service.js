@@ -124,8 +124,12 @@ export function createGedService({ged,store,validate=verifyCompanyCms,buildPdf=b
   }
   async function download(company,actor,id,{original=false}={}) {
     const item=await ged.get(company,'DOC',id);if(!item)error(404,'Documento não encontrado.','JPGED_DOCUMENTO');
-    const selected=original?item:(await layouts.revision(company,item)||item);
-    await audit(company,actor,'DOCUMENTO_BAIXADO',{documentId:id,pdfHash:selected.pdfHash,version:original?'original':'atual'});
+    const revision=await layouts.revision(company,item);
+    // Superseded orientation layouts remain immutable in audit storage only.
+    // Old browser tabs and saved original-version links also receive the corrected PDF.
+    const useOriginal=original&&revision?.layoutVersion!==COMPACT_LAYOUT;
+    const selected=useOriginal?item:(revision||item);
+    await audit(company,actor,'DOCUMENTO_BAIXADO',{documentId:id,pdfHash:selected.pdfHash,version:useOriginal?'original':'atual'});
     const filename=documentFilename(item);
     return {url:await ged.download(selected.path,filename),filename,sha256:selected.pdfHash,expiresIn:60};
   }
