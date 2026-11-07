@@ -31,11 +31,14 @@ test('ficha guarda unidade e CEP no conteúdo assinado, sem aceitar endereço fo
  assert.equal(documentHash(ficha),before);assert.notEqual(documentHash({...ficha,empresaSnapshot:{...ficha.empresaSnapshot,endereco:'alterado'}}),before);
  const current=await f.storage.get('empresa',company.id);assert.throws(()=>selectCompanyUnit(current,{unidadeId:'u2',unidadeVersao:a.version}),{code:'UNIDADES_ALTERADAS'});
 });
-test('troca de CNPJ invalida vínculo; cadastro incompleto e retorno divergente não são aceitos',async()=>{
+test('troca de CNPJ invalida vínculo; retorno divergente não é aceito',async()=>{
  const f=await fixture();await f.service.read(f.company.id);await f.storage.update('empresa',f.company.id,{cnpj:'11222333000181'});
- assert.throws(()=>selectCompanyUnit(awaited(),{unidadeId:'u1'}));function awaited(){return {cnpj:'11222333000181',_unidadesTreinamentos:{cnpj,items:units}};}
- f.source={ok:true,cnpj:'errado',empresa:null,unidades:[]};f.clock=Date.parse('2026-11-09T12:00:00Z');
+ const updated=await f.storage.get('empresa',f.company.id);assert.throws(()=>selectCompanyUnit(updated,{unidadeId:'u1'}),{code:'UNIDADES_CARREGAR'});
  const second=await fixture();second.source={ok:true,cnpj:'errado',empresa:null,unidades:[]};await assert.rejects(second.service.read(second.company.id),{code:'UNIDADES_DADOS'});
+});
+test('UF explícita no endereço é preservada apesar de diferença de acento na cidade',async()=>{
+ const f=await fixture();f.source={ok:true,cnpj,empresa:{id:'central'},unidades:[{id:'sid',cidade:'Sidrolandia',endereco:'Rua Pernambuco, 265 - Centro, Sidrolândia - MS, 79170-000',uf:'',cep:'79170-000'}]};
+ const r=await f.service.read(f.company.id);assert.equal(r.items[0].uf,'MS');
 });
 test('rotas restringem a consulta à empresa autenticada e ignoram CNPJ fornecido pelo navegador',async()=>{
  const f=await fixture(),other=await f.storage.create('empresa',{nome:'OUTRA',cnpj:'11222333000181'});const app=express();app.use(express.json());app.use((req,res,next)=>{req.auth={sub:'user',master:false,empresaIds:[f.company.id]};next();});app.use('/api/empresas',createEmpresasRouter({storage:f.storage,accounts:{},unitLookup:f.lookup}));app.use((e,req,res,next)=>res.status(e.status||500).json({code:e.code}));const handler=serverless(app);

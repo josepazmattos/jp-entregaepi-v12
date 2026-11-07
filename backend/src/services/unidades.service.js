@@ -33,7 +33,14 @@ export function createUnitsService({storage,lookup=lookupTrainingUnits,now=()=>D
    const ids=new Set();
    const items=source.unidades.map(unit=>{
     const id=clean(unit.id,128);if(!id||ids.has(id))throw httpError(502,'Identificador de unidade inválido.','UNIDADES_DADOS');ids.add(id);
-    return {id,cidade:clean(unit.cidade,120),endereco:clean(unit.endereco,300),uf:clean(unit.uf||'',2),cep:clean(unit.cep||'',9)};
+    const cidade=clean(unit.cidade,120),endereco=clean(unit.endereco,300);let uf=clean(unit.uf||'',2).toUpperCase();
+    // Recover only an explicit UF next to this exact city in the central address.
+    // Accent differences (Sidrolandia/Sidrolândia) must not discard an existing MS.
+    const fold=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    const cityPattern=fold(cidade).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    if(!uf&&cityPattern){const match=new RegExp(cityPattern+'\\s*[-–—,/]\\s*([a-z]{2})(?=\\s*(?:[,;.]|\\d|$))','i').exec(fold(endereco));if(match)uf=match[1].toUpperCase();}
+    if(uf&&!new Set('AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ')).has(uf))throw httpError(502,'UF inválida no cadastro de unidades.','UNIDADES_DADOS');
+    return {id,cidade,endereco,uf,cep:clean(unit.cep||'',9)};
    });
    const data={cnpj,empresaId:source.empresa?clean(source.empresa.id,128):'',items,consultadoEm:new Date(now()).toISOString()};
    data.version=createHash('sha256').update(JSON.stringify([data.cnpj,data.empresaId,data.items])).digest('hex');
