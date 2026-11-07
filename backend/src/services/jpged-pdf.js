@@ -59,7 +59,7 @@ export async function buildSigningPdf(ficha, certificate = null) {
   text('TERMO DE RESPONSABILIDADE', { type: bold, size: 13, center: true, gap: 8 });
   text(ficha.modeloFicha?.termoResponsabilidade || '', { size: ficha.modeloFicha?.id==='JP-FICHA-20261031-RESPONSABILIDADE'?9:ficha.modeloFicha?.id==='JP-EPI-2026.11'?9.5:11 });
   if(ficha.modeloFicha?.termoAssinatura)text('Confirmação da assinatura eletrônica: '+ficha.modeloFicha.termoAssinatura,{size:9.5,gap:8});
-  if(ficha.modeloFicha?.id==='JP-EPI-2026.11')text(ficha.orientacao?.confirmada?`Orientação registrada em ${ficha.orientacao.data} por ${ficha.orientacao.responsavel}. Referência: ${ficha.orientacao.referencia||'Não informada'}`:'Orientação sobre os equipamentos: não informada nesta ficha.',{size:10});
+  if(ficha.modeloFicha?.id==='JP-EPI-2026.11' && ficha.orientacao?.confirmada)text(`Orientação registrada em ${ficha.orientacao.data} por ${ficha.orientacao.responsavel}${ficha.orientacao.referencia?'. Referência: '+ficha.orientacao.referencia:''}`,{size:10});
   text(`${company.localidade || worker.localidade || ''}${company.uf ? '/' + company.uf : ''} — ${ficha.data}`, { type: bold, gap: 10 });
   const imageUrl = bio.realFingerImage;
   const facial=bio.metodo==='AWS_REKOGNITION_FACE_LIVENESS';

@@ -1,0 +1,28 @@
+name: Validar vales e impressão de EPI
+on:
+  push:
+    branches: [epi-vales-orientacao-20261107]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci --prefix backend --no-audit --no-fund && npm ci --prefix tests --no-audit --no-fund
+      - run: python3 -m pip install cryptography==46.0.3
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      - run: npx --prefix tests playwright install --with-deps chromium
+      - run: npm test --prefix backend
+      - run: npm run test:unit --prefix tests
+      - run: node tests/ocorrencias-browser.cjs
+      - run: node tests/epi-tools-browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vales-validacao
+          path: tests/output/

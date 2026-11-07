@@ -1150,7 +1150,8 @@ $("entregaForm").addEventListener("submit",async event=>{
       ...window.JP_FICHA.createSnapshot(empresa,trabalhador,itens),
       itens:itens.map(({epiId,quantidade,tipoMovimentacao,enquadramento})=>({epiId,quantidade,tipoMovimentacao,enquadramento}))
     };
-    ensureSuccess(await api("/api/fichas",{method:"POST",body:JSON.stringify(payload)}),"Não foi possível gerar a ficha de EPI.");
+    const created=ensureSuccess(await api("/api/fichas",{method:"POST",body:JSON.stringify(payload)}),"Não foi possível gerar a ficha de EPI.");
+    if(generation===sessionGeneration&&company===companyGeneration)window.JP_OCORRENCIAS?.linkReplacement(created.body.item);
     clearEntregaDraft();entregaSaving=true;renderEntregaDraft();$("entregaEpi").value="";$("entregaQuantidade").value="1";
     await refreshAll();if(generation!==sessionGeneration||company!==companyGeneration)return;goScreen("fichas");
   }catch(error){if(generation===sessionGeneration&&company===companyGeneration)handleAppError(error);}finally{if(generation===sessionGeneration&&company===companyGeneration){button.disabled=false;entregaSaving=false;renderEntregaDraft();}}

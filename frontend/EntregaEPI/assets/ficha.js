@@ -199,7 +199,7 @@ function equipmentName(item = {}) {
       </tbody></table>
       ${cancelled ? `<div class="docx-cancelled">FICHA CANCELADA${ficha.motivoCancelamento ? ` - ${esc(ficha.motivoCancelamento)}` : ""}</div>` : ""}
       <section class="docx-term"><h1 class="docx-term-title">TERMO DE RESPONSABILIDADE</h1>${text(term).split(/\n\s*\n/).map(paragraph => `<p>${esc(paragraph)}</p>`).join("")}
-        ${modern?`<p><b>Orientação sobre os equipamentos:</b> ${ficha.orientacao?.confirmada?esc(`Registrada em ${formatDate(ficha.orientacao.data)} por ${ficha.orientacao.responsavel}${ficha.orientacao.referencia?' · Referência: '+ficha.orientacao.referencia:''}`):'Não informada nesta ficha.'}</p>`:''}
+        ${modern && ficha.orientacao?.confirmada?`<p><b>Orientação sobre os equipamentos:</b> ${esc(`Registrada em ${formatDate(ficha.orientacao.data)} por ${ficha.orientacao.responsavel}${ficha.orientacao.referencia?' · Referência: '+ficha.orientacao.referencia:''}`)}</p>`:''}
         ${ficha.modeloFicha?.termoAssinatura ? `<p class="docx-signature-term"><strong>Confirmação da assinatura eletrônica:</strong> ${esc(ficha.modeloFicha.termoAssinatura)}</p>` : ""}
         <p class="docx-local"><strong>Localidade da Empresa:</strong> ${esc(localityWithUf)} <span class="docx-date-spacer"></span> <strong>${mixedMovement?'Data das Movimentações:':returnOnly?'Data da Devolução:':'Data da Entrega:'}</strong> ${esc(returnOnly?formatDate(ficha.datasMovimentacao.devolucao):date)}.</p>
         <div class="docx-sign-area">${fingerprint}${signatureNote}<div class="docx-sign-line"></div><div class="docx-worker-name">${esc(workerName)}</div></div>

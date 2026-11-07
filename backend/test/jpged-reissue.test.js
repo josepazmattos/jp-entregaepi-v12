@@ -1,6 +1,6 @@
 import test, {after} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync, readFileSync, rmSync} from 'node:fs';
+import {mkdtempSync, readFileSync, writeFileSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -98,6 +98,21 @@ for(const scenario of ['conteudo','cancelamento','prova','imagem','biometricId',
   });
 }
 test('nova ficha já marcada como compacta dispensa reemissão',async()=>{
-  const f=await fixture();await f.ged.put(f.company.id,'DOC',f.document.id,{...f.document,layoutVersion:'compact-1'},f.document.version);
+  const f=await fixture();await f.ged.put(f.company.id,'DOC',f.document.id,{...f.document,layoutVersion:'compact-2-orientacao'},f.document.version);
   assert.equal((await f.service.reissueLayout(f.company.id,'actor',f.document.id)).alreadyCurrent,true);assert.equal(f.signCalls,0);
+});
+
+test('nova revisão omite orientação vazia e preserva a revisão anterior e o original',async()=>{
+  const f=await fixture();
+  const first=await f.service.reissueLayout(f.company.id,'actor',f.document.id);
+  const prior=await f.ged.get(f.company.id,'LAYOUT',f.document.id);
+  await f.ged.put(f.company.id,'LAYOUT',f.document.id,{...prior,layoutVersion:'compact-1'},prior.version);
+  const original=await f.ged.readBlob(f.document.path);
+  const revised=await f.service.reissueLayout(f.company.id,'actor',f.document.id);
+  const current=await f.ged.get(f.company.id,'LAYOUT',f.document.id);
+  assert.equal(revised.revision.layoutVersion,'compact-2-orientacao');
+  assert.equal(current.previousRevision.pdfHash,first.revision.pdfHash);
+  assert.deepEqual(await f.ged.readBlob(f.document.path),original);
+  const file=join(dir,'orientation-revision.pdf');writeFileSync(file,await f.ged.readBlob(current.path));
+  assert.doesNotMatch(execFileSync('pdftotext',[file,'-']).toString(),/orientação sobre os equipamentos:\s*não informada nesta ficha/i);
 });

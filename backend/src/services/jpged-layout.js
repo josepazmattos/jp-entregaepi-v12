@@ -4,7 +4,7 @@ import { sha256, canonical } from './document-integrity.js';
 import { signingBytes, embedCms } from './jpged-pdf.js';
 import { detachedCms } from './jpged-cms.js';
 
-export const COMPACT_LAYOUT = 'compact-1';
+export const COMPACT_LAYOUT = 'compact-2-orientacao';
 const fail = (message, code) => { throw httpError(409, message, code); };
 
 // A presentation revision is a NEW signed original. Never rewrite DOC, its
@@ -12,7 +12,7 @@ const fail = (message, code) => { throw httpError(409, message, code); };
 export function createLayoutService({ ged, store, certificate, confirmedContent, buildPdf, validate, vault, audit }) {
   async function revision(company, document) {
     const item = await ged.get(company, 'LAYOUT', document.id);
-    if (item && (item.sourcePdfHash !== document.pdfHash || item.documentHash !== document.documentHash || item.layoutVersion !== COMPACT_LAYOUT)) {
+    if (item && (item.sourcePdfHash !== document.pdfHash || item.documentHash !== document.documentHash || !['compact-1',COMPACT_LAYOUT].includes(item.layoutVersion))) {
       fail('A versão de impressão não corresponde ao original preservado.', 'JPGED_INTEGRIDADE');
     }
     return item;
@@ -33,7 +33,7 @@ export function createLayoutService({ ged, store, certificate, confirmedContent,
     const document = await ged.get(company, 'DOC', id);
     if (!document) throw httpError(404, 'Documento não encontrado.', 'JPGED_DOCUMENTO');
     const existing = await revision(company, document);
-    if (existing || document.layoutVersion === COMPACT_LAYOUT) return { completed: true, documentId: id, alreadyCurrent: true, revision: summary(existing) };
+    if (existing?.layoutVersion === COMPACT_LAYOUT || document.layoutVersion === COMPACT_LAYOUT) return { completed: true, documentId: id, alreadyCurrent: true, revision: summary(existing) };
     const ficha = await source(company, document);
     if (sha256(await ged.readBlob(document.path)) !== document.pdfHash) fail('O original preservado perdeu a integridade.', 'JPGED_INTEGRIDADE');
     const cert = await certificate(company);
@@ -70,7 +70,8 @@ export function createLayoutService({ ged, store, certificate, confirmedContent,
         layoutVersion: COMPACT_LAYOUT, sourcePdfHash: document.pdfHash, documentHash: document.documentHash,
         biometricId: document.biometricId, path, evidencePath, pdfHash, sizeBytes: final.length,
         certifiedAt: checked.evidence.checkedAt, certificate: checked.certificate, actor,
-      });
+        ...(existing?{previousRevision:existing}:{}),
+      },existing?.version||0);
     } catch (error) {
       if (error.code !== 'JPGED_CONFLICT') throw error;
       // Concurrent sessions converge on one published revision, without ever

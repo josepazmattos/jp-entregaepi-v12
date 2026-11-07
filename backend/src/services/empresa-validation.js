@@ -131,15 +131,25 @@ export function validateCompanyLogo(value) {
   return value;
 }
 
+export function companyEmails(value) {
+  const input=textField(value,{field:'E-mails',max:3000});
+  const addresses=input.split(';').map(x=>x.trim()).filter(Boolean);
+  if(addresses.length>10)invalid('E-mails','Informe até 10 e-mails separados por ponto e vírgula.');
+  for(const address of addresses){
+    if(address.length>254||address.split('@')[0].length>64||!/^([a-z0-9!#$%&'*+\/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+\/=?^_`{|}~-]+)*)@([a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(address))invalid('E-mails','Confira os e-mails e separe os endereços com ponto e vírgula (;).');
+  }
+  return [...new Map(addresses.map(address=>[address.toLowerCase(),address])).values()];
+}
+
 export function companyEditableFields(body, { requireName = false } = {}) {
   const fields = {};
   for (const [key, label, max] of [
     ['nome', 'Nome da empresa', 300], ['localidade', 'Localidade', 300],
-    ['endereco', 'Endereço', 500], ['responsavel', 'Responsável', 200], ['email', 'E-mail', 254], ['telefone', 'Telefone', 50]
+    ['endereco', 'Endereço', 500], ['responsavel', 'Responsável', 200], ['email', 'E-mails', 3000], ['telefone', 'Telefone', 50]
   ]) {
     if (key in body || key === 'nome' && requireName) fields[key] = textField(body[key], { field: label, max, required: key === 'nome' });
   }
-  if (fields.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.email)) invalid('E-mail');
+  if ('email' in fields)fields.email=companyEmails(fields.email).join('; ');
   if ('uf' in body) {
     fields.uf = textField(body.uf, { field: 'UF', max: 2 }).toUpperCase();
     if (fields.uf && !'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ').includes(fields.uf)) invalid('UF', 'Selecione uma UF válida.');

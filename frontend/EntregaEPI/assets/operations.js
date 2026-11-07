@@ -3,6 +3,7 @@ let workerEdit=null;
 const facialAssetsBase=new URL('.',document.currentScript?.src||location.href).href;
 const operationWindows=new Set(),operationDialogs=new Set(),operationControllers=new Set();
 function closeOperations(){
+  window.JP_OCORRENCIAS?.reset();
   if(typeof resetJpged==='function')resetJpged();
   if(typeof resetEpiTools==='function')resetEpiTools();
   const editing=Boolean(workerEdit);workerEdit=null;
@@ -61,9 +62,9 @@ function editCompany(id){
   if(!isMaster())return;
   const item=cache.empresas.find(x=>x.id===id);if(!item)return;
   const context=operationContext(),dialog=dialogShell(document,'Editar empresa',item.nome||'Empresa selecionada');
-  const fields=[['nome','Nome da empresa'],['endereco','Endereço'],['localidade','Localidade'],['uf','UF'],['responsavel','Responsável'],['email','E-mail'],['telefone','Telefone']];
+  const fields=[['nome','Nome da empresa'],['endereco','Endereço'],['localidade','Localidade'],['uf','UF'],['responsavel','Responsável'],['email','E-mails da empresa (; entre endereços)'],['telefone','Telefone']];
   if(isMaster()&&item.acessoStatus==='ativo')fields.splice(1,0,['login','Login da empresa']);
-  dialog.querySelector('.dialog-content').innerHTML='<form id="companyEditForm">'+fields.map(([key,label])=>`<label for="company-edit-${key}">${label}</label><input id="company-edit-${key}" name="${key}" value="${escapeHtml(item[key]||'')}" ${key==='nome'?'required':''} ${key==='uf'?'maxlength="2"':''}>`).join('')+`<p class="field-help">${item.inscricaoTipo==='CAEPF'?'CAEPF':'CNPJ'}: ${escapeHtml(item.cnpj)} · Login: ${escapeHtml(item.login||'—')}</p><button type="submit" class="btn btn-primary" style="margin-top:16px">Salvar alterações</button></form>`;
+  dialog.querySelector('.dialog-content').innerHTML='<form id="companyEditForm">'+fields.map(([key,label])=>`<label for="company-edit-${key}">${label}</label><input id="company-edit-${key}" name="${key}" value="${escapeHtml(item[key]||'')}" ${key==='nome'?'required':''} ${key==='uf'?'maxlength="2"':''} ${key==='email'?'maxlength="3000" inputmode="email" placeholder="rh@empresa.com.br; gestor@empresa.com.br"':''}>`).join('')+`<p class="field-help">${item.inscricaoTipo==='CAEPF'?'CAEPF':'CNPJ'}: ${escapeHtml(item.cnpj)} · Login: ${escapeHtml(item.login||'—')}</p><button type="submit" class="btn btn-primary" style="margin-top:16px">Salvar alterações</button></form>`;
   const form=dialog.querySelector('form');form.onsubmit=async event=>{
     event.preventDefault();const button=form.querySelector('button');if(button.disabled)return;button.disabled=true;
     try{assertOperationContext(context);ensureSuccess(await api('/api/empresas/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({...Object.fromEntries(new FormData(form)),_version:item._version||1})}));assertOperationContext(context);await refreshEmpresas(false);dialog.close();}

@@ -1,6 +1,6 @@
 import { QueryCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb';
 
-const supported = new Set(['empresa', 'trabalhador', 'ficha', 'epi', 'auditoria']);
+const supported = new Set(['empresa', 'trabalhador', 'ficha', 'epi', 'auditoria', 'ocorrencia_epi']);
 const failure = () => Object.assign(new Error('A consulta está temporariamente ocupada. Tente novamente.'), { status: 503, code: 'CONSULTA_OCUPADA' });
 
 // The index contains only keys. Read current records strongly consistently from the
