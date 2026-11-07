@@ -62,15 +62,15 @@ export async function buildSigningPdf(ficha, certificate = null) {
   text(`Movimentação: ${ficha.tipo}    Data: ${ficha.data}    Ficha: ${ficha.numero || ficha.id}`, { size: 10, gap: 12 });
   if(ficha.status==='cancelada')text('FICHA CANCELADA - '+(ficha.motivoCancelamento||''),{type:bold});
   if(!certificate)text('CÓPIA PARA CONSULTA - SEM CERTIFICAÇÃO DIGITAL NESTE ARQUIVO',{type:bold,size:9});
-  if(ficha.modeloFicha?.id==='JP-EPI-2026.11'){
-    text(`Endereço: ${company.endereco||'Não informado'} · ${company.localidade||''}/${company.uf||''}`,{size:10});
+  if(ficha.modeloFicha?.id?.startsWith('JP-EPI-2026.11')){
+    text(`Endereço: ${company.endereco||'Não informado'} · ${company.localidade||''}/${company.uf||''}${company.cep?' · CEP: '+company.cep:''}`,{size:10});
     const admission=String(worker.dataAdmissao||'').replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$3/$2/$1');
     text(`Setor: ${worker.setor||'Não informado'} · Admissão: ${admission||'Não informada'}`,{size:10});
   }
   text('TERMO DE RESPONSABILIDADE', { type: bold, size: 13, center: true, gap: 8 });
-  text(ficha.modeloFicha?.termoResponsabilidade || '', { justify:true,size: ficha.modeloFicha?.id==='JP-FICHA-20261031-RESPONSABILIDADE'?9:ficha.modeloFicha?.id==='JP-EPI-2026.11'?9.5:11 });
+  text(ficha.modeloFicha?.termoResponsabilidade || '', { justify:true,size: ficha.modeloFicha?.id==='JP-FICHA-20261031-RESPONSABILIDADE'?9:ficha.modeloFicha?.id?.startsWith('JP-EPI-2026.11')?9.5:11 });
   if(ficha.modeloFicha?.termoAssinatura)text('Confirmação da assinatura eletrônica: '+ficha.modeloFicha.termoAssinatura,{justify:true,size:9.5,gap:8});
-  if(ficha.modeloFicha?.id==='JP-EPI-2026.11' && ficha.orientacao?.confirmada)text(`Orientação registrada em ${ficha.orientacao.data} por ${ficha.orientacao.responsavel}${ficha.orientacao.referencia?'. Referência: '+ficha.orientacao.referencia:''}`,{size:10});
+  if(ficha.modeloFicha?.id?.startsWith('JP-EPI-2026.11') && ficha.orientacao?.confirmada)text(`Orientação registrada em ${ficha.orientacao.data} por ${ficha.orientacao.responsavel}${ficha.orientacao.referencia?'. Referência: '+ficha.orientacao.referencia:''}`,{size:10});
   text(`${company.localidade || worker.localidade || ''}${company.uf ? '/' + company.uf : ''} — ${ficha.data}`, { type: bold, gap: 10 });
   const imageUrl = bio.realFingerImage;
   const facial=bio.metodo==='AWS_REKOGNITION_FACE_LIVENESS';
