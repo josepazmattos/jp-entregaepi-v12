@@ -17,7 +17,7 @@
   const data=state.company===activeEmpresaId?state.data:null;
   if(!data){select.disabled=true;select.innerHTML='<option value="">'+(state.promise?'Carregando unidades…':'Carregue as unidades')+'</option>';el(prefix+'UnitAddress').textContent='';return;}
   const items=data.items||[];select.disabled=!items.length;
-  select.innerHTML=items.length?'<option value="">Selecione a unidade desta ficha</option>'+items.map(u=>`<option value="${escapeHtml(u.id)}" ${!u.endereco||!u.cidade?'disabled':''}>${escapeHtml(address(u))}</option>`).join(''):'<option value="">Endereço do cadastro da empresa</option>';
+  select.innerHTML=items.length?'<option value="">Selecione a unidade desta ficha</option>'+items.map(u=>`<option value="${escapeHtml(u.id)}" ${!u.endereco||!u.cidade?'disabled':''}>${escapeHtml([u.cidade,u.uf].filter(Boolean).join('/')+' — '+u.endereco)}</option>`).join(''):'<option value="">Endereço do cadastro da empresa</option>';
   const prior=choices[prefix];select.value=items.some(u=>u.id===prior.selected)?prior.selected:'';
   const selected=items.find(u=>u.id===select.value),company=cache.empresas.find(x=>x.id===activeEmpresaId)||{};
   el(prefix+'UnitAddress').textContent=selected?address(selected):items.length?'Confira a unidade e o endereço antes de gerar a ficha.':[company.endereco,company.localidade,company.uf].filter(Boolean).join(' · ');
