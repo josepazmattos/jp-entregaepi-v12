@@ -6,11 +6,11 @@ import { createCompanyService, publicCompany } from '../services/empresa.service
 import { companyAccounts } from '../services/company-accounts.js';
 import { bearer } from '../security/session.js';
 import { invokeSecurity } from '../security/remote.js';
-import {createUnitsService} from '../services/unidades.service.js';
+import {createUnitsService,validateUnitChanges} from '../services/unidades.service.js';
 
-export function createEmpresasRouter({ storage = defaultStorage, accounts = companyAccounts, unitLookup } = {}) {
+export function createEmpresasRouter({ storage = defaultStorage, accounts = companyAccounts, unitLookup, unitSave } = {}) {
   const router = Router();
-  const units=createUnitsService({storage,lookup:unitLookup});
+  const units=createUnitsService({storage,lookup:unitLookup,save:unitSave});
   const service = createCompanyService({ storage, accounts });
   const requestService = req => !process.env.VAULT_ADMIN_FUNCTION ? service : createCompanyService({storage,accounts:{...accounts,
     ensureCompanyAccess: ({companyId})=>invokeSecurity(process.env.VAULT_ADMIN_FUNCTION,{action:'account-ensure',company:companyId,token:bearer(req.headers)}),
@@ -24,6 +24,9 @@ export function createEmpresasRouter({ storage = defaultStorage, accounts = comp
     ok(res, { items: items.filter(item => !item.excluidaEm).map(publicCompany) });
   });
 
+  router.get('/:id/unidades/cadastro',requireMaster,async(req,res)=>{ok(res,await units.read(req.params.id,{force:true}));});
+  router.post('/:id/unidades',requireMaster,async(req,res)=>{ok(res,await units.write(req.params.id,objectBody(req).alteracoes,req.auth.sub));});
+
   router.get('/:id/unidades',async(req,res)=>{assertCompanyAccess(req,req.params.id);ok(res,await units.read(req.params.id));});
   router.post('/:id/unidades/atualizar',async(req,res)=>{assertCompanyAccess(req,req.params.id);ok(res,await units.read(req.params.id,{refresh:true}));});
 
@@ -33,7 +36,14 @@ export function createEmpresasRouter({ storage = defaultStorage, accounts = comp
   });
 
   router.post('/', requireMaster, async (req, res) => {
-    const result = await requestService(req).register(objectBody(req), req.auth.sub);
+    const body=objectBody(req);
+    const changes=body.unidades?.length?validateUnitChanges(body.unidades):null;
+    if(changes&&body.inscricaoTipo==='CAEPF')throw httpError(400,'As localidades compartilhadas exigem CNPJ.','UNIDADES_CNPJ_INVALIDO');
+    const result = await requestService(req).register(body, req.auth.sub);
+    if(changes){
+      try{result.unidades=await units.write(result.item.id,changes,req.auth.sub);result.item=publicCompany(await service.company(result.item.id));}
+      catch(error){res.status(202);ok(res,{...result,unidadesPendentes:true,warning:'Empresa salva. As localidades ainda não foram confirmadas: '+error.message});return;}
+    }
     res.status(result.acesso.status === 'ativo' ? 200 : 202);
     ok(res, result);
   });

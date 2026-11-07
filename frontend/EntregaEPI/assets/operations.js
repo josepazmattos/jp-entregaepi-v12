@@ -59,19 +59,41 @@ async function submitWorker(event){
   try{assertOperationContext(context);ensureSuccess(await api('/api/trabalhadores/'+encodeURIComponent(context.id),{method:'PATCH',body:JSON.stringify({...formDataObj(form),_version:context.version})}));assertOperationContext(context);cancelWorkerEdit();await refreshTrabalhadores(false);setText('appMessage','Dados do trabalhador atualizados.');$('appMessage').className='message success';}
   catch(error){handleAppError(error);}finally{button.disabled=false;}
 }
-function editCompany(id){
+async function editCompany(id){
   if(!isMaster())return;
-  const item=cache.empresas.find(x=>x.id===id);if(!item)return;
-  const context=operationContext(),dialog=dialogShell(document,'Editar empresa',item.nome||'Empresa selecionada');
-  const fields=[['nome','Nome da empresa'],['endereco','Endereço'],['localidade','Localidade'],['uf','UF'],['responsavel','Responsável'],['email','E-mails da empresa (; entre endereços)'],['telefone','Telefone']];
-  if(isMaster()&&item.acessoStatus==='ativo')fields.splice(1,0,['login','Login da empresa']);
-  dialog.querySelector('.dialog-content').innerHTML='<form id="companyEditForm">'+fields.map(([key,label])=>`<label for="company-edit-${key}">${label}</label><input id="company-edit-${key}" name="${key}" value="${escapeHtml(item[key]||'')}" ${key==='nome'?'required':''} ${key==='uf'?'maxlength="2"':''} ${key==='email'?'maxlength="3000" inputmode="email" placeholder="rh@empresa.com.br; gestor@empresa.com.br"':''}>`).join('')+`<p class="field-help">${item.inscricaoTipo==='CAEPF'?'CAEPF':'CNPJ'}: ${escapeHtml(item.cnpj)} · Login: ${escapeHtml(item.login||'—')}</p><button type="submit" class="btn btn-primary" style="margin-top:16px">Salvar alterações</button></form>`;
-  const form=dialog.querySelector('form');form.onsubmit=async event=>{
-    event.preventDefault();const button=form.querySelector('button');if(button.disabled)return;button.disabled=true;
-    try{assertOperationContext(context);ensureSuccess(await api('/api/empresas/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({...Object.fromEntries(new FormData(form)),_version:item._version||1})}));assertOperationContext(context);await refreshEmpresas(false);dialog.close();}
-    catch(error){dialogMessage(dialog,error.message,'error');}finally{button.disabled=false;}
-  };
+  const cached=cache.empresas.find(x=>x.id===id);if(!cached)return;
+  const context=operationContext(),dialog=dialogShell(document,'Editar empresa',cached.nome||'Empresa selecionada');
+  dialogMessage(dialog,'Carregando cadastro e localidades…');
+  try{
+    let units,unitError='';
+    try{units=ensureSuccess(await api('/api/empresas/'+encodeURIComponent(id)+'/unidades/cadastro')).body;}catch(error){unitError=error.message;}
+    assertOperationContext(context);if(!dialog.isConnected)return;
+    let item=ensureSuccess(await api('/api/empresas/'+encodeURIComponent(id))).body.item;
+    assertOperationContext(context);if(!dialog.isConnected)return;
+    const fields=[['nome','Nome da empresa'],['endereco','Endereço principal (usado quando não houver unidades)'],['localidade','Localidade principal'],['uf','UF'],['responsavel','Responsável'],['email','E-mails da empresa (; entre endereços)'],['telefone','Telefone']];
+    if(item.acessoStatus==='ativo')fields.splice(1,0,['login','Login da empresa']);
+    dialog.querySelector('.dialog-content').innerHTML='<form id="companyEditForm">'+fields.map(([key,label])=>`<label for="company-edit-${key}">${label}</label><input id="company-edit-${key}" name="${key}" value="${escapeHtml(item[key]||'')}" ${key==='nome'?'required':''} ${key==='uf'?'maxlength="2"':''} ${key==='email'?'maxlength="3000" inputmode="email" placeholder="rh@empresa.com.br; gestor@empresa.com.br"':''}>`).join('')+`<p class="field-help">${item.inscricaoTipo==='CAEPF'?'CAEPF':'CNPJ'}: ${escapeHtml(item.cnpj)} · Login: ${escapeHtml(item.login||'—')}</p><button type="submit" class="btn btn-primary" style="margin-top:16px">Salvar alterações</button></form>`;
+    const form=dialog.querySelector('form');
+    if(units)window.JP_EMPRESA_UNIDADES?.mount(form,units.items||[]);
+    else{const note=document.createElement('p');note.className='message warn';note.textContent='Localidades indisponíveis: '+unitError+' Os dados gerais podem ser salvos; os endereços das unidades serão preservados. Reabra a edição para tentar novamente.';form.querySelector('button[type=submit]').before(note);}
+    dialogMessage(dialog,'');
+    let profileSaved=false;
+    form.onsubmit=async event=>{
+      event.preventDefault();const button=form.querySelector('button[type=submit]');if(button.disabled)return;
+      let changes;try{changes=window.JP_EMPRESA_UNIDADES?.changes(form)||[];}catch(error){dialogMessage(dialog,error.message,'error');return;}
+      button.disabled=true;
+      try{
+        assertOperationContext(context);
+        if(!profileSaved){item=ensureSuccess(await api('/api/empresas/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({...Object.fromEntries(new FormData(form)),_version:item._version||1})})).body.item;profileSaved=true;for(const input of form.querySelectorAll('[name]'))input.disabled=true;}
+        assertOperationContext(context);await window.JP_EMPRESA_UNIDADES?.save(id,changes);assertOperationContext(context);await refreshEmpresas(false);dialog.close();
+        if(document.querySelector("#screen-entrega.active,#screen-rapida.active"))window.JP_UNIDADES?.load();
+        setText('appMessage','Empresa e localidades salvas. Os endereços estão disponíveis para novas fichas.');$('appMessage').className='message success';
+      }catch(error){if(dialog.isConnected)dialogMessage(dialog,(profileSaved?'Dados da empresa salvos. As localidades ainda não foram confirmadas. ':'')+error.message,'error');}
+      finally{button.disabled=false;}
+    };
+  }catch(error){if(dialog.isConnected)dialogMessage(dialog,error.message,'error');}
 }
+
 function resetCompanyPassword(id){
   if(!isMaster())return;
   let item=cache.empresas.find(x=>x.id===id);if(!item)return;

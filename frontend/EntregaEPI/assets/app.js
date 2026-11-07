@@ -276,7 +276,7 @@ function clearSessionData(clearDrafts=false) {
   $("userBadge").textContent="Usuário autenticado";
   resetDiagnostics();renderConfigSummary();setSidebarOpen(false);renderRoleAccess();resetFirstAccess();clearCredentials();clearImportPreview();resetCompanyLogoEditor();
   clearAppError();renderEntregaOptions();$("caMessage").className="message hidden";$("caMessage").textContent="";
-  if(clearDrafts){["empresaForm","trabalhadorForm","epiForm","entregaForm"].forEach(id=>$(id).reset());empresaLogoDraft="";empresaRequestId="";companyLoginAutomatic=true;setLogoPreview("empresaLogoPreview","empresaLogoPreviewWrap","");updateEquipmentKind();}
+  if(clearDrafts){window.JP_EMPRESA_UNIDADES?.reset($("empresaForm"));["empresaForm","trabalhadorForm","epiForm","entregaForm"].forEach(id=>$(id).reset());empresaLogoDraft="";empresaRequestId="";companyLoginAutomatic=true;setLogoPreview("empresaLogoPreview","empresaLogoPreviewWrap","");updateEquipmentKind();}
 }
 function handleAppError(error) {
   if (error.code === "SESSION_CHANGED") return;
@@ -590,10 +590,12 @@ async function submitCompany(event){
   event.preventDefault();if(!isMaster()){handleAppError(new Error("O cadastro de empresas e acessos é realizado pelo Master."));return;}
   const form=event.target,button=form.querySelector('button[type="submit"]'),generation=sessionGeneration;if(button.disabled||logoCreateLoading)return;companySaving=true;updateCompanySubmitButton();clearAppError();clearCredentials();
   try{
-    const body=formDataObj(form);body.logoDataUrl=empresaLogoDraft;
+    const body=formDataObj(form);body.logoDataUrl=empresaLogoDraft;body.unidades=window.JP_EMPRESA_UNIDADES?.changes(form)||[];
     if(!empresaRequestId)empresaRequestId=createRequestId();body.requestId=empresaRequestId;
     const result=ensureSuccess(await api("/api/empresas",{method:"POST",body:JSON.stringify(body)}),"Não foi possível cadastrar a empresa.");
     if(!result.body?.item?.id)throw new Error("O serviço não confirmou o cadastro da empresa. Tente novamente.");
+    if(result.body.unidadesPendentes){await refreshEmpresas(false);throw new Error(result.body.warning+' Clique em Cadastrar novamente para retomar, ou abra Editar empresa.');}
+    window.JP_EMPRESA_UNIDADES?.reset(form);
     companyGeneration++;const selectedGeneration=companyGeneration;clearImportPreview();resetCompanyLogoEditor();saveActiveCompany(result.body.item.id);
     form.reset();updateEmployerRegistration();clearCompanyPdf();empresaRequestId="";empresaLogoDraft="";companyLoginAutomatic=true;setLogoPreview("empresaLogoPreview","empresaLogoPreviewWrap","");
     await refreshAll();if(generation!==sessionGeneration||selectedGeneration!==companyGeneration)return;showCompanyAccess(result,body.cnpj);

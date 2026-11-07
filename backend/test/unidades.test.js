@@ -45,3 +45,22 @@ test('rotas restringem a consulta à empresa autenticada e ignoram CNPJ fornecid
  const request=async(id,method='GET')=>handler({version:'2.0',rawPath:'/api/empresas/'+id+'/unidades'+(method==='POST'?'/atualizar':''),rawQueryString:'cnpj=11222333000181',headers:{host:'test','content-type':'application/json'},requestContext:{http:{method,path:'/',sourceIp:'127.0.0.1'}},body:method==='POST'?JSON.stringify({cnpj:'11222333000181'}):undefined},{});
  assert.equal((await request(other.id)).statusCode,403);assert.equal(f.calls,0);assert.equal((await request(f.company.id,'POST')).statusCode,200);assert.equal(f.calls,1);
 });
+test('cadastro Master deriva CNPJ do servidor, invalida cache e atualiza seleção',async()=>{
+ const f=await fixture(),id='11111111-1111-4111-8111-111111111111';let request;
+ await f.service.read(f.company.id);
+ const service=createUnitsService({storage:f.storage,lookup:f.lookup,save:async input=>{request=input;assert.equal((await f.storage.get('empresa',f.company.id))._unidadesTreinamentos,null);f.source={ok:true,cnpj,empresa:{id:'treino-e1'},unidades:[{...units[0],id,revisao:'b'.repeat(64)}]};return {ok:true,cnpj};}});
+ const result=await service.write(f.company.id,[{...units[0],id,ativo:true,revisao:null}], 'master');
+ assert.equal(request.cnpj,cnpj);assert.equal(request.actor,'master');assert.equal(result.items[0].id,id);assert.equal(result.items[0].revisao,'b'.repeat(64));assert.equal(f.calls,2);
+});
+test('falha na gravação não permite reutilizar cache antigo e entradas inválidas não chegam à origem',async()=>{
+ const f=await fixture();await f.service.read(f.company.id);let calls=0;
+ const service=createUnitsService({storage:f.storage,lookup:f.lookup,save:async()=>{calls++;return {ok:false,status:409,code:'CADASTRO_ALTERADO',message:'Atualize a unidade.'};}});
+ await assert.rejects(service.write(f.company.id,[{id:'forjado'}],'master'),{code:'UNIDADE_INVALIDA'});assert.equal(calls,0);
+ await assert.rejects(service.write(f.company.id,[{...units[0],id:'11111111-1111-4111-8111-111111111111',ativo:true}],'master'),{code:'CADASTRO_ALTERADO'});
+ assert.equal((await f.storage.get('empresa',f.company.id))._unidadesTreinamentos,null);
+});
+test('empresa comum não pode abrir gestão nem gravar localidades mesmo alterando a requisição',async()=>{
+ const f=await fixture();let writes=0;const app=express();app.use(express.json());app.use((req,res,next)=>{req.auth={sub:'user',master:false,empresaIds:[f.company.id]};next();});app.use('/api/empresas',createEmpresasRouter({storage:f.storage,accounts:{},unitLookup:f.lookup,unitSave:async()=>{writes++;}}));app.use((e,req,res,next)=>res.status(e.status||500).json({code:e.code}));const handler=serverless(app);
+ for(const [path,method] of [['/unidades','POST'],['/unidades/cadastro','GET']]){const r=await handler({version:'2.0',rawPath:'/api/empresas/'+f.company.id+path,headers:{host:'test','content-type':'application/json'},requestContext:{http:{method,path:'/',sourceIp:'127.0.0.1'}},body:JSON.stringify({cnpj,alteracoes:[]})},{});assert.equal(r.statusCode,403);}
+ assert.equal(writes,0);assert.equal(f.calls,0);
+});
