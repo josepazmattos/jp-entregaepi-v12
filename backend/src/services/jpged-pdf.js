@@ -31,8 +31,18 @@ export async function buildSigningPdf(ficha, certificate = null) {
     }
     return out;
   }
-  function text(value, { size = 11, type = font, center = false, gap = 4 } = {}) {
-    for (const line of lines(value, available, size, type)) { ensure(size * 1.35); page.drawText(line, { x: center ? (width - type.widthOfTextAtSize(line, size)) / 2 : margin, y: y - size, size, font: type }); y -= size * 1.35; }
+  function text(value, { size = 11, type = font, center = false, justify = false, gap = 4 } = {}) {
+    const wrapped=lines(value, available, size, type);
+    for (const [index,line] of wrapped.entries()) {
+      ensure(size * 1.35);
+      const words=line.split(' ');
+      if(justify && !center && words.length>1 && index<wrapped.length-1 && wrapped[index+1]){
+        const space=(available-words.reduce((sum,word)=>sum+type.widthOfTextAtSize(word,size),0))/(words.length-1);
+        let x=margin;
+        for(const word of words){page.drawText(word,{x,y:y-size,size,font:type});x+=type.widthOfTextAtSize(word,size)+space;}
+      } else page.drawText(line, { x: center ? (width - type.widthOfTextAtSize(line, size)) / 2 : margin, y: y - size, size, font: type });
+      y -= size * 1.35;
+    }
     y -= gap;
   }
   newPage();
@@ -54,11 +64,12 @@ export async function buildSigningPdf(ficha, certificate = null) {
   if(!certificate)text('CÓPIA PARA CONSULTA - SEM CERTIFICAÇÃO DIGITAL NESTE ARQUIVO',{type:bold,size:9});
   if(ficha.modeloFicha?.id==='JP-EPI-2026.11'){
     text(`Endereço: ${company.endereco||'Não informado'} · ${company.localidade||''}/${company.uf||''}`,{size:10});
-    text(`Setor: ${worker.setor||'Não informado'} · Admissão: ${worker.dataAdmissao||'Não informada'}`,{size:10});
+    const admission=String(worker.dataAdmissao||'').replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$3/$2/$1');
+    text(`Setor: ${worker.setor||'Não informado'} · Admissão: ${admission||'Não informada'}`,{size:10});
   }
   text('TERMO DE RESPONSABILIDADE', { type: bold, size: 13, center: true, gap: 8 });
-  text(ficha.modeloFicha?.termoResponsabilidade || '', { size: ficha.modeloFicha?.id==='JP-FICHA-20261031-RESPONSABILIDADE'?9:ficha.modeloFicha?.id==='JP-EPI-2026.11'?9.5:11 });
-  if(ficha.modeloFicha?.termoAssinatura)text('Confirmação da assinatura eletrônica: '+ficha.modeloFicha.termoAssinatura,{size:9.5,gap:8});
+  text(ficha.modeloFicha?.termoResponsabilidade || '', { justify:true,size: ficha.modeloFicha?.id==='JP-FICHA-20261031-RESPONSABILIDADE'?9:ficha.modeloFicha?.id==='JP-EPI-2026.11'?9.5:11 });
+  if(ficha.modeloFicha?.termoAssinatura)text('Confirmação da assinatura eletrônica: '+ficha.modeloFicha.termoAssinatura,{justify:true,size:9.5,gap:8});
   if(ficha.modeloFicha?.id==='JP-EPI-2026.11' && ficha.orientacao?.confirmada)text(`Orientação registrada em ${ficha.orientacao.data} por ${ficha.orientacao.responsavel}${ficha.orientacao.referencia?'. Referência: '+ficha.orientacao.referencia:''}`,{size:10});
   text(`${company.localidade || worker.localidade || ''}${company.uf ? '/' + company.uf : ''} — ${ficha.data}`, { type: bold, gap: 10 });
   const imageUrl = bio.realFingerImage;
