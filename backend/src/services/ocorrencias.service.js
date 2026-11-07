@@ -21,6 +21,7 @@ export async function sendOccurrenceEmail(item) {
     `EPI recolhido fisicamente: ${item.recolhido ? 'Sim' : 'Não'}`,
     ...(item.valorCentavos == null ? [] : [`Valor informado para análise: R$ ${(item.valorCentavos / 100).toFixed(2).replace('.',',')}`]),
     ...(item.manifestacao ? [`Manifestação do trabalhador: ${item.manifestacao}`] : []),
+    ...(item.evidencias ? [`Referência das evidências: ${item.evidencias}`] : []),
     '', 'Consulte o vale, a ficha original e a reposição pelo acesso autenticado da empresa:', url,
     'Após entrar, abra Entrega de EPI e clique em Abrir vale do e-mail. A ficha original pode ser impressa ou baixada pelo fluxo habitual.',
     '', 'Este registro não autoriza desconto automático e não altera a ficha de entrega. O RH deve apurar o dano, a responsabilidade, o ajuste prévio quando exigível e as regras aplicáveis antes de decidir. A reposição do EPI não depende dessa apuração.'
@@ -38,7 +39,7 @@ export function createOccurrenceService(db, send=sendOccurrenceEmail) {
   async function register(ficha, body, actor) {
     const requestId=textField(body.requestId,{required:true,field:'Solicitação',max:100});
     const scope=`epi-occurrence:${ficha.empresaId}:${actor}`;
-    const requestHash=hash({fichaId:ficha.id,indice:body.indice,quantidade:body.quantidade,motivo:body.motivo,data:body.data,descricao:body.descricao,manifestacao:body.manifestacao,recolhido:body.recolhido,valorCentavos:body.valorCentavos});
+    const requestHash=hash({fichaId:ficha.id,indice:body.indice,quantidade:body.quantidade,motivo:body.motivo,data:body.data,descricao:body.descricao,manifestacao:body.manifestacao,evidencias:body.evidencias,recolhido:body.recolhido,valorCentavos:body.valorCentavos});
     const replay=async()=>{const receipt=await db.getReceipt(scope,requestId);if(!receipt)return null;if(receipt.result.hash!==requestHash)throw httpError(409,'Solicitação já utilizada com outros dados.');return db.get(entity,receipt.result.id);};
     const previous=await replay();if(previous)return previous;
     if(ficha.status==='cancelada')throw httpError(409,'A ficha de origem está cancelada.');
@@ -50,7 +51,7 @@ export function createOccurrenceService(db, send=sendOccurrenceEmail) {
     const date=workerDate(body.data);if(!date||date>new Date().toISOString().slice(0,10))throw httpError(400,'Informe uma data válida, até hoje.');
     const delivered=workerDate(item.datasMovimentacao?.entrega||ficha.data);if(delivered&&date<delivered)throw httpError(400,'A ocorrência não pode anteceder a entrega de origem.');
     if(body.valorCentavos!=null&&(!Number.isSafeInteger(body.valorCentavos)||body.valorCentavos<0||body.valorCentavos>100000000))throw httpError(400,'Valor informado inválido.');
-    const data={empresaId:ficha.empresaId,trabalhadorId:ficha.trabalhadorId,fichaId:ficha.id,fichaNumero:ficha.numero||ficha.id,indice:index,epiId:item.epiId||'',equipamento:item.epiNome||item.epiDescricao||'',ca:item.ca||'',empresaNome:ficha.empresaSnapshot?.nome||'',trabalhadorNome:ficha.trabalhadorSnapshot?.nomeCompleto||ficha.trabalhadorNome||'',quantidade:body.quantidade,motivo:body.motivo,data:date,descricao:textField(body.descricao,{required:true,field:'Relato',max:2000}),manifestacao:textField(body.manifestacao,{field:'Manifestação',max:2000}),recolhido:body.recolhido,valorCentavos:body.valorCentavos??null,status:'pendente_analise_rh',email:{destinatario:OCCURRENCE_EMAIL,status:'pendente'},criadoPor:actor};
+    const data={empresaId:ficha.empresaId,trabalhadorId:ficha.trabalhadorId,fichaId:ficha.id,fichaNumero:ficha.numero||ficha.id,indice:index,epiId:item.epiId||'',equipamento:item.epiNome||item.epiDescricao||'',ca:item.ca||'',empresaNome:ficha.empresaSnapshot?.nome||'',trabalhadorNome:ficha.trabalhadorSnapshot?.nomeCompleto||ficha.trabalhadorNome||'',quantidade:body.quantidade,motivo:body.motivo,data:date,descricao:textField(body.descricao,{required:true,field:'Relato',max:2000}),manifestacao:textField(body.manifestacao,{field:'Manifestação',max:2000}),evidencias:textField(body.evidencias,{field:'Referência das evidências',max:2000}),recolhido:body.recolhido,valorCentavos:body.valorCentavos??null,status:'pendente_analise_rh',email:{destinatario:OCCURRENCE_EMAIL,status:'pendente'},criadoPor:actor};
     const balanceId=hash([ficha.id,index]);
     for(let attempt=0;attempt<3;attempt++){
       const existing=await replay();if(existing)return existing;
