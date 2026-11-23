@@ -14,16 +14,14 @@ test('texto integral preserva o SHA256 do modelo aprovado JP-DOCX-11.10.6', () =
 test('prévia e servidor concordam sobre entrega, devolução, instrumentos e movimentação mista',()=>{
   const context=vm.createContext({});vm.runInContext(readFileSync(new URL('../../frontend/EntregaEPI/assets/ficha.js',import.meta.url),'utf8'),context);
   const epi={semCA:false,enquadramento:'epi',tipoMovimentacao:'Entrega'},instrument={semCA:true,enquadramento:'instrumento',tipoMovimentacao:'Entrega'};
-  for(const items of [[epi],[instrument],[epi,instrument],[{...epi,tipoMovimentacao:'Devolução'}],[epi,{...instrument,tipoMovimentacao:'Devolução'}]]){
+  for(const items of [[epi],[instrument],[{...instrument,enquadramento:'acessorio'}],[epi,instrument],[{...epi,tipoMovimentacao:'Devolução'}],[epi,{...instrument,tipoMovimentacao:'Devolução'}]]){
     const backend=modeloFichaParaItens(items),frontend=context.JP_FICHA.createSnapshot({}, {}, items).modeloFicha;
     assert.deepEqual(JSON.parse(JSON.stringify(frontend)),backend);
+    assert.equal(backend.termoResponsabilidade,modeloFichaParaItens([epi]).termoResponsabilidade);
     assert.ok(!backend.termoResponsabilidade.includes('recebidas na presente data'));
     assert.ok(!/certificado|anexo/i.test(backend.termoResponsabilidade));
   }
   assert.match(modeloFichaParaItens([epi]).termoResponsabilidade,/recebi gratuitamente.*fui orientado/is);
-  assert.doesNotMatch(modeloFichaParaItens([instrument]).termoResponsabilidade,/treinado|item 6.7.2/);
-  assert.doesNotMatch(modeloFichaParaItens([{...epi,tipoMovimentacao:'Devolução'}]).termoResponsabilidade,/recebido|treinado/);
-  assert.match(modeloFichaParaItens([epi,{...instrument,tipoMovimentacao:'Devolução'}]).termoResponsabilidade,/movimentações/);
 });
 
 test('CA não aplicável exige classificação explícita de item não EPI',()=>{

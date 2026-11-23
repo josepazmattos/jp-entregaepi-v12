@@ -5,21 +5,11 @@ export const TERMO_LEGADO = "Declaro sob minha inteira responsabilidade a guarda
 export const MODELO_FICHA_ID = "JP-EPI-2026.11-v2";
 export const RESPONSABILIDADE = "Declaro que recebi gratuitamente, nas datas registradas nesta ficha, os Equipamentos de Proteção Individual (EPIs) nela relacionados, em condições adequadas de conservação e funcionamento. Declaro também que fui orientado sobre os riscos contra os quais esses equipamentos oferecem proteção, suas limitações e os cuidados necessários para o uso, ajuste, limpeza, guarda e conservação.\n\nComprometo-me a:\n\n1. Usar os EPIs indicados durante as atividades em que forem exigidos, exclusivamente para a finalidade a que se destinam e conforme as orientações recebidas.\n\n2. Cuidar da limpeza, da guarda e da conservação dos equipamentos, seguindo as orientações da empresa e do fabricante.\n\n3. Comunicar imediatamente à empresa qualquer extravio, dano, defeito ou alteração que torne o EPI impróprio para uso. Nessas situações, devo interromper a atividade que exige o equipamento até que a proteção adequada seja restabelecida.\n\n4. Devolver os equipamentos sujeitos à devolução quando solicitado pela empresa, por ocasião da substituição ou no encerramento do contrato de trabalho, conforme o procedimento interno.\n\nEstou ciente de que a recusa injustificada ao uso do EPI fornecido pela empresa constitui ato faltoso, nos termos do art. 158, parágrafo único, alínea “b”, da CLT, e pode ensejar medida disciplinar cabível.\n\nEm caso de dano ou extravio, a empresa apurará as circunstâncias. Eventual desconto salarial dependerá da comprovação da responsabilidade do empregado e observará o art. 462, § 1º, da CLT, que admite o desconto em caso de dolo ou, quando houver culpa, se essa possibilidade tiver sido previamente acordada.";
 export const TREINAMENTO_ANTERIOR = "Declaro que fui treinado e orientado anteriormente à entrega dos EPIs recebidos, quanto ao uso, ajuste, limitações de proteção, limpeza, guarda, conservação e necessidade de substituição.";
-export const RECEBIMENTO = "Declaro ter recebido gratuitamente os itens desta ficha, nas quantidades e datas discriminadas, observados os arts. 166 e 167 da CLT e a NR-6 quanto aos EPIs.";
-export const DEVOLUCAO = "Confirmo a devolução dos itens relacionados nesta ficha, nas quantidades e datas de devolução discriminadas.";
-export const MOVIMENTACAO_MISTA = "Confirmo as movimentações discriminadas nesta ficha: recebi gratuitamente os itens indicados como entrega ou troca e devolvi os indicados como devolução, nas respectivas quantidades e datas.";
 export function modeloFichaParaItens(itens = []) {
-  const tipos = [...new Set(itens.map(item => item.tipoMovimentacao || 'Entrega'))];
-  const somenteDevolucao = tipos.length === 1 && tipos[0] === 'Devolução';
-  const mista = tipos.includes('Devolução') && !somenteDevolucao;
-  const entregaEpi = !itens.length || itens.some(item => item.tipoMovimentacao !== 'Devolução' && !['instrumento','uniforme','acessorio','outro_nao_epi'].includes(item.enquadramento));
-  const termoResponsabilidade = somenteDevolucao ? DEVOLUCAO
-    : entregaEpi ? (mista ? MOVIMENTACAO_MISTA + '\n\n' : '') + RESPONSABILIDADE
-    : (mista ? MOVIMENTACAO_MISTA : RECEBIMENTO) + '\n\n' + "Responsabilizo-me pela guarda, conservação e limpeza dos equipamentos sob minha posse, por utilizá-los para sua finalidade e comunicar danos, extravio ou condições impróprias. Devolverei os itens quando solicitado ou ao término do vínculo, mediante registro, ressalvados os consumíveis ou descartáveis utilizados regularmente. Eventual desconto por dano depende de apuração e dos requisitos do art. 462, § 1º, da CLT: culpa comprovada com ajuste prévio, ou dolo comprovado. Desgaste normal e riscos da atividade não são cobrados.";
   const outros = itens.some(item => item.semCA === true || item.tipo === 'sem_ca');
   return { id: MODELO_FICHA_ID, formato: 'A4-retrato',
     titulo: outros ? 'FICHA DE CONTROLE DE EPIs E OUTROS EQUIPAMENTOS' : 'FICHA DE CONTROLE DE EQUIPAMENTOS DE PROTEÇÃO INDIVIDUAL',
-    termoResponsabilidade,termoAssinatura:TERMO_ASSINATURA,termoAssinaturaId:TERMO_ASSINATURA_ID };
+    termoResponsabilidade:RESPONSABILIDADE,termoAssinatura:TERMO_ASSINATURA,termoAssinaturaId:TERMO_ASSINATURA_ID };
 }
 export const MODELO_FICHA_APROVADO = Object.freeze(modeloFichaParaItens());
 export const TERMO_APROVADO = MODELO_FICHA_APROVADO.termoResponsabilidade;
