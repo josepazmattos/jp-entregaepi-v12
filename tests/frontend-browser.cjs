@@ -244,7 +244,7 @@ async function main(){
       const body=request.postDataJSON();
       assert.equal(body.trabalhadorSnapshot.matriculaESocial,'00042');
       assert.equal(body.trabalhadorSnapshot.funcao,worker.funcao);
-      assert.ok(body.modeloFicha.termoResponsabilidade.includes('súmula n. 80 do TST.'));
+      assert.ok(body.modeloFicha.termoResponsabilidade.includes('art. 462, § 1º, da CLT'));
       const record={...body,id:'FICHA-NOVA-TESTE',numero:'EPI-TESTE-0002',status:'pendente'};
       database.fichas.push(record);await json(200,{ok:true,item:record});return;
     }

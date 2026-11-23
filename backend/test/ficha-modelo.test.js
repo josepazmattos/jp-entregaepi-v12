@@ -20,7 +20,7 @@ test('prévia e servidor concordam sobre entrega, devolução, instrumentos e mo
     assert.ok(!backend.termoResponsabilidade.includes('recebidas na presente data'));
     assert.ok(!/certificado|anexo/i.test(backend.termoResponsabilidade));
   }
-  assert.match(modeloFichaParaItens([epi]).termoResponsabilidade,/recebi gratuitamente.*orientação efetivamente realizada/is);
+  assert.match(modeloFichaParaItens([epi]).termoResponsabilidade,/recebi gratuitamente.*fui orientado/is);
   assert.doesNotMatch(modeloFichaParaItens([instrument]).termoResponsabilidade,/treinado|item 6.7.2/);
   assert.doesNotMatch(modeloFichaParaItens([{...epi,tipoMovimentacao:'Devolução'}]).termoResponsabilidade,/recebido|treinado/);
   assert.match(modeloFichaParaItens([epi,{...instrument,tipoMovimentacao:'Devolução'}]).termoResponsabilidade,/movimentações/);
@@ -33,12 +33,9 @@ test('CA não aplicável exige classificação explícita de item não EPI',()=>
   assert.throws(()=>classifyEquipment({semCA:true},'epi'),{code:'ENQUADRAMENTO_INVALIDO'});
 });
 
-test('termo v2 inclui seis compromissos e assinatura sem alterar fichas históricas',()=>{
+test('termo corresponde integralmente ao modelo aprovado e conserva a confirmação eletrônica',()=>{
  const model=modeloFichaParaItens([{tipoMovimentacao:'Entrega',enquadramento:'epi'}]);
  assert.equal(model.id,'JP-EPI-2026.11-v2');
- for(let n=1;n<=6;n++)assert.ok(model.termoResponsabilidade.includes('\n\n'+n+'. '));
- assert.match(model.termoResponsabilidade,/Fui devidamente orientado\(a\) e treinado\(a\)/);
- assert.match(model.termoResponsabilidade,/recusa injustificada/);
- assert.match(model.termoResponsabilidade,/quando aplicáveis, cabem à empresa/);
+ assert.equal(createHash('sha256').update(model.termoResponsabilidade).digest('hex'),'5ed3e0fbbcaf48a587166d9cb103fcc82c115222628ae8a87ab2d550960ccb4f');
  assert.match(model.termoAssinatura,/vinculada exclusivamente a esta ficha/);
 });
