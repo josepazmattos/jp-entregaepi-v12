@@ -130,7 +130,7 @@ async function printAndInspect(context,record,prefix,{expectedPages=1}={}){
   assert.ok(geometry.tableRight<=geometry.sheetRight+1,'tabela cabe na largura da ficha');
   assert.equal(geometry.overflowingCells,0,'texto não ultrapassa as células');
   assert.ok(geometry.font.includes('Times New Roman'));
-  assert.ok(geometry.termText.includes('súmula n. 80 do TST.'));
+  assert.ok(geometry.termText.includes('art. 462, § 1º, da CLT'));
   assert.equal(geometry.rows,record.itens.length);
   assert.equal(geometry.name,worker.nomeCompleto);
   await popup.emulateMedia({media:'print'});
@@ -244,7 +244,7 @@ async function main(){
       const body=request.postDataJSON();
       assert.equal(body.trabalhadorSnapshot.matriculaESocial,'00042');
       assert.equal(body.trabalhadorSnapshot.funcao,worker.funcao);
-      assert.ok(body.modeloFicha.termoResponsabilidade.includes('súmula n. 80 do TST.'));
+      assert.ok(body.modeloFicha.termoResponsabilidade.includes('art. 462, § 1º, da CLT'));
       const record={...body,id:'FICHA-NOVA-TESTE',numero:'EPI-TESTE-0002',status:'pendente'};
       database.fichas.push(record);await json(200,{ok:true,item:record});return;
     }
